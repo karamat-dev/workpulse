@@ -6,7 +6,15 @@
 .eask/
 .eldev/
 .keg/
-
+.env
+.env.example
+.env.local
+.env.development
+.env.production
+.env.test
+.env.testing
+.env.staging
+.env.development.local
 # Built distribution
 dist/
 
