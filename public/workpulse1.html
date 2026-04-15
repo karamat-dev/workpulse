@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkPulse — Attendance Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#F4F2ED;--surface:#fff;--surface2:#EDEAE3;--border:#DDD9D0;
+  --text:#18170F;--muted:#6E6C63;--faint:#A8A69E;
+  --accent:#2447D0;--accent-bg:#EBF0FF;--accent-dark:#1A35A8;
+  --green:#1B7A42;--green-bg:#E6F5EC;
+  --red:#C0392B;--red-bg:#FDEEEC;
+  --amber:#A05C00;--amber-bg:#FEF3E2;
+  --purple:#6B3FA0;--purple-bg:#F3EDFC;
+  --teal:#0D7373;--teal-bg:#E3F5F5;
+  --sidebar:240px;--hdr:58px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.55;height:100vh;overflow:hidden;}
+
+/* ── LOGIN SCREEN ── */
+#login-screen{
+  position:fixed;inset:0;background:var(--text);
+  display:flex;align-items:center;justify-content:center;z-index:9999;
+}
+.login-box{background:var(--surface);border-radius:16px;padding:40px;width:380px;box-shadow:0 32px 64px rgba(0,0,0,0.25);}
+.login-logo{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px;}
+.login-logo span{color:var(--accent);}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
+.login-tabs{display:flex;gap:0;background:var(--surface2);border-radius:8px;padding:3px;margin-bottom:24px;}
+.login-tab{flex:1;padding:7px;text-align:center;font-size:13px;font-weight:500;border-radius:6px;cursor:pointer;color:var(--muted);transition:.15s;}
+.login-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.lf-group{margin-bottom:14px;}
+.lf-label{display:block;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
+.lf-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);background:var(--surface);outline:none;transition:border .15s;}
+.lf-input:focus{border-color:var(--accent);}
+.lf-btn{width:100%;padding:12px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-top:6px;transition:.15s;}
+.lf-btn:hover{background:var(--accent-dark);}
+.lf-hint{font-size:11px;color:var(--muted);margin-top:14px;text-align:center;line-height:1.6;}
+.lf-err{color:var(--red);font-size:12px;margin-top:6px;display:none;}
+
+/* ── LAYOUT ── */
+#app{display:none;height:100vh;overflow:hidden;flex-direction:row;}
+#app.visible{display:flex;}
+
+/* ── SIDEBAR ── */
+.sidebar{width:var(--sidebar);background:var(--text);color:#fff;display:flex;flex-direction:column;height:100vh;overflow-y:auto;flex-shrink:0;}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-logo h1{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fff;}
+.sb-logo h1 span{color:#6B9DFF;}
+.sb-logo p{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px;}
+.sb-user{padding:12px 16px;display:flex;align-items:center;gap:9px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-user-info .name{font-size:13px;font-weight:500;color:#fff;}
+.sb-user-info .role{font-size:10px;color:rgba(255,255,255,.4);}
+.sb-sect{padding:14px 16px 5px;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.25);}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 16px;cursor:pointer;color:rgba(255,255,255,.5);font-size:13px;transition:.12s;position:relative;}
+.nav-item:hover{background:rgba(255,255,255,.05);color:#fff;}
+.nav-item.active{background:rgba(107,157,255,.15);color:#6B9DFF;}
+.nav-item svg{width:15px;height:15px;flex-shrink:0;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px;}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#1B7A42;margin-left:auto;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.sb-footer{padding:14px 16px;margin-top:auto;border-top:1px solid rgba(255,255,255,.08);}
+.sb-footer p{font-size:10px;color:rgba(255,255,255,.2);}
+
+/* ── AVATAR ── */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;}
+.av-32{width:32px;height:32px;font-size:12px;}
+.av-28{width:28px;height:28px;font-size:11px;}
+.av-40{width:40px;height:40px;font-size:14px;}
+.av-64{width:64px;height:64px;font-size:22px;}
+
+/* ── MAIN ── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.topbar{height:var(--hdr);background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:12px;flex-shrink:0;}
+.topbar-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;flex:1;}
+.tb-clock{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--accent);letter-spacing:-.5px;font-variant-numeric:tabular-nums;}
+.content{flex:1;overflow-y:auto;padding:22px;}
+
+/* ── PAGE / TAB SYSTEM ── */
+.page{display:none;}.page.active{display:block;}
+.tab-content{display:none;}.tab-content.active{display:block;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:7px;border:1.5px solid var(--border);background:var(--surface);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:.15s;white-space:nowrap;}
+.btn:hover{border-color:var(--accent);color:var(--accent);}
+.btn-sm{padding:5px 10px;font-size:12px;}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent-dark);border-color:var(--accent-dark);color:#fff;}
+.btn-green{background:var(--green);border-color:var(--green);color:#fff;}
+.btn-red{background:var(--red);border-color:var(--red);color:#fff;}
+.btn-danger{border-color:var(--red);color:var(--red);}
+.btn-danger:hover{background:var(--red);color:#fff;}
+.btn-ghost{border-color:transparent;background:transparent;}
+.btn-ghost:hover{background:var(--surface2);border-color:var(--border);}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border-radius:12px;border:1px solid var(--border);padding:18px;}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:.1px;}
+.stat-card{background:var(--surface);border-radius:10px;border:1px solid var(--border);padding:14px 16px;}
+.stat-label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.3px;margin-bottom:5px;}
+.stat-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;letter-spacing:-.5px;line-height:1.1;}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:3px;}
+
+/* ── GRID ── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+@media(max-width:1100px){.g4{grid-template-columns:repeat(2,1fr);}.g3{grid-template-columns:repeat(2,1fr);}}
+
+/* ── BADGE ── */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:5px;font-size:11px;font-weight:500;}
+.bg-green{background:var(--green-bg);color:var(--green);}
+.bg-red{background:var(--red-bg);color:var(--red);}
+.bg-amber{background:var(--amber-bg);color:var(--amber);}
+.bg-blue{background:var(--accent-bg);color:var(--accent);}
+.bg-purple{background:var(--purple-bg);color:var(--purple);}
+.bg-gray{background:var(--surface2);color:var(--muted);}
+.bg-teal{background:var(--teal-bg);color:var(--teal);}
+
+/* ── TABLE ── */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{text-align:left;padding:9px 11px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--border);background:var(--surface2);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:hover{background:var(--surface2);}
+tbody tr:last-child{border-bottom:none;}
+tbody td{padding:10px 11px;vertical-align:middle;}
+
+/* ── USER CELL ── */
+.ucell{display:flex;align-items:center;gap:8px;}
+.ucell-info .n{font-weight:500;font-size:13px;}
+.ucell-info .s{font-size:11px;color:var(--muted);}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);margin-bottom:18px;}
+.tab{padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab:hover:not(.active){color:var(--text);}
+
+/* ── FORM ── */
+.fg{margin-bottom:13px;}
+.fl{display:block;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+.fi{width:100%;padding:9px 11px;border:1.5px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border .15s;}
+.fi:focus{border-color:var(--accent);}
+.fi:disabled{background:var(--surface2);color:var(--muted);}
+select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236E6C63'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;}
+
+/* ── ROWS ── */
+.irow{padding:9px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px;}
+.irow:last-child{border-bottom:none;}
+.ikey{font-size:12px;color:var(--muted);font-weight:500;}
+.ival{font-size:13px;font-weight:500;text-align:right;}
+
+/* ── ALERT ── */
+.alert{padding:11px 14px;border-radius:8px;display:flex;align-items:flex-start;gap:9px;margin-bottom:10px;font-size:13px;border-left:3px solid;}
+.al-info{background:var(--accent-bg);border-color:var(--accent);color:var(--accent-dark);}
+.al-warn{background:var(--amber-bg);border-color:var(--amber);color:var(--amber);}
+.al-success{background:var(--green-bg);border-color:var(--green);color:var(--green);}
+.al-danger{background:var(--red-bg);border-color:var(--red);color:var(--red);}
+
+/* ── CLOCK WIDGET ── */
+.clock-widget{background:#18170F;border-radius:14px;padding:24px;color:#fff;text-align:center;position:relative;overflow:hidden;}
+.clock-widget::before{content:'';position:absolute;top:-40px;right:-40px;width:130px;height:130px;border-radius:50%;background:rgba(107,157,255,.07);}
+.cw-time{font-family:'Syne',sans-serif;font-size:40px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums;}
+.cw-date{font-size:12px;color:rgba(255,255,255,.45);margin-top:3px;}
+.cw-status{margin:10px 0 6px;}
+.punch-btn{display:block;width:100%;padding:11px;border-radius:9px;border:none;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:.2s;margin-top:7px;}
+.pb-in{background:var(--accent);color:#fff;}
+.pb-in:hover{background:var(--accent-dark);}
+.pb-out{background:var(--red);color:#fff;}
+.pb-out:hover{background:#9E2E1E;}
+.pb-break{background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);}
+.pb-break:hover{background:rgba(255,255,255,.18);}
+.pb-break-in{background:var(--amber);color:#fff;}
+.pb-break-in:hover{background:#7A4400;}
+
+/* ── TIMELINE ── */
+.tl{display:flex;flex-direction:column;gap:0;}
+.tl-item{display:flex;gap:10px;position:relative;padding-bottom:14px;}
+.tl-item:last-child{padding-bottom:0;}
+.tl-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:4px;position:relative;z-index:1;}
+.tl-line{position:absolute;left:4px;top:13px;bottom:0;width:1px;background:var(--border);}
+.tl-item:last-child .tl-line{display:none;}
+
+/* ── PROGRESS ── */
+.prog-bar{height:5px;background:var(--surface2);border-radius:3px;overflow:hidden;margin-top:5px;}
+.prog-fill{height:100%;border-radius:3px;transition:width .5s;}
+
+/* ── CALENDAR ── */
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px;}
+.cal-dh{text-align:center;font-size:10px;font-weight:700;color:var(--muted);padding:4px;text-transform:uppercase;}
+.cal-day{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:12px;border-radius:6px;cursor:pointer;position:relative;}
+.cal-day:hover{background:var(--surface2);}
+.cal-today{background:var(--accent)!important;color:#fff!important;font-weight:700;}
+.cal-leave{background:var(--green-bg);color:var(--green);}
+.cal-holiday{background:var(--amber-bg);color:var(--amber);}
+.cal-event{background:var(--purple-bg);color:var(--purple);}
+
+/* ── MONITOR ── */
+.monitor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;}
+.mon-card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:9px;}
+.mon-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.md-in{background:var(--green);}
+.md-out{background:var(--faint);}
+.md-break{background:var(--amber);}
+.md-leave{background:var(--purple);}
+
+/* ── MODAL ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:14px;padding:24px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.modal-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;}
+
+/* ── CHART BARS ── */
+.chart-area{background:var(--surface2);border-radius:8px;height:160px;display:flex;align-items:flex-end;padding:12px;gap:6px;}
+.cb-wrap{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+.cb-bar{width:100%;border-radius:3px 3px 0 0;min-height:4px;transition:height .5s;}
+.cb-lbl{font-size:10px;color:var(--muted);}
+
+/* ── ORG CHART ── */
+.org-wrap{overflow-x:auto;padding:20px;}
+.org-tree{display:flex;flex-direction:column;align-items:center;gap:0;}
+.org-node{background:var(--surface);border:1.5px solid var(--border);border-radius:10px;padding:11px 14px;text-align:center;min-width:130px;cursor:pointer;transition:.15s;}
+.org-node:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg);}
+.org-node.root{border-color:var(--accent);background:var(--accent-bg);}
+.org-node .oname{font-weight:700;font-size:12px;}
+.org-node .orole{font-size:10px;color:var(--muted);}
+.org-row{display:flex;gap:20px;align-items:flex-start;}
+.org-branch{display:flex;flex-direction:column;align-items:center;}
+.org-vline{width:1px;background:var(--border);}
+.org-hline{height:1px;background:var(--border);}
+
+/* ── PROFILE HERO ── */
+.profile-hero{background:#18170F;border-radius:12px;padding:24px;color:#fff;display:flex;align-items:center;gap:18px;margin-bottom:18px;}
+.ph-name{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;}
+.ph-role{font-size:12px;color:rgba(255,255,255,.5);margin-top:2px;}
+.ph-tags{margin-top:8px;display:flex;gap:6px;}
+
+/* ── DEPT CARD ── */
+.dept-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.dept-card .dc-bar{height:4px;}
+.dept-card .dc-body{padding:14px;}
+.dept-card .dc-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;}
+
+/* ── ANNOUNCEMENT ── */
+.ann{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:11px;border-left:3px solid var(--accent);}
+.ann-title{font-weight:600;font-size:14px;margin-bottom:6px;}
+.ann-meta{font-size:11px;color:var(--muted);margin-top:6px;}
+
+/* ── LEAVE TYPE ROW ── */
+.ltr{padding:11px 0;border-bottom:1px solid var(--border);}
+.ltr:last-child{border-bottom:none;}
+.ltr-hdr{display:flex;justify-content:space-between;margin-bottom:5px;font-size:13px;}
+.ltr-name{font-weight:500;}
+.ltr-cnt{color:var(--muted);}
+
+/* ── NOTIFICATION BELL ── */
+.notif-wrap{position:relative;}
+.notif-dot{position:absolute;top:-1px;right:-1px;width:7px;height:7px;border-radius:50%;background:var(--red);border:2px solid var(--surface);}
+
+/* ── EMPLOYEE VIEW CLOCK ── */
+.emp-clock-widget{background:#18170F;border-radius:16px;padding:28px;text-align:center;color:#fff;}
+.ecw-time{font-family:'Syne',sans-serif;font-size:52px;font-weight:800;letter-spacing:-2px;font-variant-numeric:tabular-nums;}
+.ecw-date{font-size:13px;color:rgba(255,255,255,.4);margin-top:4px;}
+.ecw-info{display:flex;justify-content:center;gap:24px;margin:16px 0 20px;}
+.ecw-stat{text-align:center;}
+.ecw-stat .v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;}
+.ecw-stat .l{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;}
+.ecw-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.ecw-btns .punch-btn{margin-top:0;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* search */
+.search-input{padding:7px 11px;border:1.5px solid var(--border);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);background:var(--surface);outline:none;transition:border .15s;}
+.search-input:focus{border-color:var(--accent);}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ LOGIN SCREEN ═══════════ -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">Work<span>Pulse</span></div>
+    <div class="login-sub">Attendance Management System</div>
+    <div class="login-tabs">
+      <div class="login-tab active" id="lt-admin" onclick="window.selectLoginRole('admin')">Admin / HR</div>
+      <div class="login-tab" id="lt-emp" onclick="window.selectLoginRole('employee')">Employee</div>
+    </div>
+    <div class="lf-group">
+      <label class="lf-label">Email Address</label>
+      <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">
+    </div>
+    <div class="lf-group">
+      <label class="lf-label">Password</label>
+      <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
+    </div>
+    <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
+    <button class="lf-btn" onclick="window.doLogin()">Sign In</button>
+    <div class="lf-hint">
+      <strong>Admin / HR:</strong> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="08696c656166487f677a63787d647b6d266b6765">[email&#160;protected]</a> · admin123<br>
+      <strong>Employee:</strong> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="ddb8b0adb1b2a4b8b89daab2afb6ada8b1aeb8f3beb2b0">[email&#160;protected]</a> · emp123
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MAIN APP ═══════════ -->
+<div id="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo">
+      <h1>Work<span>Pulse</span></h1>
+      <p id="sb-version">Attendance Management System</p>
+    </div>
+    <div class="sb-user">
+      <div class="av av-32" id="sb-avatar" style="background:var(--accent);color:#fff;">AK</div>
+      <div class="sb-user-info">
+        <div class="name" id="sb-name">Ahmed Karim</div>
+        <div class="role" id="sb-role">Administrator</div>
+      </div>
+    </div>
+    <div id="sidebar-nav"></div>
+    <div class="sb-footer">
+      <p>WorkPulse v2.4.1</p>
+      <p style="margin-top:2px;">Backup: Today 03:00 AM ✓</p>
+      <button class="btn btn-sm" style="margin-top:10px;width:100%;justify-content:center;color:var(--red);border-color:rgba(255,255,255,.1);background:transparent;font-size:12px;" onclick="window.doLogout()"">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="page-title">Dashboard</div>
+      <div style="display:flex;align-items:center;gap:9px;">
+        <div class="tb-clock" id="tb-clock">00:00:00</div>
+        <div id="topbar-actions"></div>
+        <div class="notif-wrap">
+          <button class="btn btn-sm" onclick="window.showPage('leave')" title="Notifications">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a5.5 5.5 0 015.5 5.5c0 3-1 5-1.5 6H4c-.5-1-1.5-3-1.5-6A5.5 5.5 0 018 1z"/><path d="M6 12v.5a2 2 0 004 0V12"/></svg>
+          </button>
+          <div class="notif-dot"></div>
+        </div>
+      </div>
+    </div>
+    <div class="content" id="main-content"></div>
+  </div>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Leave Modal -->
+<div class="modal-overlay" id="leaveModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
+    <div class="fg"><label class="fl">Leave Type</label>
+      <select class="fi" id="lv-type"><option>Annual Leave</option><option>Sick Leave</option><option>Casual Leave</option><option>Paternity Leave</option><option>Maternity Leave</option><option>Marriage Leave</option><option>Bereavement Leave</option></select></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">From Date</label><input type="date" class="fi" id="lv-from"></div>
+      <div class="fg"><label class="fl">To Date</label><input type="date" class="fi" id="lv-to"></div>
+    </div>
+    <div class="fg"><label class="fl">Reason</label><textarea class="fi" id="lv-reason" rows="3" placeholder="Brief reason..."></textarea></div>
+    <div class="fg"><label class="fl">Handover To</label><input type="text" class="fi" id="lv-handover" placeholder="Colleague name"></div>
+    <div id="lv-calc" style="background:var(--accent-bg);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--accent-dark);margin-bottom:12px;display:none;">
+      📅 <strong id="lv-days">0</strong> working day(s) requested
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('leaveModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitLeave()"">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Regulation Modal -->
+<div class="modal-overlay" id="regulationModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Attendance Regulation Request</div><button class="modal-close" onclick="window.closeModal('regulationModal')">×</button></div>
+    <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="reg-date"></div>
+    <div class="fg"><label class="fl">Regulation Type</label>
+      <select class="fi" id="reg-type"><option>Missing Clock In</option><option>Missing Clock Out</option><option>Wrong Clock In Time</option><option>Wrong Clock Out Time</option><option>Break Adjustment</option></select></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Original Time</label><input type="time" class="fi" id="reg-orig"></div>
+      <div class="fg"><label class="fl">Requested Time</label><input type="time" class="fi" id="reg-req"></div>
+    </div>
+    <div class="fg"><label class="fl">Reason</label><textarea class="fi" id="reg-reason" rows="3" placeholder="Explain the reason..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('regulationModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitRegulation()"">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Announcement Modal -->
+<div class="modal-overlay" id="announcementModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Post Announcement</div><button class="modal-close" onclick="window.closeModal('announcementModal')">×</button></div>
+    <div class="fg"><label class="fl">Title</label><input type="text" class="fi" id="ann-title" placeholder="Announcement title..."></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Category</label>
+        <select class="fi" id="ann-cat"><option>General</option><option>Policy</option><option>Event</option><option>Important</option><option>Holiday</option></select></div>
+      <div class="fg"><label class="fl">Audience</label>
+        <select class="fi" id="ann-aud"><option>All Employees</option><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Management</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Message</label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitAnnouncement()"">Publish</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Employee Modal -->
+<div class="modal-overlay" id="addEmpModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Add New Employee</div><button class="modal-close" onclick="window.closeModal('addEmpModal')">×</button></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">First Name</label><input type="text" class="fi" id="ne-fname" placeholder="First name"></div>
+      <div class="fg"><label class="fl">Last Name</label><input type="text" class="fi" id="ne-lname" placeholder="Last name"></div>
+    </div>
+    <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
+    <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Department</label>
+        <select class="fi" id="ne-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
+      <div class="fg"><label class="fl">Designation</label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Date of Joining</label><input type="date" class="fi" id="ne-doj"></div>
+      <div class="fg"><label class="fl">Employment Type</label>
+        <select class="fi" id="ne-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('addEmpModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitAddEmployee()"">Add Employee</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Holiday Modal -->
+<div class="modal-overlay" id="holidayModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Add National Holiday</div><button class="modal-close" onclick="window.closeModal('holidayModal')">×</button></div>
+    <div class="fg"><label class="fl">Holiday Name</label><input type="text" class="fi" id="hol-name" placeholder="e.g. Independence Day"></div>
+    <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="hol-date"></div>
+    <div class="fg"><label class="fl">Type</label>
+      <select class="fi" id="hol-type"><option>National</option><option>Religious</option><option>Optional</option></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('holidayModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitHoliday()"">Add Holiday</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leave Approval Modal -->
+<div class="modal-overlay" id="approvalModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Review Leave Request</div><button class="modal-close" onclick="window.closeModal('approvalModal')">×</button></div>
+    <div id="approval-details"></div>
+    <div class="fg" style="margin-top:12px;"><label class="fl">Comment (optional)</label><textarea class="fi" id="approval-comment" rows="2" placeholder="Add a comment..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('approvalModal')">Cancel</button>
+      <button class="btn btn-danger" onclick="window.approveLeave('Rejected')">Reject</button>
+      <button class="btn btn-green" onclick="window.approveLeave('Approved')">Approve</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Employee Modal -->
+<div class="modal-overlay" id="editEmpModal">
+  <div class="modal" style="width:600px;">
+    <div class="modal-hdr"><div class="modal-title">Edit Employee</div><button class="modal-close" onclick="window.closeModal('editEmpModal')">×</button></div>
+    <div class="tabs" style="margin-bottom:16px;" id="edit-emp-tabs">
+      <div class="tab active" onclick="window.switchEditTab('personal')">Personal</div>
+      <div class="tab" onclick="window.switchEditTab('job')">Job & HR</div>
+      <div class="tab" onclick="window.switchEditTab('salary')">Salary & Bank</div>
+    </div>
+    <!-- Personal Tab -->
+    <div id="edit-tab-personal">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">First Name</label><input type="text" class="fi" id="ee-fname"></div>
+        <div class="fg"><label class="fl">Last Name</label><input type="text" class="fi" id="ee-lname"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Date of Birth</label><input type="date" class="fi" id="ee-dob"></div>
+        <div class="fg"><label class="fl">Gender</label><select class="fi" id="ee-gender"><option>Male</option><option>Female</option><option>Other</option></select></div>
+      </div>
+      <div class="fg"><label class="fl">CNIC</label><input type="text" class="fi" id="ee-cnic" placeholder="XXXXX-XXXXXXX-X"></div>
+      <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ee-phone"></div>
+      <div class="fg"><label class="fl">Address</label><input type="text" class="fi" id="ee-address"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Blood Group</label><select class="fi" id="ee-blood"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
+        <div class="fg"><label class="fl">Next of Kin Name</label><input type="text" class="fi" id="ee-kin"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Kin Relationship</label><input type="text" class="fi" id="ee-kinRel"></div>
+        <div class="fg"><label class="fl">Kin Phone</label><input type="text" class="fi" id="ee-kinPhone"></div>
+      </div>
+    </div>
+    <!-- Job Tab -->
+    <div id="edit-tab-job" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Department</label><select class="fi" id="ee-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
+        <div class="fg"><label class="fl">Designation</label><input type="text" class="fi" id="ee-desg"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Date of Joining</label><input type="date" class="fi" id="ee-doj"></div>
+        <div class="fg"><label class="fl">Probation End Date</label><input type="date" class="fi" id="ee-dop"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
+        <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
+      </div>
+      <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ee-manager"></div>
+      <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
+    </div>
+    <!-- Salary Tab -->
+    <div id="edit-tab-salary" style="display:none;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Basic Salary (PKR)</label><input type="number" class="fi" id="ee-basic" oninput="window.calcGross()"></div>
+        <div class="fg"><label class="fl">House Allowance (PKR)</label><input type="number" class="fi" id="ee-house" oninput="window.calcGross()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Transport Allowance (PKR)</label><input type="number" class="fi" id="ee-transport" oninput="window.calcGross()"></div>
+        <div class="fg"><label class="fl">Tax Deduction (PKR)</label><input type="number" class="fi" id="ee-tax" oninput="window.calcGross()"></div>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+        <div><span style="color:var(--muted);">Gross Salary:</span> <strong id="ee-gross-display">PKR 0</strong></div>
+        <div><span style="color:var(--muted);">Net Salary:</span> <strong id="ee-net-display" style="color:var(--green);">PKR 0</strong></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Bank Name</label><input type="text" class="fi" id="ee-bank"></div>
+        <div class="fg"><label class="fl">Account No</label><input type="text" class="fi" id="ee-acct"></div>
+      </div>
+      <div class="fg"><label class="fl">IBAN</label><input type="text" class="fi" id="ee-iban"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn" onclick="window.closeModal('editEmpModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveEditEmployee()">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Leave Balance Modal (Admin) -->
+<div class="modal-overlay" id="editLeaveModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Edit Leave Balance</div><button class="modal-close" onclick="window.closeModal('editLeaveModal')">×</button></div>
+    <div id="edit-leave-employee-name" style="font-size:13px;color:var(--muted);margin-bottom:14px;"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label class="fl">Annual Leave</label><input type="number" class="fi" id="el-annual" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Sick Leave</label><input type="number" class="fi" id="el-sick" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Casual Leave</label><input type="number" class="fi" id="el-casual" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Paternity Leave</label><input type="number" class="fi" id="el-paternity" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Maternity Leave</label><input type="number" class="fi" id="el-maternity" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Marriage Leave</label><input type="number" class="fi" id="el-marriage" min="0" max="365"></div>
+      <div class="fg"><label class="fl">Bereavement Leave</label><input type="number" class="fi" id="el-bereavement" min="0" max="365"></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('editLeaveModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveLeaveBalance()">Save Balance</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="changePassModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Change Password</div><button class="modal-close" onclick="window.closeModal('changePassModal')">×</button></div>
+    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="cp-current" placeholder="Enter current password"></div>
+    <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"></div>
+    <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"></div>
+    <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('changePassModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitChangePassword()">Update Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Dialog -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal" style="width:360px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:12px;" id="confirm-icon">⚠️</div>
+    <div class="modal-title" id="confirm-title" style="margin-bottom:8px;">Are you sure?</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;" id="confirm-msg"></div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="btn" onclick="window.closeModal('confirmModal')">Cancel</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+//  DATA STORE
+// ══════════════════════════════════════════════════
+const DB = {
+  currentUser: null,
+  currentRole: null,
+
+  users: [
+    {id:'EMP-001',fname:'Ahmed',lname:'Karim',email:'employee@workpulse.com',pass:'emp123',role:'employee',dept:'Engineering',desg:'Senior Engineer',doj:'2022-01-15',dop:'2022-04-15',manager:'Hassan Ali',phone:'+92 300 1234567',avatar:'AK',avatarColor:'#2447D0',status:'Active',type:'Permanent'},
+    {id:'EMP-002',fname:'Sara',lname:'Ahmed',email:'hr@workpulse.com',pass:'hr123',role:'hr',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent'},
+    {id:'ADM-001',fname:'Zainab',lname:'Hussain',email:'admin@workpulse.com',pass:'admin123',role:'admin',dept:'Management',desg:'CEO',doj:'2018-01-01',manager:'—',phone:'+92 321 9876543',avatar:'ZH',avatarColor:'#6B3FA0',status:'Active',type:'Permanent'},
+  ],
+
+  employees: [
+    {id:'EMP-001',fname:'Ahmed',lname:'Karim',dept:'Engineering',desg:'Senior Engineer',doj:'2022-01-15',dop:'2022-04-15',manager:'Hassan Ali',phone:'+92 300 1234567',email:'ahmed.k@workpulse.com',avatar:'AK',avatarColor:'#2447D0',status:'Active',type:'Permanent',dob:'1990-03-15',gender:'Male',cnic:'42301-1234567-8',address:'123 Gulberg III, Lahore',blood:'O+',kin:'Fatima Karim',kinRel:'Spouse',kinPhone:'+92 301 7654321',basic:150000,house:40000,transport:10000,tax:8500,bank:'HBL',acct:'****-1234',iban:'PK36HBL...'},
+    {id:'EMP-002',fname:'Sara',lname:'Ahmed',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',email:'sara.a@workpulse.com',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent',dob:'1996-04-10',gender:'Female',cnic:'42301-2345678-9',address:'45 DHA Phase 5, Lahore',blood:'B+',kin:'Ali Ahmed',kinRel:'Father',kinPhone:'+92 333 4567890',basic:120000,house:30000,transport:8000,tax:5500,bank:'MCB',acct:'****-5678',iban:'PK36MCB...'},
+    {id:'EMP-003',fname:'Hassan',lname:'Ali',dept:'Engineering',desg:'Engineering Director',doj:'2019-09-10',manager:'Zainab Hussain',phone:'+92 302 3456789',email:'hassan.a@workpulse.com',avatar:'HA',avatarColor:'#0D7373',status:'Active',type:'Permanent',dob:'1985-07-22',gender:'Male',cnic:'42301-3456789-0',address:'78 Model Town, Lahore',blood:'A+',kin:'Aisha Hassan',kinRel:'Spouse',kinPhone:'+92 344 5678901',basic:200000,house:60000,transport:15000,tax:14000,bank:'HBL',acct:'****-9012',iban:'PK36HBL...'},
+    {id:'EMP-004',fname:'Maria',lname:'Santos',dept:'Product',desg:'UI Designer',doj:'2025-04-10',dop:'2025-07-10',manager:'Khalid PM',phone:'+92 303 4567890',email:'maria.s@workpulse.com',avatar:'MS',avatarColor:'#A05C00',status:'Probation',type:'Probation',dob:'1998-11-05',gender:'Female',cnic:'42301-4567890-1',address:'22 Johar Town, Lahore',blood:'AB+',kin:'Jose Santos',kinRel:'Father',kinPhone:'+92 355 6789012',basic:80000,house:20000,transport:5000,tax:0,bank:'UBL',acct:'****-3456',iban:'PK36UBL...'},
+    {id:'EMP-005',fname:'Omar',lname:'Farooq',dept:'Engineering',desg:'Software Engineer',doj:'2023-06-01',manager:'Hassan Ali',phone:'+92 304 5678901',email:'omar.f@workpulse.com',avatar:'OF',avatarColor:'#C0392B',status:'Active',type:'Permanent',dob:'1994-02-18',gender:'Male',cnic:'42301-5678901-2',address:'15 Wapda Town, Lahore',blood:'O-',kin:'Noor Farooq',kinRel:'Spouse',kinPhone:'+92 366 7890123',basic:100000,house:25000,transport:7000,tax:3500,bank:'Meezan',acct:'****-7890',iban:'PK36MEZ...'},
+  ],
+
+  attendance: [
+    {empId:'EMP-001',date:'2025-04-10',in:'08:58',out:null,breakOut:null,breakIn:null,status:'Present',late:false,overtime:0},
+    {empId:'EMP-001',date:'2025-04-09',in:'09:15',out:'18:00',breakOut:'13:00',breakIn:'13:30',status:'Present',late:true,overtime:0},
+    {empId:'EMP-001',date:'2025-04-08',in:null,out:null,breakOut:null,breakIn:null,status:'Leave',late:false,overtime:0},
+    {empId:'EMP-001',date:'2025-04-07',in:'08:55',out:'18:33',breakOut:'13:00',breakIn:'13:30',status:'Present',late:false,overtime:33},
+    {empId:'EMP-001',date:'2025-04-04',in:'09:00',out:'17:00',breakOut:'13:00',breakIn:'13:30',status:'Present',late:false,overtime:0},
+    {empId:'EMP-001',date:'2025-04-03',in:null,out:null,breakOut:null,breakIn:null,status:'Absent',late:false,overtime:0},
+    {empId:'EMP-002',date:'2025-04-10',in:'08:45',out:null,breakOut:null,breakIn:null,status:'Present',late:false,overtime:0},
+    {empId:'EMP-003',date:'2025-04-10',in:'09:02',out:null,breakOut:null,breakIn:null,status:'Present',late:false,overtime:0},
+    {empId:'EMP-005',date:'2025-04-10',in:null,out:null,breakOut:null,breakIn:null,status:'Absent',late:false,overtime:0},
+  ],
+
+  leaves: [
+    {id:'LV-001',empId:'EMP-001',empName:'Ahmed Karim',dept:'Engineering',type:'Annual Leave',from:'2025-04-08',to:'2025-04-08',days:1,reason:'Personal work',handover:'Omar Farooq',applied:'2025-04-01',managerStatus:'Approved',hrStatus:'Approved',status:'Approved'},
+    {id:'LV-002',empId:'EMP-005',empName:'Omar Farooq',dept:'Engineering',type:'Sick Leave',from:'2025-04-11',to:'2025-04-11',days:1,reason:'Fever',handover:'Hassan Ali',applied:'2025-04-10',managerStatus:'Pending',hrStatus:'Waiting',status:'Pending'},
+    {id:'LV-003',empId:'EMP-002',empName:'Sara Ahmed',dept:'HR',type:'Annual Leave',from:'2025-04-18',to:'2025-04-20',days:3,reason:'Family event',handover:'Nadia Iqbal',applied:'2025-04-08',managerStatus:'Approved',hrStatus:'Pending',status:'Pending'},
+  ],
+
+  regulations: [
+    {id:'REG-001',empId:'EMP-001',date:'2025-04-03',type:'Missing Clock In',orig:'—',req:'11:00',reason:'Biometric device issue',status:'Pending'},
+    {id:'REG-002',empId:'EMP-001',date:'2025-03-28',type:'Wrong Clock Out Time',orig:'17:00',req:'18:30',reason:'Client call overrun',status:'Approved'},
+    {id:'REG-003',empId:'EMP-001',date:'2025-03-15',type:'Break Adjustment',orig:'60 min',req:'30 min',reason:'Urgent delivery',status:'Rejected'},
+  ],
+
+  announcements: [
+    {id:'AN-001',title:'🎉 Eid Mubarak! Office Closure Notice',cat:'Holiday',audience:'All Employees',msg:'The office will be closed from April 20–22 for Eid-ul-Fitr. Wishing everyone a blessed Eid!',author:'Sara Ahmed',role:'HR Manager',date:'2025-04-10'},
+    {id:'AN-002',title:'📋 Q2 Town Hall — Save the Date',cat:'Event',audience:'All Employees',msg:'Q2 Town Hall will be held on April 22, 2025 at 3:00 PM in the Main Conference Room. Attendance is mandatory for all department heads.',author:'Zainab Hussain',role:'CEO',date:'2025-04-08'},
+    {id:'AN-003',title:'✅ New Attendance Policy — Effective May 1',cat:'Policy',audience:'All Employees',msg:'Starting May 1, the shift starts at 11:00 AM with a 10-minute grace period. Late arrivals after 11:10 AM will be marked "Late". Repeated late arrivals (3+) will trigger an HR review.',author:'Sara Ahmed',role:'HR Manager',date:'2025-04-05'},
+  ],
+
+  holidays: [
+    {date:'2025-01-01',name:"New Year's Day",type:'National'},
+    {date:'2025-02-05',name:'Kashmir Solidarity Day',type:'National'},
+    {date:'2025-03-23',name:'Pakistan Day',type:'National'},
+    {date:'2025-04-20',name:'Eid-ul-Fitr',type:'Religious'},
+    {date:'2025-04-21',name:'Eid-ul-Fitr (2nd Day)',type:'Religious'},
+    {date:'2025-05-01',name:'Labour Day',type:'National'},
+    {date:'2025-08-14',name:'Independence Day',type:'National'},
+    {date:'2025-11-09',name:'Iqbal Day',type:'National'},
+    {date:'2025-12-25',name:'Quaid Day / Christmas',type:'National'},
+  ],
+
+  departments: [
+    {name:'Engineering',head:'Hassan Ali',color:'#2447D0',count:42,present:39,leave:2,absent:1},
+    {name:'Human Resources',head:'Sara Ahmed',color:'#1B7A42',count:8,present:7,leave:1,absent:0},
+    {name:'Finance',head:'Khalid Rehman',color:'#6B3FA0',count:15,present:14,leave:1,absent:0},
+    {name:'Marketing',head:'Sana Khan',color:'#A05C00',count:19,present:14,leave:3,absent:2},
+    {name:'Product',head:'Tariq Mahmood',color:'#C0392B',count:21,present:18,leave:2,absent:1},
+    {name:'Operations',head:'Bilal Ahmed',color:'#6E6C63',count:43,present:38,leave:3,absent:2},
+  ],
+
+  leaveBalances: {
+    'EMP-001':{annual:18,sick:7,casual:3,paternity:5,maternity:90,marriage:7,bereavement:3},
+  },
+
+  liveAttendance: [
+    {name:'Ahmed Karim',dept:'Engineering',status:'in',since:'08:55'},
+    {name:'Sara Ahmed',dept:'HR',status:'break',since:'13:02'},
+    {name:'Hassan Ali',dept:'Engineering',status:'in',since:'09:02'},
+    {name:'Nadia Iqbal',dept:'HR',status:'leave',since:'Annual'},
+    {name:'Omar Farooq',dept:'Engineering',status:'out',since:'17:30'},
+    {name:'Zara Khan',dept:'Engineering',status:'in',since:'09:45'},
+    {name:'Fatima Malik',dept:'Finance',status:'in',since:'08:50'},
+    {name:'Khalid Rehman',dept:'Finance',status:'break',since:'13:10'},
+    {name:'Aisha Siddiqui',dept:'Marketing',status:'in',since:'09:00'},
+    {name:'Usman Tariq',dept:'Product',status:'in',since:'09:00'},
+    {name:'Sana Butt',dept:'Marketing',status:'leave',since:'Sick'},
+    {name:'Bilal Ahmed',dept:'Operations',status:'out',since:'17:00'},
+  ],
+
+  // Punch state per user session
+  punchState: {
+    punchedIn: false,
+    onBreak: false,
+    clockInTime: null,
+    clockOutTime: null,
+    breakOutTime: null,
+    breakInTime: null,
+    totalBreakMs: 0,
+    sessionLogs: [],
+  },
+
+  currentApprovalId: null,
+};
+
+// ══════════════════════════════════════════════════
+//  CLOCK
+// ══════════════════════════════════════════════════
+let clockInterval = null;
+function startClock(){
+  function tick(){
+    const now = new Date();
+    const t = now.toLocaleTimeString('en-GB');
+    const el = document.getElementById('tb-clock');
+    const ecwEl = document.getElementById('ecw-time-display');
+    const cwEl = document.getElementById('cw-time-display');
+    if(el) el.textContent = t;
+    if(ecwEl) ecwEl.textContent = t;
+    if(cwEl) cwEl.textContent = t;
+
+    // update working hours if punched in
+    if(DB.punchState.punchedIn && DB.punchState.clockInTime && !DB.punchState.onBreak){
+      const diff = now - DB.punchState.clockInTime - DB.punchState.totalBreakMs;
+      const h = Math.floor(diff/3600000);
+      const m = Math.floor((diff%3600000)/60000);
+      const s = Math.floor((diff%60000)/1000);
+      const wh = document.getElementById('work-hours-live');
+      if(wh) wh.textContent = `${h}h ${m}m ${s}s`;
+    }
+  }
+  tick();
+  if(clockInterval) clearInterval(clockInterval);
+  clockInterval = setInterval(tick, 1000);
+}
+
+// ══════════════════════════════════════════════════
+//  MODAL HELPERS
+// ══════════════════════════════════════════════════
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+});
+
+// ══════════════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════════════
+let loginRole = 'admin';
+function selectLoginRole(r){
+  loginRole = r;
+  document.getElementById('lt-admin').classList.toggle('active', r==='admin');
+  document.getElementById('lt-emp').classList.toggle('active', r==='employee');
+  if(r==='admin'){
+    document.getElementById('l-email').value='admin@workpulse.com';
+    document.getElementById('l-pass').value='admin123';
+  } else {
+    document.getElementById('l-email').value='employee@workpulse.com';
+    document.getElementById('l-pass').value='emp123';
+  }
+}
+
+function doLogin(){
+  const email = document.getElementById('l-email').value.trim();
+  const pass = document.getElementById('l-pass').value.trim();
+  const err = document.getElementById('l-err');
+  const user = DB.users.find(u=>u.email===email && u.pass===pass);
+  if(!user){ err.style.display='block'; return; }
+  err.style.display='none';
+  DB.currentUser = user;
+  DB.currentRole = user.role; // 'admin', 'hr', 'employee'
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').classList.add('visible');
+  initApp();
+}
+
+function doLogout(){
+  // Save punch state before logout — do NOT reset it
+  if(DB.currentUser){
+    savePunchState(DB.currentUser.id);
+  }
+  DB.currentUser=null; DB.currentRole=null;
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-screen').style.display='flex';
+}
+
+function savePunchState(empId){
+  try{
+    const ps = DB.punchState;
+    const snapshot = {
+      punchedIn: ps.punchedIn,
+      onBreak: ps.onBreak,
+      clockInTime: ps.clockInTime ? ps.clockInTime.getTime() : null,
+      clockOutTime: ps.clockOutTime ? ps.clockOutTime.getTime() : null,
+      breakOutTime: ps.breakOutTime ? ps.breakOutTime.getTime() : null,
+      breakInTime: ps.breakInTime ? ps.breakInTime.getTime() : null,
+      totalBreakMs: ps.totalBreakMs,
+      sessionLogs: ps.sessionLogs,
+      savedDate: new Date().toISOString().split('T')[0],
+    };
+    localStorage.setItem('punchState_'+empId, JSON.stringify(snapshot));
+  } catch(e){}
+}
+
+function loadPunchState(empId){
+  try{
+    const raw = localStorage.getItem('punchState_'+empId);
+    if(!raw) return false;
+    const snap = JSON.parse(raw);
+    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+
+    // Reset if saved date is not today OR if current time is past midnight (00:00) of next day
+    // Policy: punch state resets at 00:00 (midnight) — not at logout
+    if(snap.savedDate !== today){
+      localStorage.removeItem('punchState_'+empId);
+      return false;
+    }
+
+    // Restore state
+    DB.punchState.punchedIn   = snap.punchedIn;
+    DB.punchState.onBreak     = snap.onBreak;
+    DB.punchState.clockInTime  = snap.clockInTime  ? new Date(snap.clockInTime)  : null;
+    DB.punchState.clockOutTime = snap.clockOutTime ? new Date(snap.clockOutTime) : null;
+    DB.punchState.breakOutTime = snap.breakOutTime ? new Date(snap.breakOutTime) : null;
+    DB.punchState.breakInTime  = snap.breakInTime  ? new Date(snap.breakInTime)  : null;
+    DB.punchState.totalBreakMs = snap.totalBreakMs || 0;
+    DB.punchState.sessionLogs  = snap.sessionLogs  || [];
+    return true;
+  } catch(e){ return false; }
+}
+
+// ══════════════════════════════════════════════════
+//  INIT APP
+// ══════════════════════════════════════════════════
+function initApp(){
+  const u = DB.currentUser;
+  document.getElementById('sb-name').textContent = u.fname+' '+u.lname;
+  document.getElementById('sb-role').textContent = DB.currentRole==='admin'?'Administrator':DB.currentRole==='hr'?'HR Manager':'Employee';
+  document.getElementById('sb-avatar').textContent = u.avatar;
+  document.getElementById('sb-avatar').style.background = u.avatarColor;
+
+  // Always reset punchState to clean defaults first, then restore from storage
+  DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,sessionLogs:[]};
+
+  if(DB.currentRole==='employee'){
+    // Load persisted punch state — only restores if saved TODAY
+    loadPunchState(u.id);
+  }
+
+  buildNav();
+  startClock();
+  scheduleMidnightReset();
+
+  if(DB.currentRole==='employee'){
+    showPage('emp-dashboard');
+    buildTopbarActions();
+  } else {
+    showPage('dashboard');
+    buildTopbarActions();
+  }
+}
+
+// Auto-reset punch state at midnight (00:00) each day
+function scheduleMidnightReset(){
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setDate(midnight.getDate()+1);
+  midnight.setHours(0,0,5,0); // 00:00:05 next day
+  const msUntilMidnight = midnight - now;
+  setTimeout(function(){
+    if(DB.currentUser){
+      DB.punchState={punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,sessionLogs:[]};
+      try{ localStorage.removeItem('punchState_'+DB.currentUser.id); } catch(e){}
+      refreshPunchUI();
+      showToast('New shift started — Clock In when ready','green');
+    }
+    scheduleMidnightReset(); // reschedule for next day
+  }, msUntilMidnight);
+}
+
+function buildTopbarActions(){
+  const el = document.getElementById('topbar-actions');
+  if(DB.currentRole==='employee'){
+    el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
+    <button class="btn btn-sm btn-ghost" onclick="window.openModal('regulationModal')">Regulation</button>`;
+  } else {
+    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ Announce</button>
+    <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  NAVIGATION BUILD
+// ══════════════════════════════════════════════════
+const adminNav = [
+  {sect:'Overview', items:[{label:'Dashboard',page:'dashboard',icon:'grid'}]},
+  {sect:'Attendance', items:[
+    {label:'Attendance',page:'attendance',icon:'clock'},
+    {label:'Real-Time Monitor',page:'realtime',icon:'monitor',badge:'live'},
+  ]},
+  {sect:'Leave', items:[{label:'Leave Management',page:'leave',icon:'calendar',badge:'3'}]},
+  {sect:'People', items:[
+    {label:'Employees',page:'employees',icon:'users'},
+    {label:'Departments',page:'departments',icon:'chart'},
+    {label:'Org Chart',page:'orgchart',icon:'hierarchy'},
+  ]},
+  {sect:'Admin', items:[
+    {label:'Calendar & Events',page:'calendar',icon:'cal'},
+    {label:'Reports',page:'reports',icon:'report'},
+    {label:'Announcements',page:'announcements',icon:'megaphone'},
+    {label:'Company Details',page:'company',icon:'building'},
+  ]},
+];
+
+const empNav = [
+  {sect:'My Workspace', items:[
+    {label:'Dashboard',page:'emp-dashboard',icon:'grid'},
+    {label:'My Attendance',page:'emp-attendance',icon:'clock'},
+    {label:'My Leaves',page:'emp-leaves',icon:'calendar'},
+  ]},
+  {sect:'Profile & Team', items:[
+    {label:'My Profile',page:'emp-profile',icon:'user'},
+    {label:'My Team',page:'emp-team',icon:'users'},
+  ]},
+  {sect:'Company', items:[
+    {label:'Announcements',page:'emp-announcements',icon:'megaphone'},
+    {label:'Events & Calendar',page:'emp-calendar',icon:'cal'},
+  ]},
+];
+
+const icons={
+  grid:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/><rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/></svg>`,
+  clock:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5V8.5L10.5 10"/></svg>`,
+  monitor:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/><path d="M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41"/></svg>`,
+  calendar:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 1v4M11 1v4M1 7h14"/></svg>`,
+  cal:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 1v4M11 1v4M1 7h14"/><circle cx="5.5" cy="10.5" r="1"/></svg>`,
+  users:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="3"/><path d="M1 14c0-3 2-5 5-5s5 2 5 5"/><circle cx="12.5" cy="5.5" r="2"/><path d="M15 13c0-2-1.5-3.5-2.5-3.5"/></svg>`,
+  chart:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="9" width="4" height="5" rx="1"/><rect x="6" y="6" width="4" height="8" rx="1"/><rect x="11" y="3" width="4" height="11" rx="1"/></svg>`,
+  hierarchy:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="1" width="6" height="4" rx="1"/><rect x="1" y="11" width="4" height="4" rx="1"/><rect x="6" y="11" width="4" height="4" rx="1"/><rect x="11" y="11" width="4" height="4" rx="1"/><path d="M8 5v3M8 8H3v3M8 8h5v3"/></svg>`,
+  report:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12L6 8l3 3 5-6"/><rect x="1" y="1" width="14" height="13" rx="1.5"/></svg>`,
+  megaphone:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3L3 6v4l10 3V3z"/><path d="M3 10v3a1 1 0 002 0v-3"/></svg>`,
+  building:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 9h6M5 12h4"/><circle cx="8" cy="6" r="1.5"/></svg>`,
+  user:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>`,
+};
+
+function buildNav(){
+  const nav = DB.currentRole==='employee' ? empNav : adminNav;
+  let html = '';
+  nav.forEach(section=>{
+    html += `<div class="sb-sect">${section.sect}</div>`;
+    section.items.forEach(item=>{
+      const isCurrent = false;
+      let extra = '';
+      if(item.badge==='live') extra=`<span class="live-dot"></span>`;
+      else if(item.badge) extra=`<span class="nav-badge">${item.badge}</span>`;
+      html += `<div class="nav-item" id="nav-${item.page}" onclick="window.showPage('${item.page}')">${icons[item.icon]||''}${item.label}${extra}</div>`;
+    });
+  });
+  document.getElementById('sidebar-nav').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════
+//  PAGE ROUTER
+// ══════════════════════════════════════════════════
+const pageTitles = {
+  dashboard:'Dashboard',attendance:'Attendance',realtime:'Real-Time Monitor',
+  leave:'Leave Management',employees:'Employees',departments:'Departments',
+  orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
+  announcements:'Announcements',company:'Company Details',
+  'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
+  'emp-leaves':'My Leaves','emp-profile':'My Profile',
+  'emp-team':'My Team','emp-announcements':'Announcements','emp-calendar':'Events & Calendar',
+  'emp-profile-detail':'Employee Profile',
+};
+
+function showPage(id){
+  document.getElementById('page-title').textContent = pageTitles[id]||id;
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const navEl = document.getElementById('nav-'+id);
+  if(navEl) navEl.classList.add('active');
+  document.getElementById('main-content').innerHTML = renderPage(id);
+  startClock(); // re-hook clock elements
+}
+
+function renderPage(id){
+  switch(id){
+    case 'dashboard': return pageAdminDashboard();
+    case 'attendance': return pageAttendance();
+    case 'realtime': return pageRealtime();
+    case 'leave': return pageLeave();
+    case 'employees': return pageEmployees();
+    case 'departments': return pageDepartments();
+    case 'orgchart': return pageOrgChart();
+    case 'calendar': return pageCalendar();
+    case 'reports': return pageReports();
+    case 'announcements': return pageAnnouncements();
+    case 'company': return pageCompany();
+    // Employee pages
+    case 'emp-dashboard': return pageEmpDashboard();
+    case 'emp-attendance': return pageEmpAttendance();
+    case 'emp-leaves': return pageEmpLeaves();
+    case 'emp-profile': return pageEmpProfile();
+    case 'emp-team': return pageEmpTeam();
+    case 'emp-announcements': return pageAnnouncements(true);
+    case 'emp-calendar': return pageCalendar(true);
+    case 'emp-profile-detail': return pageEmpProfileDetail();
+    default: return `<div class="card"><p>Page not found: ${id}</p></div>`;
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+function statusBadge(s){
+  const map={
+    'Active':'bg-green','Probation':'bg-amber','Inactive':'bg-gray','On Leave':'bg-purple',
+    'Approved':'bg-green','Rejected':'bg-red','Pending':'bg-amber','Waiting':'bg-gray',
+    'Present':'bg-green','Absent':'bg-red','Leave':'bg-purple','Late':'bg-amber',
+    'National':'bg-blue','Religious':'bg-amber','Optional':'bg-gray',
+  };
+  return `<span class="badge ${map[s]||'bg-gray'}">${s}</span>`;
+}
+
+function calcWorkHours(attRecord){
+  if(!attRecord.in || !attRecord.out) return '—';
+  const [ih,im]=attRecord.in.split(':').map(Number);
+  const [oh,om]=attRecord.out.split(':').map(Number);
+  let mins=(oh*60+om)-(ih*60+im);
+  if(attRecord.breakOut&&attRecord.breakIn){
+    const [boh,bom]=attRecord.breakOut.split(':').map(Number);
+    const [bih,bim]=attRecord.breakIn.split(':').map(Number);
+    mins -= (bih*60+bim)-(boh*60+bom);
+  }
+  const h=Math.floor(mins/60), m=mins%60;
+  return `${h}h ${m}m`;
+}
+
+function formatDate(d){ return d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'; }
+
+function now(){ return new Date(); }
+function nowTime(){ return new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+
+// ══════════════════════════════════════════════════
+//  PUNCH SYSTEM (fully functional)
+// ══════════════════════════════════════════════════
+async function wpApi(path, opts={}){
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  const res = await fetch(path, {
+    credentials: 'same-origin',
+    headers: {
+      'Content-Type':'application/json',
+      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}),
+      ...(opts.headers||{})
+    },
+    ...opts,
+  });
+  const ct = res.headers.get('content-type') || '';
+  const data = ct.includes('application/json') ? await res.json().catch(()=>null) : null;
+  if(!res.ok) throw new Error((data && (data.message||data.error)) || ('HTTP '+res.status));
+  return data;
+}
+
+async function wpReload(){
+  try{
+    const data = await wpApi('/api/bootstrap', {method:'GET', headers:{}});
+    if(typeof DB === 'object' && DB){
+      DB.currentUser = data.currentUser;
+      DB.currentRole = data.currentRole;
+      DB.users = [data.currentUser];
+      DB.employees = data.employees || [];
+      DB.departments = data.departments || [];
+      DB.attendance = data.attendance || [];
+      DB.leaves = data.leaves || [];
+      DB.regulations = data.regulations || [];
+      DB.announcements = data.announcements || [];
+      DB.holidays = data.holidays || [];
+    }
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+async function wpPunch(type){
+  try{
+    await wpApi('/api/attendance/punch', {method:'POST', body: JSON.stringify({type})});
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+function punchIn(){
+  const ps = DB.punchState;
+  if(ps.punchedIn) return;
+  ps.punchedIn = true;
+  ps.clockInTime = new Date();
+  ps.sessionLogs.push({event:'Clock In',time:nowTime()});
+
+  const today = new Date().toISOString().split('T')[0];
+  const empId = DB.currentUser.id;
+  let rec = DB.attendance.find(a=>a.empId===empId && a.date===today);
+  if(!rec){ rec={empId,date:today,in:null,out:null,breakOut:null,breakIn:null,status:'Present',late:false,overtime:0}; DB.attendance.push(rec); }
+  rec.in = nowTime();
+  rec.status = 'Present';
+  // Shift: 11:00 AM – 8:00 PM | Grace: 10 min → late after 11:10 AM
+  const grace = new Date(); grace.setHours(11,10,0,0);
+  rec.late = new Date() > grace;
+
+  wpPunch('clock_in');
+  savePunchState(empId);
+  refreshPunchUI();
+  showToast('Clocked in at '+nowTime(),'green');
+}
+
+function punchOut(){
+  const ps = DB.punchState;
+  if(!ps.punchedIn) return;
+  ps.punchedIn = false;
+  ps.clockOutTime = new Date();
+  ps.sessionLogs.push({event:'Clock Out',time:nowTime()});
+
+  const today = new Date().toISOString().split('T')[0];
+  const empId = DB.currentUser.id;
+  let rec = DB.attendance.find(a=>a.empId===empId && a.date===today);
+  if(rec){
+    rec.out = nowTime();
+    // Calculate overtime: shift ends 20:00 (8 PM)
+    const [oh,om] = rec.out.split(':').map(Number);
+    const outMins = oh*60+om;
+    const shiftEndMins = 20*60; // 8 PM
+    rec.overtime = Math.max(0, outMins - shiftEndMins);
+  }
+
+  wpPunch('clock_out');
+  savePunchState(empId);
+  refreshPunchUI();
+  showToast('Clocked out at '+nowTime(),'red');
+}
+
+function breakOut(){
+  const ps = DB.punchState;
+  if(!ps.punchedIn||ps.onBreak) return;
+  ps.onBreak = true;
+  ps.breakOutTime = new Date();
+  ps.sessionLogs.push({event:'Break Out',time:nowTime()});
+
+  const today = new Date().toISOString().split('T')[0];
+  const empId = DB.currentUser.id;
+  let rec = DB.attendance.find(a=>a.empId===empId && a.date===today);
+  if(rec) rec.breakOut = nowTime();
+
+  wpPunch('break_out');
+  savePunchState(empId);
+  refreshPunchUI();
+  showToast('Break started at '+nowTime(),'amber');
+}
+
+function breakIn(){
+  const ps = DB.punchState;
+  if(!ps.onBreak) return;
+  ps.onBreak = false;
+  const diff = new Date() - ps.breakOutTime;
+  ps.totalBreakMs += diff;
+  ps.breakOutTime = null;
+  ps.sessionLogs.push({event:'Break In',time:nowTime()});
+
+  const today = new Date().toISOString().split('T')[0];
+  const empId = DB.currentUser.id;
+  let rec = DB.attendance.find(a=>a.empId===empId && a.date===today);
+  if(rec) rec.breakIn = nowTime();
+
+  wpPunch('break_in');
+  savePunchState(empId);
+  refreshPunchUI();
+  showToast('Break ended at '+nowTime(),'green');
+}
+
+function refreshPunchUI(){
+  const ps = DB.punchState;
+  const currentTitle = document.getElementById('page-title').textContent;
+  const mc = document.getElementById('main-content');
+  if(!mc) return;
+
+  // Pages that need full re-render when punch state changes
+  const adminAttTitle = pageTitles['attendance'];
+  const empDashTitle  = pageTitles['emp-dashboard'];
+  const empAttTitle   = pageTitles['emp-attendance'];
+
+  if(currentTitle === adminAttTitle){
+    mc.innerHTML = renderPage('attendance');
+    startClock();
+  } else if(currentTitle === empDashTitle){
+    // Re-render whole dashboard so buttons + stats update
+    mc.innerHTML = renderPage('emp-dashboard');
+    startClock();
+  } else if(currentTitle === empAttTitle){
+    mc.innerHTML = renderPage('emp-attendance');
+    startClock();
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════
+function showToast(msg, type='green'){
+  const colors={green:'var(--green)',red:'var(--red)',amber:'var(--amber)'};
+  const t=document.createElement('div');
+  t.style.cssText=`position:fixed;bottom:24px;right:24px;background:${colors[type]||colors.green};color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s;`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2500);
+}
+
+// ══════════════════════════════════════════════════
+//  SUBMIT ACTIONS
+// ══════════════════════════════════════════════════
+function submitLeave(){
+  const type=document.getElementById('lv-type').value;
+  const from=document.getElementById('lv-from').value;
+  const to=document.getElementById('lv-to').value;
+  const reason=document.getElementById('lv-reason').value;
+  const handover=document.getElementById('lv-handover').value;
+  if(!from||!to||!reason){ showToast('Please fill all required fields','red'); return; }
+  const u=DB.currentUser;
+  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
+  const id='LV-'+String(DB.leaves.length+1).padStart(3,'0');
+  DB.leaves.push({id,empId:u.id,empName:u.fname+' '+u.lname,dept:u.dept,type,from,to,days,reason,handover,applied:new Date().toISOString().split('T')[0],managerStatus:'Pending',hrStatus:'Waiting',status:'Pending'});
+  // Send to backend (best-effort). Front-end list will still show immediately.
+  wpApi('/api/leave/apply', {
+    method:'POST',
+    body: JSON.stringify({
+      leave_type_code: (type||'').toLowerCase().includes('sick') ? 'sick' : ((type||'').toLowerCase().includes('annual') ? 'annual' : 'annual'),
+      from_date: from,
+      to_date: to,
+      days,
+      reason,
+      handover_to: handover,
+    })
+  }).catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  closeModal('leaveModal');
+  showToast('Leave request submitted!','green');
+  // refresh
+  const page = DB.currentRole==='employee' ? 'emp-leaves':'leave';
+  if(document.getElementById('page-title').textContent===pageTitles[page]) showPage(page);
+}
+
+function calcLeaveDays(){
+  const from=document.getElementById('lv-from')?.value;
+  const to=document.getElementById('lv-to')?.value;
+  if(from&&to){
+    const days=Math.max(0,Math.round((new Date(to)-new Date(from))/86400000)+1);
+    const c=document.getElementById('lv-calc');
+    const d=document.getElementById('lv-days');
+    if(c&&d){c.style.display='block';d.textContent=days;}
+  }
+}
+
+document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
+
+function submitRegulation(){
+  const date=document.getElementById('reg-date').value;
+  const type=document.getElementById('reg-type').value;
+  const orig=document.getElementById('reg-orig').value;
+  const req=document.getElementById('reg-req').value;
+  const reason=document.getElementById('reg-reason').value;
+  if(!date||!req||!reason){ showToast('Please fill all required fields','red'); return; }
+  const id='REG-'+String(DB.regulations.length+1).padStart(3,'0');
+  DB.regulations.push({id,empId:DB.currentUser.id,date,type,orig:orig||'—',req,reason,status:'Pending'});
+  wpApi('/api/attendance/regulations', {method:'POST', body: JSON.stringify({date,type,original_value:orig||'—',requested_value:req,reason})})
+    .then(()=>wpReload())
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  closeModal('regulationModal');
+  showToast('Regulation request submitted!','green');
+}
+
+function submitAnnouncement(){
+  const title=document.getElementById('ann-title').value;
+  const cat=document.getElementById('ann-cat').value;
+  const audience=document.getElementById('ann-aud').value;
+  const msg=document.getElementById('ann-msg').value;
+  if(!title||!msg){ showToast('Title and message required','red'); return; }
+  const u=DB.currentUser;
+  DB.announcements.unshift({id:'AN-'+Date.now(),title,cat,audience,msg,author:u.fname+' '+u.lname,role:u.desg,date:new Date().toISOString().split('T')[0]});
+  wpApi('/api/announcements', {method:'POST', body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg})})
+    .then(()=>wpReload())
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  document.getElementById('ann-title').value='';
+  document.getElementById('ann-msg').value='';
+  closeModal('announcementModal');
+  showToast('Announcement published!','green');
+  if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
+}
+
+function submitAddEmployee(){
+  const fn=document.getElementById('ne-fname').value;
+  const ln=document.getElementById('ne-lname').value;
+  const email=document.getElementById('ne-email').value;
+  const phone=document.getElementById('ne-phone').value;
+  const dept=document.getElementById('ne-dept').value;
+  const desg=document.getElementById('ne-desg').value;
+  const doj=document.getElementById('ne-doj').value;
+  const type=document.getElementById('ne-type').value;
+  const manager=document.getElementById('ne-manager').value;
+  if(!fn||!ln||!email||!dept||!desg||!doj){ showToast('Please fill all required fields','red'); return; }
+  const id='EMP-'+String(DB.employees.length+1).padStart(3,'0');
+  const av=(fn[0]+ln[0]).toUpperCase();
+  const colors=['#2447D0','#1B7A42','#0D7373','#A05C00','#C0392B','#6B3FA0'];
+  const avatarColor=colors[DB.employees.length%colors.length];
+  DB.employees.push({id,fname:fn,lname:ln,email,phone,dept,desg,doj,dop:type==='Probation'?new Date(new Date(doj).getTime()+90*86400000).toISOString().split('T')[0]:null,manager,avatar:av,avatarColor,status:type==='Probation'?'Probation':'Active',type,basic:0,house:0,transport:0,tax:0});
+  wpApi('/api/employees', {method:'POST', body: JSON.stringify({fname:fn,lname:ln,email,phone,dept,desg,doj,type,manager})})
+    .then((data)=>{
+      const tempMsg = data && data.temporary_password ? (' Temporary password: '+data.temporary_password) : '';
+      showToast('Employee added: '+fn+' '+ln+tempMsg,'green');
+      return wpReload().then(()=>{ if(document.getElementById('page-title').textContent==='Employees') showPage('employees'); });
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  closeModal('addEmpModal');
+  ['ne-fname','ne-lname','ne-email','ne-phone','ne-desg','ne-manager'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
+}
+
+function submitHoliday(){
+  const name=document.getElementById('hol-name').value;
+  const date=document.getElementById('hol-date').value;
+  const type=document.getElementById('hol-type').value;
+  if(!name||!date){ showToast('Please fill all fields','red'); return; }
+  DB.holidays.push({date,name,type});
+  DB.holidays.sort((a,b)=>a.date.localeCompare(b.date));
+  wpApi('/api/holidays', {method:'POST', body: JSON.stringify({name,date,type})})
+    .then(()=>wpReload())
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  closeModal('holidayModal');
+  showToast('Holiday added!','green');
+  if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+}
+
+let currentApprovalId=null;
+function openApproval(leaveId){
+  currentApprovalId=leaveId;
+  const lv=DB.leaves.find(l=>l.id===leaveId);
+  if(!lv) return;
+  document.getElementById('approval-details').innerHTML=`
+    <div class="card" style="background:var(--surface2);">
+      <div class="irow"><span class="ikey">Employee</span><span class="ival">${lv.empName}</span></div>
+      <div class="irow"><span class="ikey">Department</span><span class="ival">${lv.dept}</span></div>
+      <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${lv.type}</span></div>
+      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} → ${formatDate(lv.to)} (${lv.days} day${lv.days>1?'s':''})</span></div>
+      <div class="irow"><span class="ikey">Reason</span><span class="ival">${lv.reason}</span></div>
+      <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'—'}</span></div>
+    </div>`;
+  openModal('approvalModal');
+}
+
+function approveLeave(decision){
+  const lv=DB.leaves.find(l=>l.id===currentApprovalId);
+  if(!lv) return;
+  if(DB.currentRole==='admin'||DB.currentRole==='hr'){
+    lv.managerStatus=decision;
+    lv.hrStatus=decision;
+    lv.status=decision;
+  }
+  // Backend approval workflow: HR step approves/rejects final (manager step is done separately)
+  wpApi('/api/leave/'+encodeURIComponent(lv.id)+'/review', {method:'PATCH', body: JSON.stringify({step: ((DB.currentRole==='hr'||DB.currentRole==='admin')?'hr':'manager'), status: decision, notes: ''})})
+    .then(()=>wpReload())
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  closeModal('approvalModal');
+  showToast(`Leave ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
+  if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+}
+
+function deleteEmployee(id){
+  if(!confirm('Are you sure you want to remove this employee?')) return;
+  const idx=DB.employees.findIndex(e=>e.id===id);
+  if(idx>=0) DB.employees.splice(idx,1);
+  wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'})
+    .then(()=>wpReload())
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+  showToast('Employee removed','red');
+  showPage('employees');
+}
+
+function filterTable(inputId, tableId){
+  const val=document.getElementById(inputId)?.value.toLowerCase()||'';
+  document.querySelectorAll(`#${tableId} tbody tr`).forEach(row=>{
+    row.style.display=row.textContent.toLowerCase().includes(val)?'':'none';
+  });
+}
+
+// ══════════════════════════════════════════════════
+//  TAB SWITCHER
+// ══════════════════════════════════════════════════
+function switchTab(group, tab){
+  document.querySelectorAll(`[id^="${group}-tc-"]`).forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll(`[data-tab-group="${group}"]`).forEach(el=>el.classList.remove('active'));
+  const tc=document.getElementById(`${group}-tc-${tab}`);
+  if(tc) tc.classList.add('active');
+  document.querySelectorAll(`[data-tab-group="${group}"][data-tab="${tab}"]`).forEach(el=>el.classList.add('active'));
+}
+
+function buildTabs(group, tabs, activeTab){
+  const tabHtml=tabs.map(t=>`<div class="tab${t.id===activeTab?' active':''}" data-tab-group="${group}" data-tab="${t.id}" onclick="switchTab('${group}','${t.id}')">${t.label}</div>`).join('');
+  const contentHtml=tabs.map(t=>`<div class="tab-content${t.id===activeTab?' active':''}" id="${group}-tc-${t.id}">${t.content}</div>`).join('');
+  return `<div class="tabs">${tabHtml}</div>${contentHtml}`;
+}
+
+// ══════════════════════════════════════════════════
+//  ██████ ADMIN PAGES ██████
+// ══════════════════════════════════════════════════
+
+function pageAdminDashboard(){
+  const today=new Date().toISOString().split('T')[0];
+  const todayAtt=DB.attendance.filter(a=>a.date===today);
+  const present=todayAtt.filter(a=>a.status==='Present').length;
+  const absent=todayAtt.filter(a=>a.status==='Absent').length;
+  const onLeave=DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
+  const pendingLeaves=DB.leaves.filter(l=>l.status==='Pending').length;
+  const lateToday=todayAtt.filter(a=>a.late).length;
+
+  return `
+  <div class="alert al-success"><span>🎂</span><div><strong>Today's Birthday:</strong> Sara Ahmed (HR Manager) — Send her a wish! &nbsp;|&nbsp; <strong>Work Anniversary:</strong> Hassan Ali — 6 years today!</div></div>
+  <div class="alert al-warn"><span>⚠️</span><div><strong>New Joiner:</strong> Maria Santos joined today as UI Designer (Product). Welcome!</div></div>
+  <div class="alert al-danger"><span>🔴</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
+
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">↑ 1 new today</div></div>
+    <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present||DB.liveAttendance.filter(l=>l.status==='in').length}</div><div class="stat-sub">Active in office</div></div>
+    <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave||DB.liveAttendance.filter(l=>l.status==='leave').length}</div><div class="stat-sub">Approved leave</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests →</div></div>
+  </div>
+
+  <div class="g2" style="margin-bottom:14px;">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Weekly Attendance</div><span class="badge bg-blue">This Week</span></div>
+      <div class="chart-area">
+        ${[['Mon',85],['Tue',90],['Wed',78],['Thu',92],['Fri',86],['Sat',20],['Sun',5]].map(([d,h])=>`
+        <div class="cb-wrap"><div class="cb-bar" style="height:${h}%;background:${h>80?'var(--accent)':h>40?'var(--amber)':'var(--border)'};"></div><div class="cb-lbl">${d}</div></div>`).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Department Attendance</div></div>
+      ${DB.departments.map(d=>{const pct=Math.round(d.present/d.count*100);return`
+      <div style="padding:7px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${pct}%</strong></div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${d.color};"></div></div>
+      </div>`}).join('')}
+    </div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Recent Activity</div></div>
+      <div class="tl">
+        <div class="tl-item"><div class="tl-dot" style="background:var(--green);"></div><div class="tl-line"></div><div><div style="font-size:13px;font-weight:500;">Hassan Ali clocked in</div><div style="font-size:11px;color:var(--muted);">09:02 AM · Engineering</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--amber);"></div><div class="tl-line"></div><div><div style="font-size:13px;font-weight:500;">Sara Ahmed — Break Out</div><div style="font-size:11px;color:var(--muted);">01:02 PM · HR</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--red);"></div><div class="tl-line"></div><div><div style="font-size:13px;font-weight:500;">Leave Request: Omar Farooq</div><div style="font-size:11px;color:var(--muted);">Sick Leave · Awaiting approval</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--purple);"></div><div><div style="font-size:13px;font-weight:500;">Maria Santos — New Joiner</div><div style="font-size:11px;color:var(--muted);">Onboarded: Product / UI Designer</div></div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Upcoming Events</div><button class="btn btn-sm" onclick="window.showPage('calendar')">View All</button></div>
+      <div class="irow"><div><strong style="font-size:13px;">Eid-ul-Fitr</strong><div style="font-size:11px;color:var(--muted);">National Holiday</div></div><span class="badge bg-amber">Apr 20</span></div>
+      <div class="irow"><div><strong style="font-size:13px;">Q2 Town Hall</strong><div style="font-size:11px;color:var(--muted);">Company-wide event</div></div><span class="badge bg-purple">Apr 22</span></div>
+      <div class="irow"><div><strong style="font-size:13px;">Sara Ahmed 🎂</strong><div style="font-size:11px;color:var(--muted);">Birthday today!</div></div><span class="badge bg-green">Today</span></div>
+      <div class="irow"><div><strong style="font-size:13px;">Maria Santos Probation</strong><div style="font-size:11px;color:var(--muted);">Probation review due</div></div><span class="badge bg-blue">Jul 10</span></div>
+    </div>
+  </div>`;
+}
+
+function pageAttendance(){
+  const ps=DB.punchState;
+  const u=DB.currentUser;
+  const today=new Date().toISOString().split('T')[0];
+  const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Clocked In',late:false};
+
+  const statusLabel = ps.punchedIn ? (ps.onBreak?'On Break':'In Office') : (todayRec.out?'Clocked Out':'Not Started');
+  const statusBadgeHtml = ps.punchedIn ? (ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`) : `<span class="badge bg-gray">Not Clocked In</span>`;
+
+  let punchButtons = '';
+  if(!ps.punchedIn && !todayRec.out){
+    punchButtons = `<button class="punch-btn pb-in" onclick="punchIn()">Clock In</button>`;
+  } else if(ps.punchedIn){
+    punchButtons = `
+      <button class="punch-btn pb-out" onclick="punchOut()">Clock Out</button>
+      ${ps.onBreak
+        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break In — End Break</button>`
+        : `<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">Break Out</button>`
+      }`;
+  } else {
+    punchButtons = `<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>Shift Completed</button>`;
+  }
+
+  const logRows = DB.attendance.filter(a=>a.empId===u.id).map(a=>`
+    <tr>
+      <td>${formatDate(a.date)}</td>
+      <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
+      <td>${a.in||'—'}</td>
+      <td>${a.breakOut||'—'}</td>
+      <td>${a.breakIn||'—'}</td>
+      <td>${a.out||'—'}</td>
+      <td>${calcWorkHours(a)}</td>
+      <td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
+      <td>${statusBadge(a.late?'Late':a.status)}</td>
+    </tr>`).join('');
+
+  const regRows = DB.regulations.filter(r=>r.empId===u.id).map(r=>`
+    <tr><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.orig}</td><td>${r.req}</td><td>${r.reason}</td><td>${statusBadge(r.status)}</td>
+    <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'—'}</td></tr>`).join('');
+
+  const logTimeline = ps.sessionLogs.map(l=>`
+    <div class="tl-item"><div class="tl-dot" style="background:var(--accent);"></div><div class="tl-line"></div>
+    <div><div style="font-size:13px;font-weight:500;">${l.event}</div><div style="font-size:11px;color:var(--muted);">${l.time}</div></div></div>`).join('')||
+    '<div style="color:var(--muted);font-size:13px;">No activity logged yet today.</div>';
+
+  return `
+  <div class="g2" style="margin-bottom:18px;">
+    <div class="clock-widget">
+      <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
+      <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+      <div class="cw-status" style="margin:10px 0 6px;">${statusBadgeHtml}</div>
+      ${punchButtons}
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
+      <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
+      <div class="irow"><span class="ikey">Working Hours</span><span class="ival" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</span></div>
+      <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
+      <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 – 20:00</span></div>
+    </div>
+  </div>
+  ${buildTabs('att',[
+    {id:'log',label:'Daily Log',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
+      <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openModal('regulationModal')">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button></div></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Hours</th><th>OT</th><th>Status</th></tr></thead>
+      <tbody>${logRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div></div>`},
+    {id:'today',label:"Today's Log",content:`
+      <div class="card"><div class="card-title" style="margin-bottom:14px;">Session Activity</div>
+      <div class="tl">${logTimeline}</div></div>`},
+    {id:'regulation',label:'Regulation Requests',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('regulationModal')">New Request</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Original</th><th>Requested</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${regRows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No regulation requests</td></tr>'}</tbody></table></div></div>`},
+    {id:'monthly',label:'Monthly',content:`
+      <div class="g4" style="margin-bottom:14px;">
+        <div class="stat-card"><div class="stat-label">Working Days</div><div class="stat-val">22</div></div>
+        <div class="stat-card"><div class="stat-label">Present</div><div class="stat-val" style="color:var(--green);">19</div></div>
+        <div class="stat-card"><div class="stat-label">On Leave</div><div class="stat-val" style="color:var(--purple);">2</div></div>
+        <div class="stat-card"><div class="stat-label">Absent</div><div class="stat-val" style="color:var(--red);">1</div></div>
+      </div>
+      <div class="g2">
+        <div class="stat-card"><div class="stat-label">Total Hours</div><div class="stat-val">162h 45m</div><div class="stat-sub">Avg 8h 33m/day</div></div>
+        <div class="stat-card"><div class="stat-label">Overtime</div><div class="stat-val" style="color:var(--amber);">4h 20m</div></div>
+      </div>`},
+  ],'log')}`;
+}
+
+function cancelRegulation(id){
+  const idx=DB.regulations.findIndex(r=>r.id===id);
+  if(idx>=0) DB.regulations.splice(idx,1);
+  showToast('Regulation request cancelled','amber');
+  showPage('attendance');
+}
+
+function pageRealtime(){
+  const inCount=DB.liveAttendance.filter(l=>l.status==='in').length;
+  const breakCount=DB.liveAttendance.filter(l=>l.status==='break').length;
+  const outCount=DB.liveAttendance.filter(l=>l.status==='out').length;
+  const leaveCount=DB.liveAttendance.filter(l=>l.status==='leave').length;
+  const cards=DB.liveAttendance.map(e=>{
+    const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[e.status]||'md-out';
+    const lbl={in:'In since '+e.since,break:'On Break — '+e.since,out:'Clocked Out '+e.since,leave:'On Leave — '+e.since}[e.status];
+    return`<div class="mon-card"><div class="mon-dot ${dot}"></div>
+      <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
+      <div style="font-size:11px;color:var(--muted);">${e.dept} · ${lbl}</div></div></div>`;
+  }).join('');
+
+  return `
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label"><span class="live-dot" style="margin-right:4px;"></span>In Office</div><div class="stat-val" style="color:var(--green);">${inCount}</div></div>
+    <div class="stat-card"><div class="stat-label">On Break</div><div class="stat-val" style="color:var(--amber);">${breakCount}</div></div>
+    <div class="stat-card"><div class="stat-label">Clocked Out</div><div class="stat-val" style="color:var(--muted);">${outCount}</div></div>
+    <div class="stat-card"><div class="stat-label">On Leave</div><div class="stat-val" style="color:var(--purple);">${leaveCount}</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><span class="live-dot" style="margin-right:6px;"></span>Live Employee Status</div>
+      <input class="search-input" id="rt-search" placeholder="Search..." oninput="filterMonitor(this.value)" style="width:200px;">
+    </div>
+    <div class="monitor-grid" id="monitor-grid">${cards}</div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-in" style="flex-shrink:0;"></div>In Office</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-break" style="flex-shrink:0;"></div>On Break</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-out" style="flex-shrink:0;"></div>Clocked Out</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-leave" style="flex-shrink:0;"></div>On Leave</div>
+    </div>
+  </div>`;
+}
+
+function filterMonitor(val){
+  const v=val.toLowerCase();
+  document.querySelectorAll('#monitor-grid .mon-card').forEach(card=>{
+    card.style.display=card.textContent.toLowerCase().includes(v)?'':'none';
+  });
+}
+
+function pageLeave(){
+  const pending=DB.leaves.filter(l=>l.status==='Pending');
+  const all=DB.leaves;
+
+  const pendingRows=pending.map(l=>`
+    <tr>
+      <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${l.empName.split(' ').map(x=>x[0]).join('')}</div>
+      <div class="ucell-info"><div class="n">${l.empName}</div><div class="s">${l.dept}</div></div></div></td>
+      <td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${l.days}</td><td>${l.reason}</td>
+      <td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td>
+      <td><div style="display:flex;gap:4px;">
+        <button class="btn btn-sm bg-green" onclick="openApproval('${l.id}')">Review</button>
+      </div></td>
+    </tr>`).join('');
+
+  const allRows=all.map(l=>`
+    <tr>
+      <td>${l.empName}</td><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td>
+      <td>${l.days}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td>
+      <td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
+    </tr>`).join('');
+
+  const holidayRows=DB.holidays.map(h=>`
+    <tr><td>${formatDate(h.date)}</td><td>${new Date(h.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long'})}</td>
+    <td>${h.name}</td><td>${statusBadge(h.type)}</td><td>Nationwide</td></tr>`).join('');
+
+  const balanceHTML=`
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Leave Balances — 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+        ${[['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Maternity Leave',90,90,'var(--teal)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']].map(([n,r,t,c])=>`
+        <div class="ltr">
+          <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${r} / ${t} days remaining</span></div>
+          <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(r/t*100)}%;background:${c};"></div></div>
+        </div>`).join('')}
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Leave Policy</div></div>
+        <div class="irow"><span class="ikey">Annual Leave Quota</span><span class="ival">21 days/year</span></div>
+        <div class="irow"><span class="ikey">Sick Leave</span><span class="ival">10 days/year</span></div>
+        <div class="irow"><span class="ikey">Casual Leave</span><span class="ival">5 days/year</span></div>
+        <div class="irow"><span class="ikey">Maternity Leave</span><span class="ival">90 days</span></div>
+        <div class="irow"><span class="ikey">Paternity Leave</span><span class="ival">5 days</span></div>
+        <div class="irow"><span class="ikey">Marriage Leave</span><span class="ival">7 days</span></div>
+        <div class="irow"><span class="ikey">Bereavement Leave</span><span class="ival">3 days</span></div>
+        <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">Jan–Dec (Annual)</span></div>
+        <div class="irow"><span class="ikey">Pro-Rata Calculation</span><span class="ival"><span class="badge bg-green">Enabled</span></span></div>
+        <div class="irow"><span class="ikey">Carry Forward</span><span class="ival">Max 5 days</span></div>
+        <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee → Manager → HR</span></div>
+      </div>
+    </div>`;
+
+  return buildTabs('lv',[
+    {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
+      <tbody>${pendingRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
+    {id:'all',label:'All Requests',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
+      <tbody>${allRows}</tbody></table></div></div>`},
+    {id:'balance',label:'Leave Balances',content:balanceHTML},
+    {id:'holidays',label:'National Holidays',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">National Holidays 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('holidayModal')">+ Add Holiday</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th>Type</th><th>Region</th></tr></thead>
+      <tbody>${holidayRows}</tbody></table></div></div>`},
+  ],'pending');
+}
+
+function pageEmployees(){
+  const rows=DB.employees.map(e=>`
+    <tr>
+      <td><div class="ucell"><div class="av av-28" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
+      <div class="ucell-info"><div class="n">${e.fname} ${e.lname}</div><div class="s">${e.email}</div></div></div></td>
+      <td>${e.id}</td><td>${e.dept}</td><td>${e.desg}</td><td>${formatDate(e.doj)}</td>
+      <td>${statusBadge(e.status)}</td><td>${e.manager}</td>
+      <td><div style="display:flex;gap:4px;">
+        <button class="btn btn-sm" onclick="viewEmpProfile('${e.id}')">View</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>
+      </div></td>
+    </tr>`).join('');
+
+  return `
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title">Employee Directory (${DB.employees.length})</div>
+      <div style="display:flex;gap:7px;align-items:center;">
+        <input class="search-input" id="emp-search" placeholder="Search employees..." oninput="filterTable('emp-search','emp-table')" style="width:200px;">
+        <select class="fi" style="width:140px;padding:6px 10px;" onchange="filterEmpDept(this.value)">
+          <option value="">All Departments</option>
+          ${DB.departments.map(d=>`<option>${d.name}</option>`).join('')}
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
+      </div>
+    </div>
+    <div class="table-wrap"><table id="emp-table">
+      <thead><tr><th>Employee</th><th>ID</th><th>Department</th><th>Designation</th><th>Date of Joining</th><th>Status</th><th>Reporting To</th><th>Actions</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </div>`;
+}
+
+function filterEmpDept(val){
+  document.querySelectorAll('#emp-table tbody tr').forEach(row=>{
+    row.style.display=!val||row.textContent.includes(val)?'':'none';
+  });
+}
+
+function viewEmpProfile(id){
+  window._viewEmpId=id;
+  showPage('emp-profile-detail');
+}
+
+function pageEmpProfileDetail(){
+  const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
+  const gross=(e.basic||0)+(e.house||0)+(e.transport||0);
+  const net=gross-(e.tax||0);
+
+  return `
+  <div class="profile-hero">
+    <div class="av av-64" style="background:${e.avatarColor}33;color:${e.avatarColor};border:3px solid ${e.avatarColor}44;">${e.avatar}</div>
+    <div style="flex:1;">
+      <div class="ph-name">${e.fname} ${e.lname}</div>
+      <div class="ph-role">${e.desg} · ${e.id}</div>
+      <div class="ph-tags">${statusBadge(e.status)}<span class="badge bg-blue">${e.dept}</span></div>
+    </div>
+    <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);" onclick="window.showPage('employees')">← Back</button>
+  </div>
+  ${buildTabs('epd',[
+    {id:'personal',label:'Personal',content:`
+      <div class="g2">
+        <div class="card"><div class="card-title" style="margin-bottom:13px;">Personal Details</div>
+          <div class="irow"><span class="ikey">Full Name</span><span class="ival">${e.fname} ${e.lname}</span></div>
+          <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(e.dob)}</span></div>
+          <div class="irow"><span class="ikey">Gender</span><span class="ival">${e.gender||'—'}</span></div>
+          <div class="irow"><span class="ikey">CNIC</span><span class="ival">${e.cnic||'—'}</span></div>
+          <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${e.phone}</span></div>
+          <div class="irow"><span class="ikey">Personal Email</span><span class="ival">${e.email}</span></div>
+          <div class="irow"><span class="ikey">Address</span><span class="ival">${e.address||'—'}</span></div>
+          <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${e.blood||'—'}</span></div>
+        </div>
+        <div class="card"><div class="card-title" style="margin-bottom:13px;">Next of Kin</div>
+          <div class="irow"><span class="ikey">Name</span><span class="ival">${e.kin||'—'}</span></div>
+          <div class="irow"><span class="ikey">Relationship</span><span class="ival">${e.kinRel||'—'}</span></div>
+          <div class="irow"><span class="ikey">Contact</span><span class="ival">${e.kinPhone||'—'}</span></div>
+        </div>
+      </div>`},
+    {id:'job',label:'Job & HR',content:`
+      <div class="g2">
+        <div class="card"><div class="card-title" style="margin-bottom:13px;">Job Details</div>
+          <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${e.id}</span></div>
+          <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(e.doj)}</span></div>
+          <div class="irow"><span class="ikey">Probation End</span><span class="ival">${formatDate(e.dop)}</span></div>
+          <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
+          <div class="irow"><span class="ikey">Designation</span><span class="ival">${e.desg}</span></div>
+          <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${e.type}</span></div>
+          <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(e.status)}</span></div>
+          <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${e.manager}</span></div>
+          <div class="irow"><span class="ikey">Official Email</span><span class="ival">${e.email}</span></div>
+          <div class="irow"><span class="ikey">Office Phone</span><span class="ival">${e.phone}</span></div>
+        </div>
+        <div class="card"><div class="card-title" style="margin-bottom:13px;">HR Details</div>
+          <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
+          <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 – 20:00</span></div>
+          <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon – Fri</span></div>
+          <div class="irow"><span class="ikey">Weekly Hours</span><span class="ival">45 hrs</span></div>
+          <div class="irow"><span class="ikey">Contract Type</span><span class="ival">${e.type}</span></div>
+        </div>
+      </div>`},
+    {id:'salary',label:'Salary & Bank',content:`
+      <div class="g2">
+        <div class="card"><div class="card-hdr"><div class="card-title">Salary <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
+          <div class="irow"><span class="ikey">Basic Salary</span><span class="ival">PKR ${(e.basic||0).toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">House Allowance</span><span class="ival">PKR ${(e.house||0).toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">Transport</span><span class="ival">PKR ${(e.transport||0).toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">Gross Salary</span><span class="ival" style="font-weight:700;">PKR ${gross.toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">Tax Deduction</span><span class="ival">PKR ${(e.tax||0).toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);font-weight:700;">PKR ${net.toLocaleString()}</span></div>
+        </div>
+        <div class="card"><div class="card-hdr"><div class="card-title">Bank Details <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
+          <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'—'}</span></div>
+          <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'—'}</span></div>
+          <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'—'}</span></div>
+          <div class="irow"><span class="ikey">Payment Method</span><span class="ival">Bank Transfer</span></div>
+        </div>
+      </div>`},
+    {id:'docs',label:'Documents',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Documents</div><button class="btn btn-sm btn-primary">Upload</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Document</th><th>Type</th><th>Uploaded</th><th>Status</th></tr></thead><tbody>
+          <tr><td>CNIC Copy</td><td>Identity</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
+          <tr><td>Degree Certificate</td><td>Education</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
+          <tr><td>Offer Letter</td><td>Employment</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
+          <tr><td>Medical Certificate</td><td>Medical</td><td>—</td><td><span class="badge bg-amber">Pending</span></td></tr>
+        </tbody></table></div>
+      </div>`},
+  ],'personal')}`;
+}
+
+function pageDepartments(){
+  return `
+  <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+    <button class="btn btn-sm btn-primary">+ Add Department</button>
+  </div>
+  <div class="g3">
+    ${DB.departments.map(d=>`
+    <div class="dept-card">
+      <div class="dc-bar" style="background:${d.color};"></div>
+      <div class="dc-body">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+          <div><div class="dc-name">${d.name}</div><div style="font-size:12px;color:var(--muted);">Head: ${d.head}</div></div>
+          <span class="badge bg-blue">${d.count} emp</span>
+        </div>
+        <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${d.present}</span></div>
+        <div class="irow"><span class="ikey">On Leave</span><span class="ival" style="color:var(--purple);">${d.leave}</span></div>
+        <div class="irow"><span class="ikey">Absent</span><span class="ival" style="color:var(--red);">${d.absent}</span></div>
+        <div class="prog-bar" style="margin-top:10px;"><div class="prog-fill" style="width:${Math.round(d.present/d.count*100)}%;background:${d.color};"></div></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${Math.round(d.present/d.count*100)}% attendance rate</div>
+        <button class="btn btn-sm" style="width:100%;margin-top:10px;justify-content:center;" onclick="window.showPage('employees')">View Employees</button>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function pageOrgChart(){
+  return `
+  <div class="card">
+    <div class="card-hdr"><div class="card-title">Organization Chart</div><button class="btn btn-sm">Export PNG</button></div>
+    <div class="org-wrap">
+      <div class="org-tree">
+        <div class="org-node root"><div class="oname">Zainab Hussain</div><div class="orole">CEO</div></div>
+        <div class="org-vline" style="height:24px;"></div>
+        <div style="position:relative;display:flex;gap:0;">
+          <div style="position:absolute;top:0;left:15%;right:15%;height:1px;background:var(--border);"></div>
+          <div style="display:flex;gap:18px;">
+            ${DB.departments.map(d=>`
+            <div class="org-branch">
+              <div class="org-vline" style="height:24px;"></div>
+              <div class="org-node" onclick="window.showPage('employees')" style="border-top:3px solid ${d.color};">
+                <div class="oname" style="font-size:11px;">${d.head}</div>
+                <div class="orole">${d.name}</div>
+                <span class="badge bg-gray" style="margin-top:4px;font-size:9px;">${d.count} emp</span>
+              </div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="alert al-info" style="margin-top:14px;"><span>ℹ️</span><div>Click any node to view department employees. The chart supports up to 6 levels of hierarchy.</div></div>
+  </div>`;
+}
+
+function pageCalendar(empView=false){
+  const today=new Date();
+  const month=today.getMonth(), year=today.getFullYear();
+  const firstDay=(new Date(year,month,1).getDay()+6)%7;
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const todayDate=today.getDate();
+
+  let calDays='';
+  for(let i=0;i<firstDay;i++) calDays+=`<div class="cal-day"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday=d===todayDate;
+    const isHoliday=DB.holidays.some(h=>h.date===dateStr);
+    const hasLeave=DB.leaves.some(l=>l.status==='Approved'&&l.from<=dateStr&&l.to>=dateStr);
+    const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':'';
+    calDays+=`<div class="cal-day ${cls}" title="${isHoliday?DB.holidays.find(h=>h.date===dateStr).name:''}">${d}</div>`;
+  }
+
+  const events=[
+    {date:'Today',label:'🎂 Sara Ahmed Birthday',badge:'bg-amber'},
+    {date:'Apr 20–22',label:'🏖️ Eid-ul-Fitr Holiday',badge:'bg-amber'},
+    {date:'Apr 22',label:'📋 Q2 Town Hall',badge:'bg-purple'},
+    {date:'Apr 25',label:'⚙️ Zara Khan Probation',badge:'bg-blue'},
+    {date:'May 1',label:'🌍 Labour Day',badge:'bg-green'},
+  ];
+
+  return `
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr">
+        <div class="card-title">${today.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
+        <div style="display:flex;gap:5px;"><button class="btn btn-sm">‹</button><button class="btn btn-sm">›</button></div>
+      </div>
+      <div class="cal-grid">
+        ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dh">${d}</div>`).join('')}
+        ${calDays}
+      </div>
+      <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--green-bg);border:1px solid var(--green);"></div>Leave</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--amber-bg);border:1px solid var(--amber);"></div>Holiday</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--accent);"></div>Today</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Events & Reminders</div>${!empView?`<button class="btn btn-sm btn-primary">+ Event</button>`:''}</div>
+      ${events.map(ev=>`
+      <div class="irow"><div><strong style="font-size:13px;">${ev.label}</strong></div><span class="badge ${ev.badge}">${ev.date}</span></div>`).join('')}
+      <div style="margin-top:14px;">
+        <div class="card-title" style="margin-bottom:10px;">National Holidays</div>
+        ${DB.holidays.slice(0,5).map(h=>`
+        <div class="irow"><span style="font-size:13px;">${h.name}</span><span class="badge bg-amber">${formatDate(h.date)}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function pageReports(){
+  const attRows=DB.employees.map(e=>`
+    <tr><td>${e.fname} ${e.lname}</td><td>${e.dept}</td><td>22</td><td>19</td><td>1</td><td>2</td><td>2</td><td>162h</td><td>4h</td></tr>`).join('');
+
+  const lvRows=DB.leaves.map(l=>`
+    <tr><td>${l.empName}</td><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${l.days}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
+
+  return buildTabs('rp',[
+    {id:'att',label:'Attendance',content:`
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Attendance Report</div>
+          <div style="display:flex;gap:6px;"><input type="month" class="fi" style="width:140px;padding:6px 10px;" value="2025-04">
+          <button class="btn btn-sm btn-primary">Export CSV</button><button class="btn btn-sm">Print</button></div>
+        </div>
+        <div class="g4" style="margin-bottom:14px;">
+          <div class="stat-card"><div class="stat-label">Avg Attendance</div><div class="stat-val">87%</div></div>
+          <div class="stat-card"><div class="stat-label">Late Arrivals</div><div class="stat-val" style="color:var(--amber);">34</div></div>
+          <div class="stat-card"><div class="stat-label">Absent Days</div><div class="stat-val" style="color:var(--red);">12</div></div>
+          <div class="stat-card"><div class="stat-label">Overtime Hrs</div><div class="stat-val" style="color:var(--green);">47h</div></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Dept</th><th>Working Days</th><th>Present</th><th>Absent</th><th>Late</th><th>On Leave</th><th>Hours</th><th>Overtime</th></tr></thead>
+        <tbody>${attRows}</tbody></table></div>
+      </div>`},
+    {id:'lv',label:'Leave',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Leave Report</div><button class="btn btn-sm btn-primary">Export</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th></tr></thead>
+        <tbody>${lvRows}</tbody></table></div>
+      </div>`},
+    {id:'monthly',label:'Monthly Summary',content:`
+      <div class="g3" style="margin-bottom:14px;">
+        <div class="stat-card"><div class="stat-label">Month</div><div class="stat-val" style="font-size:18px;">April 2025</div></div>
+        <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val">${DB.employees.length}</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Attendance</div><div class="stat-val">87%</div></div>
+      </div>
+      <div class="card"><div class="card-hdr"><div class="card-title">By Department</div><button class="btn btn-sm btn-primary">Export PDF</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Department</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
+        <tbody>${DB.departments.map(d=>`<tr><td>${d.name}</td><td>${d.count}</td><td>${d.present}</td><td>${d.absent}</td><td>${d.leave}</td><td>${Math.floor(Math.random()*25)+5}h</td>
+          <td>${statusBadge(Math.round(d.present/d.count*100)>=85?'Approved':'Pending')}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>`},
+    {id:'empdata',label:'Employee Data',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Employee Records</div>
+        <div style="display:flex;gap:6px;"><button class="btn btn-sm btn-primary">Export CSV</button><button class="btn btn-sm">Export Excel</button></div>
+      </div>
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
+        <tbody>${DB.employees.map(e=>`<tr><td>${e.id}</td><td>${e.fname} ${e.lname}</td><td>${e.dept}</td><td>${e.desg}</td><td>${formatDate(e.doj)}</td><td>${e.type}</td><td>${statusBadge(e.status)}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>`},
+  ],'att');
+}
+
+function pageAnnouncements(empView=false){
+  const items=DB.announcements.map(a=>`
+    <div class="ann" style="border-left-color:${a.cat==='Event'?'var(--purple)':a.cat==='Policy'?'var(--green)':a.cat==='Important'?'var(--red)':'var(--accent)'};">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="ann-title">${a.title}</div>
+        <span class="badge bg-blue" style="flex-shrink:0;margin-left:8px;">${a.cat}</span>
+      </div>
+      <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
+      <div class="ann-meta">By ${a.author} (${a.role}) · ${formatDate(a.date)} · 🌐 ${a.audience}</div>
+    </div>`).join('');
+
+  return `
+  ${!empView?`<div style="display:flex;justify-content:flex-end;margin-bottom:14px;"><button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ New Announcement</button></div>`:''}
+  ${items||'<div class="card"><p style="color:var(--muted);">No announcements yet.</p></div>'}`;
+}
+
+function pageCompany(){
+  return `
+  <div class="g2">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">Company Information</div>
+      <div class="irow"><span class="ikey">Company Name</span><span class="ival">WorkPulse Technologies Pvt. Ltd.</span></div>
+      <div class="irow"><span class="ikey">Website</span><span class="ival" style="color:var(--accent);">www.workpulse.com</span></div>
+      <div class="irow"><span class="ikey">Official Email</span><span class="ival">info@workpulse.com</span></div>
+      <div class="irow"><span class="ikey">Contact No</span><span class="ival">+92 42 35761234</span></div>
+      <div class="irow"><span class="ikey">Office Location</span><span class="ival">12 Tech City, Arfa Software Park, Lahore</span></div>
+      <div class="irow"><span class="ikey">LinkedIn</span><span class="ival" style="color:var(--accent);">linkedin.com/company/workpulse</span></div>
+      <div class="irow"><span class="ikey">No. of Employees</span><span class="ival">${DB.employees.length}</span></div>
+      <div class="irow"><span class="ikey">Industry</span><span class="ival">Software & Technology</span></div>
+      <div class="irow"><span class="ikey">Incorporated</span><span class="ival">2018</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:14px;">Backup & Disaster Recovery</div>
+      <div class="alert al-success"><span>✅</span><div><strong>Last Backup:</strong> Today 03:00 AM — Successful</div></div>
+      <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 3:00 AM</span></div>
+      <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full + Incremental</span></div>
+      <div class="irow"><span class="ikey">Retention</span><span class="ival">90 days</span></div>
+      <div class="irow"><span class="ikey">Storage</span><span class="ival">AWS S3 (AES-256)</span></div>
+      <div class="irow"><span class="ikey">RTO</span><span class="ival">&lt; 4 hours</span></div>
+      <div class="irow"><span class="ikey">RPO</span><span class="ival">&lt; 24 hours</span></div>
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn btn-sm btn-primary" onclick="showToast('Backup initiated...','green')">Run Backup Now</button>
+        <button class="btn btn-sm">Download Log</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  ██████ EMPLOYEE PAGES ██████
+// ══════════════════════════════════════════════════
+function pageEmpDashboard(){
+  const u=DB.currentUser;
+  const ps=DB.punchState;
+  const today=new Date().toISOString().split('T')[0];
+  const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,status:'Not Started',late:false};
+  const myLeaves=DB.leaves.filter(l=>l.empId===u.id);
+  const myPending=myLeaves.filter(l=>l.status==='Pending').length;
+
+  const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):todayRec.out?'Completed':'Not Started';
+  const statusColor=ps.punchedIn?(ps.onBreak?'var(--amber)':'var(--green)'):'var(--muted)';
+
+  return `
+  <div class="alert al-info"><span>📢</span><div>${DB.announcements[0]?.title||'No new announcements.'}</div></div>
+  
+  <!-- Main clock + actions -->
+  <div class="card emp-clock-widget" style="margin-bottom:14px;padding:28px;">
+    <div class="ecw-time" id="ecw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
+    <div class="ecw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+    <div class="ecw-info">
+      <div class="ecw-stat"><div class="v" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</div><div class="l">Hours Today</div></div>
+      <div class="ecw-stat"><div class="v">${todayRec.in||'—'}</div><div class="l">Clock In</div></div>
+      <div class="ecw-stat"><div class="v">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</div><div class="l">Clock Out</div></div>
+    </div>
+    <div class="ecw-btns">
+      ${!ps.punchedIn && !todayRec.out
+        ? `<button class="punch-btn pb-in" style="grid-column:1/-1;" onclick="punchIn()">▶ Clock In</button>`
+        : ps.punchedIn
+          ? `<button class="punch-btn pb-out" onclick="punchOut()">■ Clock Out</button>
+             ${ps.onBreak
+               ? `<button class="punch-btn pb-break-in" onclick="breakIn()">↩ Break In</button>`
+               : `<button class="punch-btn pb-break" onclick="breakOut()">☕ Break Out</button>`}`
+          : `<button class="punch-btn" style="grid-column:1/-1;background:var(--surface2);color:var(--muted);" disabled>✓ Shift Completed</button>`
+      }
+    </div>
+    <div style="margin-top:12px;font-size:12px;color:rgba(255,255,255,.3);text-align:center;">
+      Status: <span style="color:${statusColor};font-weight:600;">${statusLabel}</span> &nbsp;|&nbsp; Shift: 11:00–20:00 &nbsp;|&nbsp; ${todayRec.late?'⚠️ Marked Late':'✓ On Time'}
+    </div>
+  </div>
+
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Days Present (Apr)</div><div class="stat-val" style="color:var(--green);">19</div><div class="stat-sub">of 22 working days</div></div>
+    <div class="stat-card"><div class="stat-label">Annual Leave Left</div><div class="stat-val" style="color:var(--purple);">18</div><div class="stat-sub">of 21 days</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Requests</div><div class="stat-val" style="color:var(--amber);">${myPending}</div><div class="stat-sub" onclick="window.showPage('emp-leaves')" style="cursor:pointer;color:var(--accent);">View →</div></div>
+    <div class="stat-card"><div class="stat-label">Hours This Month</div><div class="stat-val">162h</div><div class="stat-sub">Avg 8h 33m/day</div></div>
+  </div>
+
+  <div class="g2">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">My Recent Attendance</div><button class="btn btn-sm" onclick="window.showPage('emp-attendance')">View All</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead>
+      <tbody>${DB.attendance.filter(a=>a.empId===u.id).slice(0,5).map(a=>`
+        <tr><td>${formatDate(a.date)}</td><td>${a.in||'—'}</td><td>${a.out||'—'}</td><td>${calcWorkHours(a)}</td>
+        <td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Announcements</div><button class="btn btn-sm" onclick="window.showPage('emp-announcements')">View All</button></div>
+      ${DB.announcements.slice(0,3).map(a=>`
+      <div style="padding:9px 0;border-bottom:1px solid var(--border);">
+        <div style="font-weight:500;font-size:13px;">${a.title}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${formatDate(a.date)} · ${a.author}</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function pageEmpAttendance(){
+  const u=DB.currentUser;
+  const ps=DB.punchState;
+  const today=new Date().toISOString().split('T')[0];
+  const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Started',late:false};
+
+  const statusBadgeHtml=ps.punchedIn?(ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`):todayRec.out?`<span class="badge bg-gray">Completed</span>`:`<span class="badge bg-gray">Not Clocked In</span>`;
+
+  const logRows=DB.attendance.filter(a=>a.empId===u.id).map(a=>`
+    <tr><td>${formatDate(a.date)}</td>
+    <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
+    <td>${a.in||'—'}</td><td>${a.breakOut||'—'}</td><td>${a.breakIn||'—'}</td><td>${a.out||'—'}</td>
+    <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
+    <td>${statusBadge(a.late?'Late':a.status)}</td>
+    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openModal('regulationModal')">Regulate</button>`:'—'}</td>
+    </tr>`).join('');
+
+  const regRows=DB.regulations.filter(r=>r.empId===u.id).map(r=>`
+    <tr><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.orig}</td><td>${r.req}</td><td>${r.reason}</td><td>${statusBadge(r.status)}</td></tr>`).join('');
+
+  return `
+  <div class="g2" style="margin-bottom:18px;">
+    <div class="clock-widget">
+      <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
+      <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+      <div class="cw-status">${statusBadgeHtml}</div>
+      ${!ps.punchedIn&&!todayRec.out
+        ?`<button class="punch-btn pb-in" onclick="punchIn()">▶ Clock In</button>`
+        :ps.punchedIn
+          ?`<button class="punch-btn pb-out" onclick="punchOut()">■ Clock Out</button>
+            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">↩ Break In</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">☕ Break Out</button>`}`
+          :`<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>✓ Shift Completed</button>`}
+      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.35);">Policy: 11:00–20:00 · Late after 11:10 AM</div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
+      <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
+      <div class="irow"><span class="ikey">Working Hours</span><span class="ival" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</span></div>
+      <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
+    </div>
+  </div>
+  ${buildTabs('ema',[
+    {id:'log',label:'My Log',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
+        <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openModal('regulationModal')">+ Regulation</button></div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Break Out</th><th>Break In</th><th>Out</th><th>Hours</th><th>OT</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${logRows||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div>
+    </div>`},
+    {id:'reg',label:'Regulation Requests',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">My Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('regulationModal')">+ New</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Original</th><th>Requested</th><th>Reason</th><th>Status</th></tr></thead>
+      <tbody>${regRows||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No requests</td></tr>'}</tbody></table></div>
+    </div>`},
+  ],'log')}`;
+}
+
+function pageEmpLeaves(){
+  const u=DB.currentUser;
+  const myLeaves=DB.leaves.filter(l=>l.empId===u.id);
+  const rows=myLeaves.map(l=>`
+    <tr><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${l.days}</td>
+    <td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
+
+  return `
+  <div class="g2" style="margin-bottom:14px;">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">My Leave Balance 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+      ${[['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']].map(([n,r,t,c])=>`
+      <div class="ltr">
+        <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${r}/${t} days remaining</span></div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(r/t*100)}%;background:${c};"></div></div>
+      </div>`).join('')}
+      <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: Jan–Dec. Carry forward: max 5 days.</div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">Approval Workflow</div>
+      <div class="tl">
+        <div class="tl-item"><div class="tl-dot" style="background:var(--accent);"></div><div class="tl-line"></div><div><div style="font-weight:500;font-size:13px;">You apply</div><div style="font-size:11px;color:var(--muted);">Submit via portal with reason</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--amber);"></div><div class="tl-line"></div><div><div style="font-weight:500;font-size:13px;">Line Manager reviews</div><div style="font-size:11px;color:var(--muted);">Approve/reject within 24h</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--green);"></div><div><div style="font-weight:500;font-size:13px;">HR final approval</div><div style="font-size:11px;color:var(--muted);">Balance checked, auto-syncs to attendance</div></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
+    <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+
+function pageEmpProfile(){
+  const u=DB.currentUser;
+  const emp=DB.employees.find(e=>e.email===u.email)||DB.employees[0];
+  return `
+  <div class="profile-hero">
+    <div class="av av-64" style="background:${u.avatarColor}33;color:${u.avatarColor};border:3px solid ${u.avatarColor}55;">${u.avatar}</div>
+    <div>
+      <div class="ph-name">${u.fname} ${u.lname}</div>
+      <div class="ph-role">${u.desg} · ${u.id||emp?.id}</div>
+      <div class="ph-tags"><span class="badge bg-green">Active</span><span class="badge bg-blue">${u.dept}</span></div>
+    </div>
+  </div>
+  <div class="g2">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:13px;">My Personal Details</div>
+      <div class="irow"><span class="ikey">Full Name</span><span class="ival">${u.fname} ${u.lname}</span></div>
+      <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${u.id||emp?.id}</span></div>
+      <div class="irow"><span class="ikey">Department</span><span class="ival">${u.dept}</span></div>
+      <div class="irow"><span class="ikey">Designation</span><span class="ival">${u.desg}</span></div>
+      <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(u.doj)}</span></div>
+      <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
+      <div class="irow"><span class="ikey">Office Email</span><span class="ival">${u.email}</span></div>
+      <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${u.phone}</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:13px;">Employment Details</div>
+      <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
+      <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 – 20:00</span></div>
+      <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon – Fri</span></div>
+      <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(emp?.status||'Active')}</span></div>
+      <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
+      <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'—'}</span></div>
+    </div>
+  </div>`;
+}
+
+function pageEmpTeam(){
+  const u=DB.currentUser;
+  const teamMembers=DB.employees.filter(e=>e.dept===u.dept&&e.email!==u.email);
+  const liveMap={};
+  DB.liveAttendance.forEach(l=>{ liveMap[l.name]={status:l.status,since:l.since}; });
+
+  const cards=teamMembers.map(e=>{
+    const lv=liveMap[e.fname+' '+e.lname]||{status:'out',since:'—'};
+    const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[lv.status]||'md-out';
+    const lbl={in:'In since '+lv.since,break:'On Break',out:'Not in office',leave:'On Leave'}[lv.status];
+    return`<div class="card" style="display:flex;align-items:center;gap:12px;">
+      <div class="mon-dot ${dot}" style="width:10px;height:10px;"></div>
+      <div class="av av-40" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
+      <div style="flex:1;">
+        <div style="font-weight:500;font-size:13px;">${e.fname} ${e.lname}</div>
+        <div style="font-size:11px;color:var(--muted);">${e.desg}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${lbl}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="alert al-info"><span>ℹ️</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hdr"><div class="card-title">My Department — ${u.dept}</div></div>
+    <div class="irow"><span class="ikey">Department Head</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'—'}</span></div>
+    <div class="irow"><span class="ikey">Total Members</span><span class="ival">${DB.employees.filter(e=>e.dept===u.dept).length}</span></div>
+    <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'—'}</span></div>
+  </div>
+  <div class="g2">${cards||'<div class="card"><p style="color:var(--muted);">No other team members found.</p></div>'}</div>`;
+}
+
+// ══════════════════════════════════════════════════
+//  EDIT EMPLOYEE
+// ══════════════════════════════════════════════════
+let _editEmpId = null;
+let _editTab = 'personal';
+
+function openEditEmployee(id){
+  _editEmpId = id;
+  _editTab = 'personal';
+  const e = DB.employees.find(emp=>emp.id===id);
+  if(!e) return;
+  // Personal
+  document.getElementById('ee-fname').value = e.fname||'';
+  document.getElementById('ee-lname').value = e.lname||'';
+  document.getElementById('ee-dob').value = e.dob||'';
+  document.getElementById('ee-gender').value = e.gender||'Male';
+  document.getElementById('ee-cnic').value = e.cnic||'';
+  document.getElementById('ee-phone').value = e.phone||'';
+  document.getElementById('ee-address').value = e.address||'';
+  document.getElementById('ee-blood').value = e.blood||'O+';
+  document.getElementById('ee-kin').value = e.kin||'';
+  document.getElementById('ee-kinRel').value = e.kinRel||'';
+  document.getElementById('ee-kinPhone').value = e.kinPhone||'';
+  // Job
+  document.getElementById('ee-dept').value = e.dept||'Engineering';
+  document.getElementById('ee-desg').value = e.desg||'';
+  document.getElementById('ee-doj').value = e.doj||'';
+  document.getElementById('ee-dop').value = e.dop||'';
+  document.getElementById('ee-type').value = e.type||'Permanent';
+  document.getElementById('ee-status').value = e.status||'Active';
+  document.getElementById('ee-manager').value = e.manager||'';
+  document.getElementById('ee-email').value = e.email||'';
+  // Salary
+  document.getElementById('ee-basic').value = e.basic||0;
+  document.getElementById('ee-house').value = e.house||0;
+  document.getElementById('ee-transport').value = e.transport||0;
+  document.getElementById('ee-tax').value = e.tax||0;
+  document.getElementById('ee-bank').value = e.bank||'';
+  document.getElementById('ee-acct').value = e.acct||'';
+  document.getElementById('ee-iban').value = e.iban||'';
+  calcGross();
+  switchEditTab('personal');
+  openModal('editEmpModal');
+}
+
+function switchEditTab(tab){
+  _editTab = tab;
+  ['personal','job','salary'].forEach(t=>{
+    const el = document.getElementById('edit-tab-'+t);
+    if(el) el.style.display = t===tab?'block':'none';
+  });
+  document.querySelectorAll('#edit-emp-tabs .tab').forEach((el,i)=>{
+    const tabs = ['personal','job','salary'];
+    el.classList.toggle('active', tabs[i]===tab);
+  });
+}
+
+function calcGross(){
+  const b = parseInt(document.getElementById('ee-basic')?.value)||0;
+  const h = parseInt(document.getElementById('ee-house')?.value)||0;
+  const t = parseInt(document.getElementById('ee-transport')?.value)||0;
+  const tx = parseInt(document.getElementById('ee-tax')?.value)||0;
+  const gross = b+h+t;
+  const net = gross-tx;
+  const gd = document.getElementById('ee-gross-display');
+  const nd = document.getElementById('ee-net-display');
+  if(gd) gd.textContent = 'PKR '+gross.toLocaleString();
+  if(nd) nd.textContent = 'PKR '+net.toLocaleString();
+}
+
+function saveEditEmployee(){
+  if(!_editEmpId) return;
+  const e = DB.employees.find(emp=>emp.id===_editEmpId);
+  if(!e) return;
+  // Personal
+  e.fname       = document.getElementById('ee-fname').value.trim() || e.fname;
+  e.lname       = document.getElementById('ee-lname').value.trim() || e.lname;
+  e.dob         = document.getElementById('ee-dob').value || e.dob;
+  e.gender      = document.getElementById('ee-gender').value;
+  e.cnic        = document.getElementById('ee-cnic').value.trim();
+  e.phone       = document.getElementById('ee-phone').value.trim();
+  e.address     = document.getElementById('ee-address').value.trim();
+  e.blood       = document.getElementById('ee-blood').value;
+  e.kin         = document.getElementById('ee-kin').value.trim();
+  e.kinRel      = document.getElementById('ee-kinRel').value.trim();
+  e.kinPhone    = document.getElementById('ee-kinPhone').value.trim();
+  // Job
+  e.dept        = document.getElementById('ee-dept').value;
+  e.desg        = document.getElementById('ee-desg').value.trim();
+  e.doj         = document.getElementById('ee-doj').value;
+  e.dop         = document.getElementById('ee-dop').value;
+  e.type        = document.getElementById('ee-type').value;
+  e.status      = document.getElementById('ee-status').value;
+  e.manager     = document.getElementById('ee-manager').value.trim();
+  e.email       = document.getElementById('ee-email').value.trim();
+  // Avatar initials update
+  e.avatar      = (e.fname[0]+(e.lname[0]||'')).toUpperCase();
+  // Salary
+  e.basic       = parseInt(document.getElementById('ee-basic').value)||0;
+  e.house       = parseInt(document.getElementById('ee-house').value)||0;
+  e.transport   = parseInt(document.getElementById('ee-transport').value)||0;
+  e.tax         = parseInt(document.getElementById('ee-tax').value)||0;
+  e.bank        = document.getElementById('ee-bank').value.trim();
+  e.acct        = document.getElementById('ee-acct').value.trim();
+  e.iban        = document.getElementById('ee-iban').value.trim();
+
+  closeModal('editEmpModal');
+  showToast('Employee profile updated!','green');
+  // Refresh current page
+  const title = document.getElementById('page-title').textContent;
+  if(title==='Employees') showPage('employees');
+  else if(title==='Employee Profile') showPage('emp-profile-detail');
+}
+
+// ══════════════════════════════════════════════════
+//  EDIT LEAVE BALANCE (Admin)
+// ══════════════════════════════════════════════════
+let _editLeaveEmpId = null;
+
+function openEditLeave(empId){
+  _editLeaveEmpId = empId;
+  const e = DB.employees.find(emp=>emp.id===empId);
+  const bal = DB.leaveBalances[empId] || {annual:21,sick:10,casual:5,paternity:5,maternity:90,marriage:7,bereavement:3};
+  const nameEl = document.getElementById('edit-leave-employee-name');
+  if(nameEl && e) nameEl.textContent = 'Editing leave balance for: '+e.fname+' '+e.lname;
+  document.getElementById('el-annual').value      = bal.annual;
+  document.getElementById('el-sick').value        = bal.sick;
+  document.getElementById('el-casual').value      = bal.casual;
+  document.getElementById('el-paternity').value   = bal.paternity;
+  document.getElementById('el-maternity').value   = bal.maternity;
+  document.getElementById('el-marriage').value    = bal.marriage;
+  document.getElementById('el-bereavement').value = bal.bereavement;
+  openModal('editLeaveModal');
+}
+
+function saveLeaveBalance(){
+  if(!_editLeaveEmpId) return;
+  DB.leaveBalances[_editLeaveEmpId] = {
+    annual:      parseInt(document.getElementById('el-annual').value)||0,
+    sick:        parseInt(document.getElementById('el-sick').value)||0,
+    casual:      parseInt(document.getElementById('el-casual').value)||0,
+    paternity:   parseInt(document.getElementById('el-paternity').value)||0,
+    maternity:   parseInt(document.getElementById('el-maternity').value)||0,
+    marriage:    parseInt(document.getElementById('el-marriage').value)||0,
+    bereavement: parseInt(document.getElementById('el-bereavement').value)||0,
+  };
+  closeModal('editLeaveModal');
+  showToast('Leave balance updated!','green');
+  if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+}
+
+// ══════════════════════════════════════════════════
+//  CHANGE PASSWORD
+// ══════════════════════════════════════════════════
+function submitChangePassword(){
+  const current  = document.getElementById('cp-current').value;
+  const nw       = document.getElementById('cp-new').value;
+  const confirm  = document.getElementById('cp-confirm').value;
+  const errEl    = document.getElementById('cp-err');
+  errEl.style.display='none';
+  if(!DB.currentUser){ return; }
+  if(current !== DB.currentUser.pass){ errEl.textContent='Current password is incorrect.'; errEl.style.display='block'; return; }
+  if(nw.length < 6){ errEl.textContent='New password must be at least 6 characters.'; errEl.style.display='block'; return; }
+  if(nw !== confirm){ errEl.textContent='Passwords do not match.'; errEl.style.display='block'; return; }
+  // Update in users array too
+  const u = DB.users.find(u=>u.email===DB.currentUser.email);
+  if(u) u.pass = nw;
+  DB.currentUser.pass = nw;
+  ['cp-current','cp-new','cp-confirm'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  closeModal('changePassModal');
+  showToast('Password changed successfully!','green');
+}
+
+// ══════════════════════════════════════════════════
+//  CONFIRM DIALOG
+// ══════════════════════════════════════════════════
+function showConfirm(title, msg, icon, onConfirm){
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-msg').textContent = msg;
+  document.getElementById('confirm-icon').textContent = icon||'⚠️';
+  const btn = document.getElementById('confirm-ok-btn');
+  btn.onclick = function(){ closeModal('confirmModal'); onConfirm(); };
+  openModal('confirmModal');
+}
+
+// ══════════════════════════════════════════════════
+//  EXPORT CSV (real working download)
+// ══════════════════════════════════════════════════
+function exportCSV(filename, rows, headers){
+  const lines = [headers.join(',')];
+  rows.forEach(row=>{
+    lines.push(row.map(cell=>{
+      const s = String(cell===null||cell===undefined?'':cell).replace(/"/g,'""');
+      return s.includes(',')||s.includes('"')||s.includes('\n') ? '"'+s+'"' : s;
+    }).join(','));
+  });
+  const blob = new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=filename; a.style.display='none';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast('CSV downloaded: '+filename,'green');
+}
+
+function exportAttendanceCSV(){
+  const headers = ['Employee ID','Name','Department','Date','Day','Clock In','Break Out','Break In','Clock Out','Hours','Overtime','Status'];
+  const rows = DB.attendance.map(a=>{
+    const emp = DB.employees.find(e=>e.id===a.empId)||{fname:'',lname:'',dept:''};
+    return [a.empId, emp.fname+' '+emp.lname, emp.dept, a.date,
+      new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}),
+      a.in||'', a.breakOut||'', a.breakIn||'', a.out||'',
+      calcWorkHours(a), a.overtime?'+'+a.overtime+'m':'', a.status];
+  });
+  exportCSV('attendance_report.csv', rows, headers);
+}
+
+function exportLeaveCSV(){
+  const headers = ['Leave ID','Employee','Department','Type','From','To','Days','Reason','Applied','Manager Status','HR Status','Final Status'];
+  const rows = DB.leaves.map(l=>[l.id,l.empName,l.dept,l.type,l.from,l.to,l.days,l.reason,l.applied,l.managerStatus,l.hrStatus,l.status]);
+  exportCSV('leave_report.csv', rows, headers);
+}
+
+function exportEmployeeCSV(){
+  const headers = ['ID','First Name','Last Name','Department','Designation','DOJ','Employment Type','Status','Email','Phone','Manager'];
+  const rows = DB.employees.map(e=>[e.id,e.fname,e.lname,e.dept,e.desg,e.doj,e.type,e.status,e.email,e.phone,e.manager]);
+  exportCSV('employee_data.csv', rows, headers);
+}
+
+function printPage(){
+  window.print();
+}
+
+// ══════════════════════════════════════════════════
+//  EXPOSE ALL FUNCTIONS TO WINDOW (fixes onclick scope)
+// ══════════════════════════════════════════════════
+window.selectLoginRole = selectLoginRole;
+window.doLogin = doLogin;
+window.doLogout = doLogout;
+window.showPage = showPage;
+window.switchTab = switchTab;
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.punchIn = punchIn;
+window.punchOut = punchOut;
+window.breakOut = breakOut;
+window.breakIn = breakIn;
+window.submitLeave = submitLeave;
+window.submitRegulation = submitRegulation;
+window.submitAnnouncement = submitAnnouncement;
+window.submitAddEmployee = submitAddEmployee;
+window.submitHoliday = submitHoliday;
+window.approveLeave = approveLeave;
+window.openApproval = openApproval;
+window.deleteEmployee = deleteEmployee;
+window.cancelRegulation = cancelRegulation;
+window.filterTable = filterTable;
+window.filterMonitor = filterMonitor;
+window.filterEmpDept = filterEmpDept;
+window.viewEmpProfile = viewEmpProfile;
+window.calcLeaveDays = calcLeaveDays;
+window.openEditEmployee = openEditEmployee;
+window.switchEditTab = switchEditTab;
+window.calcGross = calcGross;
+window.saveEditEmployee = saveEditEmployee;
+window.openEditLeave = openEditLeave;
+window.saveLeaveBalance = saveLeaveBalance;
+window.submitChangePassword = submitChangePassword;
+window.showConfirm = showConfirm;
+window.exportAttendanceCSV = exportAttendanceCSV;
+window.exportLeaveCSV = exportLeaveCSV;
+window.exportEmployeeCSV = exportEmployeeCSV;
+window.printPage = printPage;
+
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+      m.classList.remove('open');
+    });
+  }
+  if (e.key === 'Enter') {
+    var ls = document.getElementById('login-screen');
+    if (ls && ls.style.display !== 'none') { window.doLogin(); }
+  }
+});
+</script>
+</body>
+</html>
