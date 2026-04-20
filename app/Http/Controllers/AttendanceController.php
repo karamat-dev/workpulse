@@ -23,6 +23,20 @@ class AttendanceController extends Controller
         $punchedAt = isset($validated['punched_at']) ? now()->parse($validated['punched_at']) : now();
         $date = $punchedAt->toDateString();
 
+        $hasApprovedLeave = DB::table('leave_requests')
+            ->where('user_id', $user->id)
+            ->where('status', 'Approved')
+            ->where('from_date', '<=', $date)
+            ->where('to_date', '>=', $date)
+            ->exists();
+
+        if ($hasApprovedLeave) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'You cannot punch attendance on an approved leave day.',
+            ], 422);
+        }
+
         DB::transaction(function () use ($user, $validated, $punchedAt, $date) {
             $existingPunches = DB::table('attendance_punches')
                 ->where('user_id', $user->id)

@@ -11,6 +11,94 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
+    private function syncAttendanceWithLeaveStatus(int $userId, string $fromDate, string $toDate, bool $approved): void
+    {
+        $cursor = now()->parse($fromDate)->startOfDay();
+        $end = now()->parse($toDate)->startOfDay();
+
+        while ($cursor->lte($end)) {
+            $date = $cursor->toDateString();
+
+            if ($approved) {
+                DB::table('attendance_days')->updateOrInsert(
+                    ['user_id' => $userId, 'date' => $date],
+                    [
+                        'status' => 'Leave',
+                        'late' => false,
+                        'overtime_minutes' => 0,
+                        'worked_minutes' => 0,
+                        'updated_at' => now(),
+                        'created_at' => now(),
+                    ]
+                );
+            } else {
+                $punches = DB::table('attendance_punches')
+                    ->where('user_id', $userId)
+                    ->where('date', $date)
+                    ->orderBy('punched_at')
+                    ->get();
+
+                if ($punches->isEmpty()) {
+                    DB::table('attendance_days')
+                        ->where('user_id', $userId)
+                        ->where('date', $date)
+                        ->delete();
+                } else {
+                    $clockIn = $punches->firstWhere('type', 'clock_in');
+                    $clockOut = $punches->firstWhere('type', 'clock_out');
+                    $workedMinutes = 0;
+
+                    if ($clockIn && $clockOut) {
+                        $clockInAt = now()->parse($clockIn->punched_at);
+                        $clockOutAt = now()->parse($clockOut->punched_at);
+                        if ($clockOutAt->greaterThan($clockInAt)) {
+                            $workedMinutes = $clockInAt->diffInMinutes($clockOutAt);
+                        }
+                    }
+
+                    $openBreakAt = null;
+                    foreach ($punches as $punch) {
+                        if ($punch->type === 'break_out') {
+                            $openBreakAt = now()->parse($punch->punched_at);
+                        }
+
+                        if ($punch->type === 'break_in' && $openBreakAt) {
+                            $workedMinutes -= $openBreakAt->diffInMinutes(now()->parse($punch->punched_at));
+                            $openBreakAt = null;
+                        }
+                    }
+
+                    $workedMinutes = max(0, $workedMinutes);
+                    $clockInAt = $clockIn ? now()->parse($clockIn->punched_at) : null;
+                    $clockOutAt = $clockOut ? now()->parse($clockOut->punched_at) : null;
+                    $late = $clockInAt ? $clockInAt->copy()->greaterThan($clockInAt->copy()->setTime(11, 10)) : false;
+                    $overtimeMinutes = 0;
+
+                    if ($clockOutAt) {
+                        $shiftEnd = $clockOutAt->copy()->setTime(20, 0);
+                        if ($clockOutAt->greaterThan($shiftEnd)) {
+                            $overtimeMinutes = $shiftEnd->diffInMinutes($clockOutAt);
+                        }
+                    }
+
+                    DB::table('attendance_days')->updateOrInsert(
+                        ['user_id' => $userId, 'date' => $date],
+                        [
+                            'status' => $clockIn ? 'Present' : 'Absent',
+                            'late' => $late,
+                            'overtime_minutes' => $overtimeMinutes,
+                            'worked_minutes' => $workedMinutes,
+                            'updated_at' => now(),
+                            'created_at' => now(),
+                        ]
+                    );
+                }
+            }
+
+            $cursor->addDay();
+        }
+    }
+
     private function ensureAdmin(Request $request): void
     {
         if ($request->user()->role !== 'admin') {
@@ -498,11 +586,13 @@ class LeaveController extends Controller
             if (!$wasApproved && $finalStatus === 'Approved') {
                 $year = (int) date('Y', strtotime((string) $requestRow->from_date));
                 $this->adjustLeaveBalanceUsage((int) $requestRow->user_id, $year, (int) $requestRow->leave_type_id, (float) $requestRow->days);
+                $this->syncAttendanceWithLeaveStatus((int) $requestRow->user_id, (string) $requestRow->from_date, (string) $requestRow->to_date, true);
             }
 
             if ($wasApproved && $finalStatus !== 'Approved') {
                 $year = (int) date('Y', strtotime((string) $requestRow->from_date));
                 $this->adjustLeaveBalanceUsage((int) $requestRow->user_id, $year, (int) $requestRow->leave_type_id, -1 * (float) $requestRow->days);
+                $this->syncAttendanceWithLeaveStatus((int) $requestRow->user_id, (string) $requestRow->from_date, (string) $requestRow->to_date, false);
             }
         });
 
