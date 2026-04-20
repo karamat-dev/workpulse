@@ -43,7 +43,15 @@ async function wpReload(){
       DB.regulations = data.regulations || [];
       DB.announcements = data.announcements || [];
       DB.holidays = data.holidays || [];
+      DB.notifications = data.notifications || [];
+      DB.notificationCount = data.notificationCount || 0;
     }
+    if(typeof buildNav === 'function'){
+      buildNav();
+      const navEl = document.getElementById('nav-'+window.__workpulseCurrentPage);
+      if(navEl) navEl.classList.add('active');
+    }
+    if(typeof updateNotificationUI === 'function') updateNotificationUI();
     syncLeaveTypeOptions();
     syncDepartmentOptions('ne-dept');
     syncDepartmentOptions('ee-dept');
@@ -644,6 +652,14 @@ function approveLeave(decision){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('approvalModal');
   showToast(`Leave ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
+}
+
+async function markAllNotificationsRead(){
+  await wpApi('/api/me/notifications/read-all', {method:'PATCH'});
+  await wpReload();
+  if(window.__workpulseCurrentPage === 'emp-notifications'){
+    showPage('emp-notifications');
+  }
 }
 
 function deleteEmployee(id){
@@ -2179,6 +2195,48 @@ function pageEmpLeaves(){
     <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
     <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+
+function pageEmpNotifications(){
+  const notifications = Array.isArray(DB.notifications) ? DB.notifications : [];
+  const unreadCount = Number(DB.notificationCount || 0);
+  const items = notifications.map(notification => {
+    const toneClass = notification.isRead ? '' : ' unread';
+    const badge = notification.type === 'leave_review' ? 'Leave' : notification.type === 'regulation_review' ? 'Attendance' : 'Update';
+    const message = notification.message || 'You have a new update.';
+
+    return `<div class="notif-card${toneClass}">
+      <div class="notif-card-head">
+        <div>
+          <div class="notif-card-title">${notification.title || 'Notification'}</div>
+          <div class="notif-card-meta">${formatDateTime(notification.createdAt)}</div>
+        </div>
+        <span class="badge ${notification.isRead ? 'bg-gray' : 'bg-blue'}">${notification.isRead ? 'Read' : badge}</span>
+      </div>
+      <div class="notif-card-body">${message}</div>
+      ${notification.referenceCode ? `<div class="notif-card-ref">Reference: ${notification.referenceCode}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="hero-panel" style="margin-bottom:14px;">
+    <div class="hero-title">Notifications</div>
+    <div class="hero-sub">Approval updates for your leave requests and attendance regulation requests appear here automatically.</div>
+    <div class="hero-chip-row">
+      <div class="hero-chip"><div class="k">Unread</div><div class="v">${unreadCount}</div></div>
+      <div class="hero-chip"><div class="k">Total</div><div class="v">${notifications.length}</div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title">Recent Updates</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('emp-notifications'))">Refresh</button>
+        <button class="btn btn-sm btn-primary" onclick="window.markAllNotificationsRead().catch(e=>showToast(e?.message||'Failed','red'))" ${notifications.length ? '' : 'disabled'}>Mark All Read</button>
+      </div>
+    </div>
+    <div class="notif-list">${items || `<div class="notif-empty">No notifications yet. Once admin reviews your leave or attendance requests, updates will appear here.</div>`}</div>
   </div>`;
 }
 

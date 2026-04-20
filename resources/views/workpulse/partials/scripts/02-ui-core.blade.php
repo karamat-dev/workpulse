@@ -144,6 +144,7 @@ function initApp(){
   loadPunchState(u.id);
 
   buildNav();
+  updateNotificationUI();
   startClock();
   scheduleMidnightReset();
 
@@ -161,6 +162,29 @@ function getNavForRole(role){
   if(role==='employee') return empNav;
   if(role==='hr') return hrNav;
   return adminNav;
+}
+
+function getNotificationPageForRole(){
+  return DB.currentRole === 'employee' ? 'emp-notifications' : 'leave';
+}
+
+function getUnreadNotificationCount(){
+  return Number(DB.notificationCount || 0);
+}
+
+function updateNotificationUI(){
+  const dot = document.getElementById('notif-dot');
+  if(dot){
+    dot.style.display = getUnreadNotificationCount() > 0 ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('.notif-wrap button').forEach(button => {
+    button.title = getUnreadNotificationCount() > 0 ? `Notifications (${getUnreadNotificationCount()} unread)` : 'Notifications';
+  });
+}
+
+function openNotificationsPage(){
+  showPage(getNotificationPageForRole());
 }
 
 function canAccessPage(pageId){
@@ -241,6 +265,7 @@ const empNav = [
     {label:'Dashboard',page:'emp-dashboard',icon:'grid'},
     {label:'My Attendance',page:'emp-attendance',icon:'clock'},
     {label:'My Leaves',page:'emp-leaves',icon:'calendar'},
+    {label:'Notifications',page:'emp-notifications',icon:'bell'},
   ]},
   {sect:'Profile & Team', items:[
     {label:'My Profile',page:'emp-profile',icon:'user'},
@@ -263,6 +288,7 @@ const icons={
   hierarchy:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="1" width="6" height="4" rx="1"/><rect x="1" y="11" width="4" height="4" rx="1"/><rect x="6" y="11" width="4" height="4" rx="1"/><rect x="11" y="11" width="4" height="4" rx="1"/><path d="M8 5v3M8 8H3v3M8 8h5v3"/></svg>`,
   report:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12L6 8l3 3 5-6"/><rect x="1" y="1" width="14" height="13" rx="1.5"/></svg>`,
   megaphone:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3L3 6v4l10 3V3z"/><path d="M3 10v3a1 1 0 002 0v-3"/></svg>`,
+  bell:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a4.5 4.5 0 014.5 4.5c0 2.2.6 3.5 1.3 4.7H2.2c.7-1.2 1.3-2.5 1.3-4.7A4.5 4.5 0 018 1z"/><path d="M6.5 12.2a1.6 1.6 0 003 0"/></svg>`,
   building:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 9h6M5 12h4"/><circle cx="8" cy="6" r="1.5"/></svg>`,
   user:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>`,
 };
@@ -276,6 +302,7 @@ function buildNav(){
       const isCurrent = false;
       let extra = '';
       if(item.badge==='live') extra=`<span class="live-dot"></span>`;
+      else if(item.page==='emp-notifications' && getUnreadNotificationCount() > 0) extra=`<span class="nav-badge">${getUnreadNotificationCount()}</span>`;
       else if(item.badge) extra=`<span class="nav-badge">${item.badge}</span>`;
       html += `<div class="nav-item" id="nav-${item.page}" onclick="window.showPage('${item.page}')">${icons[item.icon]||''}${item.label}${extra}</div>`;
     });
@@ -293,7 +320,7 @@ const pageTitles = {
   announcements:'Announcements',company:'Company Details',
   'hr-dashboard':'HR Dashboard',
   'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
-  'emp-leaves':'My Leaves','emp-profile':'My Profile',
+  'emp-leaves':'My Leaves','emp-notifications':'Notifications','emp-profile':'My Profile',
   'emp-team':'My Team','emp-announcements':'Announcements','emp-calendar':'Events & Calendar',
   'emp-profile-detail':'Employee Profile',
 };
@@ -307,6 +334,7 @@ function showPage(id){
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const navEl = document.getElementById('nav-'+id);
   if(navEl) navEl.classList.add('active');
+  updateNotificationUI();
   const main = document.getElementById('main-content');
   try{
     main.innerHTML = renderPage(id);
@@ -350,6 +378,7 @@ function renderPage(id){
       case 'emp-dashboard': return pageEmpDashboard();
       case 'emp-attendance': return pageEmpAttendance();
       case 'emp-leaves': return pageEmpLeaves();
+      case 'emp-notifications': return pageEmpNotifications();
       case 'emp-profile': return pageEmpProfile();
       case 'emp-team': return pageEmpTeam();
       case 'emp-announcements': return pageAnnouncements(true);
@@ -399,6 +428,12 @@ function calcWorkMinutes(attRecord){
 }
 
 function formatDate(d){ return d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'; }
+function formatDateTime(dt){
+  if(!dt) return '—';
+  const parsed = new Date(dt);
+  if(Number.isNaN(parsed.getTime())) return String(dt);
+  return parsed.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
 
 function now(){ return new Date(); }
 function nowTime(){ return new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }

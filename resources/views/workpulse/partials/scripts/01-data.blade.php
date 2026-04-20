@@ -111,6 +111,9 @@ const DB = {
     {name:'Bilal Ahmed',dept:'Operations',status:'out',since:'17:00'},
   ],
 
+  notifications: [],
+  notificationCount: 0,
+
   // Punch state per user session
   punchState: {
     punchedIn: false,

@@ -10,6 +10,60 @@ use Illuminate\Validation\Rule;
 
 class MeController extends Controller
 {
+    public function notifications(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $notifications = DB::table('employee_notifications')
+            ->where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn ($notification) => [
+                'id' => (int) $notification->id,
+                'type' => $notification->type,
+                'title' => $notification->title,
+                'message' => $notification->message,
+                'referenceType' => $notification->reference_type,
+                'referenceCode' => $notification->reference_code,
+                'meta' => $notification->meta ? json_decode((string) $notification->meta, true) : null,
+                'isRead' => (bool) $notification->is_read,
+                'readAt' => $notification->read_at,
+                'createdAt' => $notification->created_at,
+            ])
+            ->values();
+
+        $unreadCount = DB::table('employee_notifications')
+            ->where('user_id', $user->id)
+            ->where('is_read', false)
+            ->count();
+
+        return response()->json([
+            'ok' => true,
+            'notifications' => $notifications,
+            'unreadCount' => $unreadCount,
+        ]);
+    }
+
+    public function markNotificationsRead(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        DB::table('employee_notifications')
+            ->where('user_id', $user->id)
+            ->where('is_read', false)
+            ->update([
+                'is_read' => true,
+                'read_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Notifications marked as read.',
+        ]);
+    }
+
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();

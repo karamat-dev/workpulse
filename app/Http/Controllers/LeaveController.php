@@ -11,6 +11,30 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
+    private function createEmployeeNotification(
+        int $userId,
+        string $type,
+        string $title,
+        ?string $message = null,
+        ?string $referenceType = null,
+        ?string $referenceCode = null,
+        ?array $meta = null,
+    ): void {
+        DB::table('employee_notifications')->insert([
+            'user_id' => $userId,
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+            'reference_type' => $referenceType,
+            'reference_code' => $referenceCode,
+            'meta' => $meta ? json_encode($meta) : null,
+            'is_read' => false,
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     private function syncAttendanceWithLeaveStatus(int $userId, string $fromDate, string $toDate, bool $approved): void
     {
         $cursor = now()->parse($fromDate)->startOfDay();
@@ -618,8 +642,13 @@ class LeaveController extends Controller
 
         DB::transaction(function () use ($validated, $user, $leaveRequest) {
             $requestRow = DB::table('leave_requests')
+                ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
                 ->where('id', $leaveRequest->id)
                 ->lockForUpdate()
+                ->select([
+                    'leave_requests.*',
+                    'leave_types.name as leave_type_name',
+                ])
                 ->first();
 
             if (!$requestRow) {
@@ -679,6 +708,44 @@ class LeaveController extends Controller
                 $this->adjustLeaveBalanceUsage((int) $requestRow->user_id, $year, (int) $requestRow->leave_type_id, -1 * (float) $requestRow->days);
                 $this->syncAttendanceWithLeaveStatus((int) $requestRow->user_id, (string) $requestRow->from_date, (string) $requestRow->to_date, false);
             }
+
+            $title = match ($validated['step']) {
+                'manager' => $validated['status'] === 'Approved' ? 'Leave Request Reviewed by Manager' : 'Leave Request Rejected by Manager',
+                'hr' => $validated['status'] === 'Approved' ? 'Leave Request Approved' : 'Leave Request Rejected',
+                default => 'Leave Request Updated',
+            };
+
+            $message = sprintf(
+                'Your %s request from %s to %s is now %s.',
+                $requestRow->leave_type_name ?? 'leave',
+                (string) $requestRow->from_date,
+                (string) $requestRow->to_date,
+                strtolower($finalStatus)
+            );
+
+            if ($validated['step'] === 'manager' && $validated['status'] === 'Approved') {
+                $message = sprintf(
+                    'Your %s request from %s to %s was approved by your manager and sent to HR for final review.',
+                    $requestRow->leave_type_name ?? 'leave',
+                    (string) $requestRow->from_date,
+                    (string) $requestRow->to_date
+                );
+            }
+
+            $this->createEmployeeNotification(
+                (int) $requestRow->user_id,
+                'leave_review',
+                $title,
+                $message,
+                'leave_request',
+                (string) $requestRow->code,
+                [
+                    'step' => $validated['step'],
+                    'decision' => $validated['status'],
+                    'final_status' => $finalStatus,
+                    'reviewer_id' => $user->id,
+                ],
+            );
         });
 
         return response()->json(['ok' => true]);

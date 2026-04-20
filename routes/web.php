@@ -30,7 +30,9 @@ Route::middleware('auth')->group(function () {
     Route::prefix('api')->group(function () {
         Route::get('/bootstrap', WorkpulseBootstrapController::class);
         Route::get('/me/profile', [MeController::class, 'profile']);
+        Route::get('/me/notifications', [MeController::class, 'notifications']);
         Route::patch('/me/account', [MeController::class, 'updateAccount']);
+        Route::patch('/me/notifications/read-all', [MeController::class, 'markNotificationsRead']);
 
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');

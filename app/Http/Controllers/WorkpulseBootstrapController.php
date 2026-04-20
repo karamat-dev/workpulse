@@ -545,6 +545,27 @@ class WorkpulseBootstrapController extends Controller
             ])
             ->values();
 
+        $notifications = DB::table('employee_notifications')
+            ->where('user_id', $user->id)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn ($notification) => [
+                'id' => (int) $notification->id,
+                'type' => $notification->type,
+                'title' => $notification->title,
+                'message' => $notification->message,
+                'referenceType' => $notification->reference_type,
+                'referenceCode' => $notification->reference_code,
+                'meta' => $notification->meta ? json_decode((string) $notification->meta, true) : null,
+                'isRead' => (bool) $notification->is_read,
+                'readAt' => $notification->read_at,
+                'createdAt' => $notification->created_at,
+            ])
+            ->values();
+
+        $notificationCount = $notifications->where('isRead', false)->count();
+
         $company = DB::table('company_settings')->where('id', 1)->first();
 
         return response()->json([
@@ -564,6 +585,8 @@ class WorkpulseBootstrapController extends Controller
             'announcements' => $announcements,
             'holidays' => $holidays,
             'events' => $events,
+            'notifications' => $notifications,
+            'notificationCount' => $notificationCount,
             'company' => $company,
         ]);
     }

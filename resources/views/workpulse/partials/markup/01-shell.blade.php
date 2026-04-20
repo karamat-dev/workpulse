@@ -56,10 +56,10 @@
         <div class="tb-clock" id="tb-clock">00:00:00</div>
         <div id="topbar-actions"></div>
         <div class="notif-wrap">
-          <button class="btn btn-sm" onclick="window.showPage('leave')" title="Notifications">
+          <button class="btn btn-sm" onclick="window.openNotificationsPage ? window.openNotificationsPage() : window.showPage('leave')" title="Notifications">
             <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a5.5 5.5 0 015.5 5.5c0 3-1 5-1.5 6H4c-.5-1-1.5-3-1.5-6A5.5 5.5 0 018 1z"/><path d="M6 12v.5a2 2 0 004 0V12"/></svg>
           </button>
-          <div class="notif-dot"></div>
+          <div class="notif-dot" id="notif-dot"></div>
         </div>
       </div>
     </div>

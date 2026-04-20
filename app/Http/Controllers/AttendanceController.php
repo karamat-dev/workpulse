@@ -12,6 +12,30 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
+    private function createEmployeeNotification(
+        int $userId,
+        string $type,
+        string $title,
+        ?string $message = null,
+        ?string $referenceType = null,
+        ?string $referenceCode = null,
+        ?array $meta = null,
+    ): void {
+        DB::table('employee_notifications')->insert([
+            'user_id' => $userId,
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+            'reference_type' => $referenceType,
+            'reference_code' => $referenceCode,
+            'meta' => $meta ? json_encode($meta) : null,
+            'is_read' => false,
+            'read_at' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     public function punch(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -479,18 +503,45 @@ class AttendanceController extends Controller
             'status' => ['required', Rule::in(['Approved', 'Rejected'])],
         ]);
 
-        $updated = DB::table('attendance_regulation_requests')
+        $reviewer = $request->user();
+        $regulation = DB::table('attendance_regulation_requests')
             ->where('code', $code)
-            ->update([
-                'status' => $validated['status'],
-                'reviewer_user_id' => $request->user()->id,
-                'reviewed_at' => now(),
-                'updated_at' => now(),
-            ]);
+            ->first();
 
-        if ($updated === 0) {
+        if (!$regulation) {
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
         }
+
+        DB::transaction(function () use ($validated, $reviewer, $regulation) {
+            DB::table('attendance_regulation_requests')
+                ->where('id', $regulation->id)
+                ->update([
+                    'status' => $validated['status'],
+                    'reviewer_user_id' => $reviewer->id,
+                    'reviewed_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+            $decision = strtolower($validated['status']);
+            $this->createEmployeeNotification(
+                (int) $regulation->user_id,
+                'regulation_review',
+                $validated['status'] === 'Approved' ? 'Attendance Request Approved' : 'Attendance Request Rejected',
+                sprintf(
+                    'Your %s request for %s was %s.',
+                    (string) $regulation->type,
+                    (string) $regulation->date,
+                    $decision
+                ),
+                'attendance_regulation',
+                (string) $regulation->code,
+                [
+                    'decision' => $validated['status'],
+                    'reviewer_id' => $reviewer->id,
+                    'date' => $regulation->date,
+                ],
+            );
+        });
 
         return response()->json(['ok' => true]);
     }

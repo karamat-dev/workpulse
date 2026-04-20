@@ -67,13 +67,18 @@
                         DB.users = [data.currentUser];
                         DB.employees = data.employees || [];
                         DB.departments = data.departments || [];
+                        DB.shifts = data.shifts || [];
                         DB.attendance = data.attendance || [];
                         DB.liveAttendance = data.liveAttendance || [];
                         DB.leaves = data.leaves || [];
+                        DB.leaveTypes = data.leaveTypes || [];
+                        DB.leavePolicies = data.leavePolicies || [];
                         DB.leaveBalances = data.leaveBalances || [];
                         DB.regulations = data.regulations || [];
                         DB.announcements = data.announcements || [];
                         DB.holidays = data.holidays || [];
+                        DB.notifications = data.notifications || [];
+                        DB.notificationCount = data.notificationCount || 0;
                     }
 
                     // Load full persisted profile for employee self-profile views
