@@ -16,7 +16,7 @@
             body { margin: 0; }
         </style>
     </head>
-    <body class="font-sans antialiased bg-black">
+    <body class="font-sans antialiased">
         {{ $slot }}
     </body>
 </html>

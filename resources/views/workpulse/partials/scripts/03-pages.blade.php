@@ -728,7 +728,7 @@ function pageAdminDashboard(){
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Department Attendance</div></div>
-      ${DB.departments.map(d=>{const pct=Math.round(d.present/d.count*100);return`
+      ${DB.departments.map(d=>{const pct=d.count?Math.round(d.present/d.count*100):0;return`
       <div style="padding:7px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${pct}%</strong></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${d.color};"></div></div>
