@@ -114,6 +114,44 @@ class LeaveController extends Controller
         return $base !== '' ? $base : 'leave_type';
     }
 
+    private function calculatePolicyAllocation(int $userId, int $year, float $quota, bool $proRata): float
+    {
+        $quota = max(0, $quota);
+        if (!$proRata || $quota <= 0) {
+            return round($quota, 2);
+        }
+
+        $dateOfJoining = DB::table('employee_profiles')
+            ->where('user_id', $userId)
+            ->value('date_of_joining');
+
+        if (!$dateOfJoining) {
+            return round($quota, 2);
+        }
+
+        $joinDate = now()->parse($dateOfJoining)->startOfDay();
+        if ((int) $joinDate->format('Y') > $year) {
+            return 0.0;
+        }
+
+        if ((int) $joinDate->format('Y') < $year) {
+            return round($quota, 2);
+        }
+
+        $yearStart = now()->setDate($year, 1, 1)->startOfDay();
+        $yearEnd = now()->setDate($year, 12, 31)->startOfDay();
+        $effectiveStart = $joinDate->greaterThan($yearStart) ? $joinDate : $yearStart;
+
+        if ($effectiveStart->greaterThan($yearEnd)) {
+            return 0.0;
+        }
+
+        $eligibleDays = $effectiveStart->diffInDays($yearEnd) + 1;
+        $daysInYear = $yearStart->diffInDays($yearEnd) + 1;
+
+        return round(($quota * $eligibleDays) / max(1, $daysInYear), 2);
+    }
+
     private function getOrCreateLeaveBalance(int $userId, int $year, int $leaveTypeId): object
     {
         $existing = DB::table('leave_balances')
@@ -126,10 +164,17 @@ class LeaveController extends Controller
             return $existing;
         }
 
-        $allocated = (float) (DB::table('leave_policies')
+        $policy = DB::table('leave_policies')
             ->where('year', $year)
             ->where('leave_type_id', $leaveTypeId)
-            ->value('quota_days') ?? 0);
+            ->first(['quota_days', 'pro_rata']);
+
+        $allocated = $this->calculatePolicyAllocation(
+            $userId,
+            $year,
+            (float) ($policy->quota_days ?? 0),
+            (bool) ($policy->pro_rata ?? false)
+        );
 
         $used = (float) (DB::table('leave_requests')
             ->where('user_id', $userId)
@@ -159,6 +204,54 @@ class LeaveController extends Controller
             'used_days' => $used,
             'remaining_days' => $remaining,
         ];
+    }
+
+    private function syncBalancesForPolicyYear(int $year, array $leaveTypeIds = []): void
+    {
+        $users = DB::table('users')
+            ->whereIn('role', ['employee', 'hr', 'admin'])
+            ->pluck('id');
+
+        $policiesQuery = DB::table('leave_policies')->where('year', $year);
+        if ($leaveTypeIds !== []) {
+            $policiesQuery->whereIn('leave_type_id', $leaveTypeIds);
+        }
+
+        $policies = $policiesQuery->get(['leave_type_id', 'quota_days', 'pro_rata']);
+
+        foreach ($users as $userId) {
+            foreach ($policies as $policy) {
+                $existing = DB::table('leave_balances')
+                    ->where('user_id', $userId)
+                    ->where('year', $year)
+                    ->where('leave_type_id', $policy->leave_type_id)
+                    ->first();
+
+                $allocated = $this->calculatePolicyAllocation(
+                    (int) $userId,
+                    $year,
+                    (float) $policy->quota_days,
+                    (bool) $policy->pro_rata
+                );
+                $used = (float) ($existing->used_days ?? 0);
+                $remaining = max(0, $allocated - $used);
+
+                DB::table('leave_balances')->updateOrInsert(
+                    [
+                        'user_id' => $userId,
+                        'year' => $year,
+                        'leave_type_id' => $policy->leave_type_id,
+                    ],
+                    [
+                        'allocated_days' => $allocated,
+                        'used_days' => $used,
+                        'remaining_days' => $remaining,
+                        'created_at' => $existing->created_at ?? now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        }
     }
 
     private function adjustLeaveBalanceUsage(int $userId, int $year, int $leaveTypeId, float $deltaUsed): void
@@ -319,27 +412,19 @@ class LeaveController extends Controller
         }
 
         $balances = DB::table('leave_types')
-            ->leftJoin('leave_balances', function ($join) use ($userId, $year) {
-                $join->on('leave_balances.leave_type_id', '=', 'leave_types.id')
-                    ->where('leave_balances.user_id', '=', $userId)
-                    ->where('leave_balances.year', '=', $year);
+            ->orderBy('name')
+            ->get(['id', 'code', 'name'])
+            ->map(function ($leaveType) use ($userId, $year) {
+                $balance = $this->getOrCreateLeaveBalance($userId, $year, (int) $leaveType->id);
+
+                return [
+                    'code' => $leaveType->code,
+                    'name' => $leaveType->name,
+                    'allocated' => (float) ($balance->allocated_days ?? 0),
+                    'used' => (float) ($balance->used_days ?? 0),
+                    'remaining' => (float) ($balance->remaining_days ?? 0),
+                ];
             })
-            ->select([
-                'leave_types.code',
-                'leave_types.name',
-                'leave_balances.allocated_days',
-                'leave_balances.used_days',
-                'leave_balances.remaining_days',
-            ])
-            ->orderBy('leave_types.name')
-            ->get()
-            ->map(fn ($balance) => [
-                'code' => $balance->code,
-                'name' => $balance->name,
-                'allocated' => (float) ($balance->allocated_days ?? 0),
-                'used' => (float) ($balance->used_days ?? 0),
-                'remaining' => (float) ($balance->remaining_days ?? 0),
-            ])
             ->values();
 
         return response()->json([
@@ -775,6 +860,11 @@ class LeaveController extends Controller
                     ]
                 );
             }
+
+            $this->syncBalancesForPolicyYear(
+                $year,
+                $leaveTypes->pluck('id')->map(fn ($id) => (int) $id)->all()
+            );
         });
 
         return $this->policies(new Request(['year' => $year]));
