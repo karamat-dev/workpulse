@@ -64,6 +64,18 @@ async function wpReload(){
   }
 }
 
+async function refreshMyLeaveBalancesSnapshot(pageId){
+  if(DB.currentRole !== 'employee' || !DB.currentUser) return;
+
+  try{
+    const data = await wpApi('/api/leave/my/balance?year='+new Date().getFullYear(), {method:'GET', headers:{}});
+    DB.leaveBalances = data.balances || [];
+    if(window.__workpulseCurrentPage === pageId){
+      showPage(pageId);
+    }
+  }catch(e){}
+}
+
 function getLeaveTypesList(){
   if(Array.isArray(DB.leaveTypes) && DB.leaveTypes.length){
     return DB.leaveTypes.map(type=>({
@@ -295,6 +307,27 @@ function getTodayLocalDate(){
   return `${year}-${month}-${day}`;
 }
 
+function getShiftEndForDate(dateStr){
+  const currentUser = DB.currentUser || {};
+  const shiftEnd = currentUser.shiftEnd || '20:00';
+  const shiftStart = currentUser.shiftStart || '11:00';
+  const [startHour, startMinute] = String(shiftStart).split(':').map(Number);
+  const [endHour, endMinute] = String(shiftEnd).split(':').map(Number);
+  const shiftEndDate = new Date(`${dateStr}T${String(endHour).padStart(2,'0')}:${String(endMinute).padStart(2,'0')}:00`);
+  const shiftStartDate = new Date(`${dateStr}T${String(startHour).padStart(2,'0')}:${String(startMinute).padStart(2,'0')}:00`);
+
+  if(shiftEndDate <= shiftStartDate){
+    shiftEndDate.setDate(shiftEndDate.getDate()+1);
+  }
+
+  return shiftEndDate;
+}
+
+function isShiftCompletedForDate(dateStr){
+  if(!dateStr) return false;
+  return new Date() >= getShiftEndForDate(dateStr);
+}
+
 function clonePunchState(){
   const ps = DB.punchState || {};
   return {
@@ -316,6 +349,10 @@ function restorePunchState(snapshot){
 async function punchIn(){
   const ps = DB.punchState;
   if(ps.punchedIn) return;
+  if(isShiftCompletedForDate(getTodayLocalDate())){
+    showToast('Shift is already completed for today','red');
+    return;
+  }
   const snapshot = clonePunchState();
   const actionTime = new Date();
   const actionLabel = actionTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
@@ -325,7 +362,6 @@ async function punchIn(){
   ps.clockOutTime = null;
   ps.breakOutTime = null;
   ps.breakInTime = null;
-  ps.totalBreakMs = 0;
   ps.sessionLogs.push({event:'Clock In',time:actionLabel});
 
   const today = getTodayLocalDate();
@@ -952,12 +988,13 @@ function pageAttendance(){
   const u=DB.currentUser;
   const today=new Date().toISOString().split('T')[0];
   const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Clocked In',late:false};
+  const shiftCompleted = isShiftCompletedForDate(today);
 
-  const statusLabel = ps.punchedIn ? (ps.onBreak?'On Break':'In Office') : (todayRec.out?'Clocked Out':'Not Started');
-  const statusBadgeHtml = ps.punchedIn ? (ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`) : `<span class="badge bg-gray">Not Clocked In</span>`;
+  const statusLabel = ps.punchedIn ? (ps.onBreak?'On Break':'In Office') : (shiftCompleted ? 'Shift Completed' : (todayRec.out?'Clocked Out':'Not Started'));
+  const statusBadgeHtml = ps.punchedIn ? (ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`) : (shiftCompleted ? `<span class="badge bg-gray">Shift Completed</span>` : `<span class="badge bg-gray">Not Clocked In</span>`);
 
   let punchButtons = '';
-  if(!ps.punchedIn && !todayRec.out){
+  if(!ps.punchedIn && !shiftCompleted){
     punchButtons = `<button class="punch-btn pb-in" onclick="punchIn()">Clock In</button>`;
   } else if(ps.punchedIn){
     punchButtons = `
@@ -2011,17 +2048,23 @@ function pageEmpDashboard(){
     const employees = Array.isArray(DB.employees) ? DB.employees : [];
     const today=new Date().toISOString().split('T')[0];
     const todayRec=attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,status:'Not Started',late:false};
+    const shiftCompleted = isShiftCompletedForDate(today);
     const myLeaves=leaves.filter(l=>l.empId===u.id);
     const myPending=myLeaves.filter(l=>l.status==='Pending').length;
-    const leaveCounts = {
-      sick: findLeaveBalance('sick')?.remaining ?? 0,
-      annual: findLeaveBalance('annual')?.remaining ?? 0,
-      bereavement: findLeaveBalance('bereavement')?.remaining ?? 0,
-      marriage: findLeaveBalance('marriage')?.remaining ?? 0,
-    };
+    const leaveCards = [
+      findLeaveBalance('sick') || {name:'Sick Leaves', allocated:0, used:0, remaining:0},
+      findLeaveBalance('annual') || {name:'Annual Leaves', allocated:0, used:0, remaining:0},
+      findLeaveBalance('bereavement') || {name:'Bereavement Leaves', allocated:0, used:0, remaining:0},
+      findLeaveBalance('marriage') || {name:'Marriage Leaves', allocated:0, used:0, remaining:0},
+    ].map(balance => ({
+      name: balance.name || 'Leave',
+      quota: Number(balance.allocated ?? 0),
+      used: Number(balance.used ?? Math.max(0, Number(balance.allocated ?? 0) - Number(balance.remaining ?? 0))),
+      left: Number(balance.remaining ?? 0),
+    }));
     const whoOff = leaves.filter(l=>l.status==='Approved' && l.from<=today && l.to>=today).length;
     const myLogs = attendance.filter(a=>a.empId===u.id).slice(0,5);
-    const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):todayRec.out?'Completed':'Not Started';
+    const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):(shiftCompleted?'Completed':(todayRec.out?'Clocked Out':'Not Started'));
 
     return `
   <div class="emp-pp-tabs">
@@ -2045,7 +2088,7 @@ function pageEmpDashboard(){
           </div>
           <div class="emp-pp-hours" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</div>
           <div class="emp-pp-actions">
-            ${!ps.punchedIn && !todayRec.out
+            ${!ps.punchedIn && !shiftCompleted
               ? `<button class="btn btn-sm btn-primary" onclick="punchIn()">Clock In</button>`
               : ps.punchedIn
                 ? `<button class="btn btn-sm btn-red" onclick="punchOut()">Clock Out</button>
@@ -2062,10 +2105,15 @@ function pageEmpDashboard(){
       <div class="emp-pp-card">
         <div class="emp-pp-title" style="margin-bottom:10px;">Time Off</div>
         <div class="emp-pp-leaves">
-          <div class="emp-pp-leaf"><span>Sick Leaves</span><strong>${leaveCounts.sick} Days</strong></div>
-          <div class="emp-pp-leaf"><span>Annual Leaves</span><strong>${leaveCounts.annual} Days</strong></div>
-          <div class="emp-pp-leaf"><span>Bereavement Leaves</span><strong>${leaveCounts.bereavement} Days</strong></div>
-          <div class="emp-pp-leaf"><span>Marriage Leaves</span><strong>${leaveCounts.marriage} Days</strong></div>
+          ${leaveCards.map(card => `
+            <div class="emp-pp-leaf">
+              <div>
+                <span>${card.name}</span>
+                <div class="emp-pp-leaf-meta">Quota: ${card.quota} Days · Used: ${card.used} Days</div>
+              </div>
+              <strong>${card.left} Left</strong>
+            </div>
+          `).join('')}
         </div>
       </div>
 
@@ -2106,8 +2154,9 @@ function pageEmpAttendance(){
   const ps=DB.punchState;
   const today=new Date().toISOString().split('T')[0];
   const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Started',late:false};
+  const shiftCompleted = isShiftCompletedForDate(today);
 
-  const statusBadgeHtml=ps.punchedIn?(ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`):todayRec.out?`<span class="badge bg-gray">Completed</span>`:`<span class="badge bg-gray">Not Clocked In</span>`;
+  const statusBadgeHtml=ps.punchedIn?(ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`):(shiftCompleted?`<span class="badge bg-gray">Completed</span>`:`<span class="badge bg-gray">Not Clocked In</span>`);
 
   const logRows=DB.attendance.filter(a=>a.empId===u.id).map(a=>`
     <tr><td>${formatDate(a.date)}</td>
@@ -2127,7 +2176,7 @@ function pageEmpAttendance(){
       <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
       <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
       <div class="cw-status">${statusBadgeHtml}</div>
-      ${!ps.punchedIn&&!todayRec.out
+      ${!ps.punchedIn&&!shiftCompleted
         ?`<button class="punch-btn pb-in" onclick="punchIn()">▶ Clock In</button>`
         :ps.punchedIn
           ?`<button class="punch-btn pb-out" onclick="punchOut()">■ Clock Out</button>
@@ -2487,6 +2536,7 @@ function pageEmpTeam(){
 }
 
 let __liveAttendanceRefreshTimer = null;
+let __employeeLeaveSyncTimer = null;
 
 async function refreshLiveAttendanceSnapshot(pageId){
   try{
@@ -2504,11 +2554,22 @@ function setupLiveAttendanceRefresh(pageId){
     __liveAttendanceRefreshTimer = null;
   }
 
-  if(!['dashboard','realtime','hr-dashboard'].includes(pageId)) return;
+  if(__employeeLeaveSyncTimer){
+    clearInterval(__employeeLeaveSyncTimer);
+    __employeeLeaveSyncTimer = null;
+  }
 
-  __liveAttendanceRefreshTimer = setInterval(()=>{
-    refreshLiveAttendanceSnapshot(pageId);
-  }, 3000);
+  if(['dashboard','realtime','hr-dashboard'].includes(pageId)){
+    __liveAttendanceRefreshTimer = setInterval(()=>{
+      refreshLiveAttendanceSnapshot(pageId);
+    }, 3000);
+  }
+
+  if(DB.currentRole === 'employee' && ['emp-dashboard','emp-leaves','emp-profile'].includes(pageId)){
+    __employeeLeaveSyncTimer = setInterval(()=>{
+      refreshMyLeaveBalancesSnapshot(pageId);
+    }, 10000);
+  }
 }
 
 function pageRealtimeLive(){

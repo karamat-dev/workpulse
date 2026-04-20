@@ -406,6 +406,11 @@ function statusBadge(s){
 }
 
 function calcWorkHours(attRecord){
+  if(typeof attRecord?.workedMinutes === 'number'){
+    const mins = Math.max(0, attRecord.workedMinutes);
+    const h=Math.floor(mins/60), m=mins%60;
+    return `${h}h ${m}m`;
+  }
   if(!attRecord.in || !attRecord.out) return '—';
   const [ih,im]=attRecord.in.split(':').map(Number);
   const [oh,om]=attRecord.out.split(':').map(Number);
@@ -415,6 +420,9 @@ function calcWorkHours(attRecord){
 }
 
 function calcWorkMinutes(attRecord){
+  if(typeof attRecord?.workedMinutes === 'number'){
+    return Math.max(0, attRecord.workedMinutes);
+  }
   if(!attRecord.in || !attRecord.out) return 0;
   const [ih,im]=attRecord.in.split(':').map(Number);
   const [oh,om]=attRecord.out.split(':').map(Number);

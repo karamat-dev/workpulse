@@ -419,7 +419,15 @@ class LeaveController extends Controller
                 'leave_balances.remaining_days',
             ])
             ->orderBy('leave_types.name')
-            ->get();
+            ->get()
+            ->map(fn ($balance) => [
+                'code' => $balance->code,
+                'name' => $balance->name,
+                'allocated' => (float) ($balance->allocated_days ?? 0),
+                'used' => (float) ($balance->used_days ?? 0),
+                'remaining' => (float) ($balance->remaining_days ?? 0),
+            ])
+            ->values();
 
         return response()->json(['ok' => true, 'year' => $year, 'balances' => $balances]);
     }
@@ -643,7 +651,7 @@ class LeaveController extends Controller
         DB::transaction(function () use ($validated, $user, $leaveRequest) {
             $requestRow = DB::table('leave_requests')
                 ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
-                ->where('id', $leaveRequest->id)
+                ->where('leave_requests.id', $leaveRequest->id)
                 ->lockForUpdate()
                 ->select([
                     'leave_requests.*',

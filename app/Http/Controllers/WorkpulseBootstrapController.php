@@ -217,14 +217,18 @@ class WorkpulseBootstrapController extends Controller
             ->get()
             ->map(function ($day) use ($attendancePunches) {
                 $punches = $attendancePunches->get($day->emp_id.'|'.$day->date, collect());
+                $firstClockIn = $punches->firstWhere('type', 'clock_in');
+                $lastClockOut = $punches->where('type', 'clock_out')->last();
+                $lastBreakOut = $punches->where('type', 'break_out')->last();
+                $lastBreakIn = $punches->where('type', 'break_in')->last();
 
                 return [
                     'empId' => $day->emp_id,
                     'date' => $day->date,
-                    'in' => $punches->firstWhere('type', 'clock_in')?->punched_at ? now()->parse($punches->firstWhere('type', 'clock_in')->punched_at)->format('H:i') : null,
-                    'out' => $punches->firstWhere('type', 'clock_out')?->punched_at ? now()->parse($punches->firstWhere('type', 'clock_out')->punched_at)->format('H:i') : null,
-                    'breakOut' => $punches->firstWhere('type', 'break_out')?->punched_at ? now()->parse($punches->firstWhere('type', 'break_out')->punched_at)->format('H:i') : null,
-                    'breakIn' => $punches->firstWhere('type', 'break_in')?->punched_at ? now()->parse($punches->firstWhere('type', 'break_in')->punched_at)->format('H:i') : null,
+                    'in' => $firstClockIn?->punched_at ? now()->parse($firstClockIn->punched_at)->format('H:i') : null,
+                    'out' => $lastClockOut?->punched_at ? now()->parse($lastClockOut->punched_at)->format('H:i') : null,
+                    'breakOut' => $lastBreakOut?->punched_at ? now()->parse($lastBreakOut->punched_at)->format('H:i') : null,
+                    'breakIn' => $lastBreakIn?->punched_at ? now()->parse($lastBreakIn->punched_at)->format('H:i') : null,
                     'status' => $day->status,
                     'late' => (bool) $day->late,
                     'workedMinutes' => (int) $day->worked_minutes,
@@ -390,20 +394,25 @@ class WorkpulseBootstrapController extends Controller
 
             $todayPunches = $attendancePunches->get($empId.'|'.$today, collect());
             $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
-            $clockOutPunch = $todayPunches->firstWhere('type', 'clock_out');
+            $lastClockInPunch = $todayPunches->where('type', 'clock_in')->last();
+            $clockOutPunch = $todayPunches->where('type', 'clock_out')->last();
             $breakOutCount = $todayPunches->where('type', 'break_out')->count();
             $breakInCount = $todayPunches->where('type', 'break_in')->count();
-            $onBreak = $breakOutCount > $breakInCount;
+            $clockInCount = $todayPunches->where('type', 'clock_in')->count();
+            $clockOutCount = $todayPunches->where('type', 'clock_out')->count();
+            $activeClockIn = $clockInCount > $clockOutCount;
+            $onBreak = $activeClockIn && $breakOutCount > $breakInCount;
 
             $clockInTime = $clockInPunch?->punched_at ? now()->parse($clockInPunch->punched_at)->format('H:i') : null;
+            $activeClockInTime = $lastClockInPunch?->punched_at ? now()->parse($lastClockInPunch->punched_at)->format('H:i') : null;
             $clockOutTime = $clockOutPunch?->punched_at ? now()->parse($clockOutPunch->punched_at)->format('H:i') : null;
 
             $status = 'not_checked_in';
             $since = 'Not Checked In';
 
-            if ($clockInPunch && !$clockOutPunch) {
+            if ($activeClockIn) {
                 $status = $onBreak ? 'break' : 'in';
-                $since = $clockInTime ?? '-';
+                $since = $activeClockInTime ?? $clockInTime ?? '-';
             } elseif ($clockOutPunch) {
                 $status = 'out';
                 $since = $clockOutTime ?? '-';

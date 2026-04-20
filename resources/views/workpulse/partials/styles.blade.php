@@ -373,6 +373,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 .emp-pp-leaf{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#faf9f6;display:flex;justify-content:space-between;gap:10px;align-items:center;}
 .emp-pp-leaf span{font-size:12px;color:var(--muted);}
 .emp-pp-leaf strong{font-size:13px;}
+.emp-pp-leaf-meta{font-size:11px;color:var(--muted);margin-top:4px;}
 .emp-pp-empty{min-height:82px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--muted);font-size:12px;background:#f6f5f1;border:1px dashed var(--border);border-radius:10px;}
 .notif-list{display:flex;flex-direction:column;gap:12px;}
 .notif-card{border:1px solid var(--border);border-radius:16px;padding:16px;background:linear-gradient(180deg,#FFFFFF 0%, #F8FCFD 100%);}

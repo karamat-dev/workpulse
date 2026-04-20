@@ -68,7 +68,9 @@ class AttendanceController extends Controller
                 ->orderBy('punched_at')
                 ->get();
 
-            $this->validatePunchSequence($validated['type'], $existingPunches);
+            $shift = $this->shiftForUser($user->id);
+
+            $this->validatePunchSequence($validated['type'], $existingPunches, $punchedAt, $shift);
 
             DB::table('attendance_punches')->insert([
                 'user_id' => $user->id,
@@ -85,7 +87,7 @@ class AttendanceController extends Controller
                 ->orderBy('punched_at')
                 ->get();
 
-            $summary = $this->buildAttendanceDaySummary($allPunches, $this->shiftForUser($user->id));
+            $summary = $this->buildAttendanceDaySummary($allPunches, $shift);
 
             $day = DB::table('attendance_days')->where('user_id', $user->id)->where('date', $date)->first();
 
@@ -108,27 +110,56 @@ class AttendanceController extends Controller
         ]);
     }
 
-    private function validatePunchSequence(string $type, $punches): void
+    private function shiftEndAt(string $date, ?object $shift = null)
     {
-        $hasClockIn = $punches->contains(fn ($punch) => $punch->type === 'clock_in');
-        $hasClockOut = $punches->contains(fn ($punch) => $punch->type === 'clock_out');
+        $shiftStart = $shift?->start_time ? now()->parse($date.' '.(string) $shift->start_time) : now()->parse($date.' 11:00:00');
+        $shiftEnd = $shift?->end_time ? now()->parse($date.' '.(string) $shift->end_time) : now()->parse($date.' 20:00:00');
+
+        if ($shiftEnd->lessThanOrEqualTo($shiftStart)) {
+            $shiftEnd->addDay();
+        }
+
+        return $shiftEnd;
+    }
+
+    private function punchSessionState($punches): array
+    {
+        $clockInCount = $punches->where('type', 'clock_in')->count();
+        $clockOutCount = $punches->where('type', 'clock_out')->count();
         $breakOutCount = $punches->where('type', 'break_out')->count();
         $breakInCount = $punches->where('type', 'break_in')->count();
-        $onBreak = $breakOutCount > $breakInCount;
 
-        if ($type === 'clock_in' && $hasClockIn && !$hasClockOut) {
+        $activeClockIn = $clockInCount > $clockOutCount;
+        $onBreak = $activeClockIn && $breakOutCount > $breakInCount;
+
+        return [
+            'activeClockIn' => $activeClockIn,
+            'onBreak' => $onBreak,
+        ];
+    }
+
+    private function validatePunchSequence(string $type, $punches, $punchedAt, ?object $shift = null): void
+    {
+        $state = $this->punchSessionState($punches);
+        $shiftEnded = $punchedAt->greaterThanOrEqualTo($this->shiftEndAt($punchedAt->toDateString(), $shift));
+
+        if ($type === 'clock_in' && $state['activeClockIn']) {
             throw ValidationException::withMessages(['type' => 'You are already clocked in.']);
         }
 
-        if ($type === 'clock_out' && (!$hasClockIn || $hasClockOut)) {
+        if ($type === 'clock_in' && $shiftEnded) {
+            throw ValidationException::withMessages(['type' => 'Shift is already completed for today.']);
+        }
+
+        if ($type === 'clock_out' && !$state['activeClockIn']) {
             throw ValidationException::withMessages(['type' => 'You need an active clock-in before clocking out.']);
         }
 
-        if ($type === 'break_out' && (!$hasClockIn || $hasClockOut || $onBreak)) {
+        if ($type === 'break_out' && (!$state['activeClockIn'] || $state['onBreak'])) {
             throw ValidationException::withMessages(['type' => 'Break out is only allowed while you are clocked in and not already on break.']);
         }
 
-        if ($type === 'break_in' && (!$hasClockIn || $hasClockOut || !$onBreak)) {
+        if ($type === 'break_in' && (!$state['activeClockIn'] || !$state['onBreak'])) {
             throw ValidationException::withMessages(['type' => 'Break in is only allowed after an open break.']);
         }
     }
@@ -149,7 +180,6 @@ class AttendanceController extends Controller
     private function buildAttendanceDaySummary($punches, ?object $shift = null): array
     {
         $clockIn = $punches->firstWhere('type', 'clock_in');
-        $clockOut = $punches->firstWhere('type', 'clock_out');
 
         if (!$clockIn) {
             return [
@@ -161,23 +191,48 @@ class AttendanceController extends Controller
         }
 
         $clockInAt = now()->parse($clockIn->punched_at);
-        $clockOutAt = $clockOut ? now()->parse($clockOut->punched_at) : null;
-
-        $workedMinutes = 0;
-        if ($clockOutAt && $clockOutAt->greaterThan($clockInAt)) {
-            $workedMinutes = $clockInAt->diffInMinutes($clockOutAt);
-        }
-
+        $lastClockOutAt = null;
+        $activeClockInAt = null;
         $openBreakAt = null;
+        $workedMinutes = 0;
+
         foreach ($punches as $punch) {
-            if ($punch->type === 'break_out') {
-                $openBreakAt = now()->parse($punch->punched_at);
+            $punchedAt = now()->parse($punch->punched_at);
+
+            if ($punch->type === 'clock_in') {
+                if (!$activeClockInAt) {
+                    $activeClockInAt = $punchedAt;
+                }
+                $openBreakAt = null;
+                continue;
             }
 
-            if ($punch->type === 'break_in' && $openBreakAt) {
-                $workedMinutes -= $openBreakAt->diffInMinutes(now()->parse($punch->punched_at));
+            if ($punch->type === 'break_out' && $activeClockInAt && !$openBreakAt) {
+                $openBreakAt = $punchedAt;
+                continue;
+            }
+
+            if ($punch->type === 'break_in' && $activeClockInAt && $openBreakAt) {
+                $workedMinutes -= $openBreakAt->diffInMinutes($punchedAt);
+                $openBreakAt = null;
+                continue;
+            }
+
+            if ($punch->type !== 'clock_out' || !$activeClockInAt) {
+                continue;
+            }
+
+            if ($openBreakAt) {
+                $workedMinutes -= $openBreakAt->diffInMinutes($punchedAt);
                 $openBreakAt = null;
             }
+
+            if ($punchedAt->greaterThan($activeClockInAt)) {
+                $workedMinutes += $activeClockInAt->diffInMinutes($punchedAt);
+            }
+
+            $activeClockInAt = null;
+            $lastClockOutAt = $punchedAt;
         }
 
         $workedMinutes = max(0, $workedMinutes);
@@ -189,10 +244,10 @@ class AttendanceController extends Controller
         $late = $clockInAt->greaterThan($lateCutoff);
         $overtimeMinutes = 0;
 
-        if ($clockOutAt) {
-            $scheduledShiftEnd = $clockOutAt->copy()->setTime((int) $shiftEnd->format('H'), (int) $shiftEnd->format('i'));
-            if ($clockOutAt->greaterThan($scheduledShiftEnd)) {
-                $overtimeMinutes = $scheduledShiftEnd->diffInMinutes($clockOutAt);
+        if ($lastClockOutAt) {
+            $scheduledShiftEnd = $lastClockOutAt->copy()->setTime((int) $shiftEnd->format('H'), (int) $shiftEnd->format('i'));
+            if ($lastClockOutAt->greaterThan($scheduledShiftEnd)) {
+                $overtimeMinutes = $scheduledShiftEnd->diffInMinutes($lastClockOutAt);
             }
         }
 
@@ -265,10 +320,10 @@ class AttendanceController extends Controller
             $day = $days->get($u->id);
             $userPunches = $punches->get($u->id, collect());
 
-            $clockIn = $userPunches->firstWhere('type', 'clock_in')?->punched_at;
-            $clockOut = $userPunches->firstWhere('type', 'clock_out')?->punched_at;
-            $breakOut = $userPunches->firstWhere('type', 'break_out')?->punched_at;
-            $breakIn = $userPunches->firstWhere('type', 'break_in')?->punched_at;
+            $clockIn = optional($userPunches->firstWhere('type', 'clock_in'))->punched_at;
+            $clockOut = optional($userPunches->where('type', 'clock_out')->last())->punched_at;
+            $breakOut = optional($userPunches->where('type', 'break_out')->last())->punched_at;
+            $breakIn = optional($userPunches->where('type', 'break_in')->last())->punched_at;
 
             $leave = $leaveRequests->get($u->id, collect())->first();
 
@@ -432,20 +487,20 @@ class AttendanceController extends Controller
 
             $todayPunches = $attendancePunches->get($empId, collect());
             $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
-            $clockOutPunch = $todayPunches->firstWhere('type', 'clock_out');
-            $breakOutCount = $todayPunches->where('type', 'break_out')->count();
-            $breakInCount = $todayPunches->where('type', 'break_in')->count();
-            $onBreak = $breakOutCount > $breakInCount;
+            $lastClockInPunch = $todayPunches->where('type', 'clock_in')->last();
+            $clockOutPunch = $todayPunches->where('type', 'clock_out')->last();
+            $state = $this->punchSessionState($todayPunches);
 
             $clockInTime = $clockInPunch?->punched_at ? now()->parse($clockInPunch->punched_at)->format('H:i') : null;
+            $activeClockInTime = $lastClockInPunch?->punched_at ? now()->parse($lastClockInPunch->punched_at)->format('H:i') : null;
             $clockOutTime = $clockOutPunch?->punched_at ? now()->parse($clockOutPunch->punched_at)->format('H:i') : null;
 
             $status = 'not_checked_in';
             $since = 'Not Checked In';
 
-            if ($clockInPunch && !$clockOutPunch) {
-                $status = $onBreak ? 'break' : 'in';
-                $since = $clockInTime ?? '-';
+            if ($state['activeClockIn']) {
+                $status = $state['onBreak'] ? 'break' : 'in';
+                $since = $activeClockInTime ?? $clockInTime ?? '-';
             } elseif ($clockOutPunch) {
                 $status = 'out';
                 $since = $clockOutTime ?? '-';
