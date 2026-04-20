@@ -10,6 +10,8 @@ use App\Http\Controllers\EmployeesController;
 use App\Http\Controllers\AnnouncementsController;
 use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\ShiftsController;
+use App\Http\Controllers\TransferController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -39,6 +41,19 @@ Route::middleware('auth')->group(function () {
 
         Route::post('/announcements', [AnnouncementsController::class, 'store'])->middleware('perm:announcements.manage');
         Route::post('/holidays', [HolidaysController::class, 'store'])->middleware('perm:leave.manage');
+
+        Route::prefix('shifts')->group(function () {
+            Route::get('/', [ShiftsController::class, 'index'])->middleware('perm:employees.manage');
+            Route::post('/', [ShiftsController::class, 'store'])->middleware('perm:employees.manage');
+            Route::patch('/{shiftId}', [ShiftsController::class, 'update'])->middleware('perm:employees.manage');
+            Route::delete('/{shiftId}', [ShiftsController::class, 'destroy'])->middleware('perm:employees.manage');
+        });
+
+        Route::prefix('transfer')->group(function () {
+            Route::get('/export', [TransferController::class, 'export'])->middleware('perm:employees.manage');
+            Route::get('/employees/export', [TransferController::class, 'exportEmployees'])->middleware('perm:employees.manage');
+            Route::post('/employees/import', [TransferController::class, 'importEmployees'])->middleware('perm:employees.manage');
+        });
 
         Route::prefix('attendance')->group(function () {
             Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');

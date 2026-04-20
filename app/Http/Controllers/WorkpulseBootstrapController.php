@@ -15,6 +15,7 @@ class WorkpulseBootstrapController extends Controller
         $profile = DB::table('employee_profiles')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->where('employee_profiles.user_id', $user->id)
             ->select([
                 'departments.name as dept_name',
@@ -28,6 +29,13 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.personal_phone',
                 'employee_profiles.cnic_document_path',
                 'employee_profiles.cnic_document_name',
+                'shifts.id as shift_id',
+                'shifts.code as shift_code',
+                'shifts.name as shift_name',
+                'shifts.start_time',
+                'shifts.end_time',
+                'shifts.grace_minutes',
+                'shifts.working_days',
             ])
             ->first();
 
@@ -51,6 +59,13 @@ class WorkpulseBootstrapController extends Controller
             'dop' => $profile?->probation_end_date,
             'lwd' => $profile?->last_working_date,
             'manager' => $profile?->manager_name ?? '-',
+            'shiftId' => $profile?->shift_id,
+            'shiftCode' => $profile?->shift_code,
+            'shiftName' => $profile?->shift_name,
+            'shiftStart' => $profile?->start_time ? substr((string) $profile->start_time, 0, 5) : null,
+            'shiftEnd' => $profile?->end_time ? substr((string) $profile->end_time, 0, 5) : null,
+            'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : null,
+            'shiftWorkingDays' => $profile?->working_days,
             'phone' => $profile?->personal_phone,
             'cnicDocumentPath' => $profile?->cnic_document_path,
             'cnicDocumentName' => $profile?->cnic_document_name,
@@ -65,6 +80,7 @@ class WorkpulseBootstrapController extends Controller
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->whereIn('users.role', ['employee', 'hr', 'admin'])
             ->select([
                 'users.id as user_id',
@@ -82,6 +98,13 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.personal_phone as phone',
                 'employee_profiles.cnic_document_path as cnic_document_path',
                 'employee_profiles.cnic_document_name as cnic_document_name',
+                'shifts.id as shift_id',
+                'shifts.code as shift_code',
+                'shifts.name as shift_name',
+                'shifts.start_time',
+                'shifts.end_time',
+                'shifts.grace_minutes',
+                'shifts.working_days',
             ])
             ->orderBy('users.employee_code');
 
@@ -112,6 +135,13 @@ class WorkpulseBootstrapController extends Controller
                 'manager' => $employee->manager ?? '-',
                 'phone' => $employee->phone,
                 'email' => $employee->email,
+                'shiftId' => $employee->shift_id,
+                'shiftCode' => $employee->shift_code,
+                'shiftName' => $employee->shift_name,
+                'shiftStart' => $employee->start_time ? substr((string) $employee->start_time, 0, 5) : null,
+                'shiftEnd' => $employee->end_time ? substr((string) $employee->end_time, 0, 5) : null,
+                'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : null,
+                'shiftWorkingDays' => $employee->working_days,
                 'cnicDocumentPath' => $employee->cnic_document_path,
                 'cnicDocumentName' => $employee->cnic_document_name,
                 'cnicDocumentUrl' => $employee->cnic_document_path ? asset($employee->cnic_document_path) : null,
@@ -140,6 +170,21 @@ class WorkpulseBootstrapController extends Controller
                 'leave' => 0,
                 'absent' => 0,
             ]);
+
+        $shifts = DB::table('shifts')
+            ->orderBy('name')
+            ->get()
+            ->map(fn ($shift) => [
+                'id' => $shift->id,
+                'code' => $shift->code,
+                'name' => $shift->name,
+                'start' => substr((string) $shift->start_time, 0, 5),
+                'end' => substr((string) $shift->end_time, 0, 5),
+                'grace' => (int) $shift->grace_minutes,
+                'workingDays' => $shift->working_days,
+                'active' => (bool) $shift->is_active,
+            ])
+            ->values();
 
         $today = now()->toDateString();
         $attendanceStartDate = now()->subDays(90)->toDateString();
@@ -404,6 +449,35 @@ class WorkpulseBootstrapController extends Controller
             return $department;
         })->values();
 
+        $visibleAnnouncementIds = DB::table('announcements')
+            ->leftJoin('announcement_recipients', 'announcement_recipients.announcement_id', '=', 'announcements.id')
+            ->when($user->role !== 'admin', function ($query) use ($user, $profile) {
+                $query->where(function ($audienceQuery) use ($user, $profile) {
+                    $audienceQuery
+                        ->where('announcements.audience', 'all')
+                        ->orWhere('announcements.audience', 'role:'.$user->role)
+                        ->orWhere('announcements.audience', 'department:'.($profile?->dept_name ?? ''))
+                        ->orWhere(function ($specificQuery) use ($user) {
+                            $specificQuery
+                                ->where('announcements.audience', 'specific')
+                                ->where('announcement_recipients.user_id', $user->id);
+                        });
+                });
+            })
+            ->distinct()
+            ->pluck('announcements.id');
+
+        $announcementRecipientMap = DB::table('announcement_recipients')
+            ->join('users', 'users.id', '=', 'announcement_recipients.user_id')
+            ->whereIn('announcement_recipients.announcement_id', $visibleAnnouncementIds->all())
+            ->select([
+                'announcement_recipients.announcement_id',
+                'users.name',
+                'users.employee_code',
+            ])
+            ->get()
+            ->groupBy('announcement_id');
+
         $announcements = DB::table('announcements')
             ->join('users', 'users.id', '=', 'announcements.author_user_id')
             ->select([
@@ -416,19 +490,39 @@ class WorkpulseBootstrapController extends Controller
                 'users.role',
                 'announcements.published_on as date',
             ])
+            ->whereIn('announcements.id', $visibleAnnouncementIds->all())
             ->orderByDesc('announcements.published_on')
             ->limit(50)
             ->get()
-            ->map(fn ($announcement) => [
-                'id' => 'AN-'.$announcement->id,
-                'title' => $announcement->title,
-                'cat' => $announcement->cat,
-                'audience' => $announcement->audience === 'all' ? 'All Employees' : $announcement->audience,
-                'msg' => $announcement->msg,
-                'author' => $announcement->author,
-                'role' => $announcement->role,
-                'date' => $announcement->date,
-            ])
+            ->map(function ($announcement) use ($announcementRecipientMap) {
+                $recipients = $announcementRecipientMap->get($announcement->id, collect())
+                    ->map(fn ($recipient) => [
+                        'employeeCode' => $recipient->employee_code,
+                        'name' => $recipient->name,
+                    ])
+                    ->values();
+
+                $audienceLabel = match (true) {
+                    $announcement->audience === 'all' => 'All Employees',
+                    str_starts_with((string) $announcement->audience, 'role:') => 'Role: '.ucfirst(substr((string) $announcement->audience, 5)),
+                    str_starts_with((string) $announcement->audience, 'department:') => 'Department: '.substr((string) $announcement->audience, 11),
+                    $announcement->audience === 'specific' => 'Specific Employees',
+                    default => $announcement->audience,
+                };
+
+                return [
+                    'id' => 'AN-'.$announcement->id,
+                    'title' => $announcement->title,
+                    'cat' => $announcement->cat,
+                    'audience' => $audienceLabel,
+                    'audienceKey' => $announcement->audience,
+                    'msg' => $announcement->msg,
+                    'author' => $announcement->author,
+                    'role' => $announcement->role,
+                    'date' => $announcement->date,
+                    'recipients' => $recipients,
+                ];
+            })
             ->values();
 
         $holidays = DB::table('holidays')
@@ -459,6 +553,7 @@ class WorkpulseBootstrapController extends Controller
             'currentRole' => $user->role,
             'employees' => $employees,
             'departments' => $departments,
+            'shifts' => $shifts,
             'attendance' => $attendance,
             'liveAttendance' => $liveAttendance,
             'leaves' => $leaves,

@@ -205,6 +205,9 @@ class ReportsController extends Controller
             'employee_profiles.employment_type',
             'employee_profiles.personal_phone',
             'employee_profiles.personal_email',
+            'shifts.name as shift_name',
+            'shifts.start_time as shift_start',
+            'shifts.end_time as shift_end',
         ];
 
         if ($canSeeConfidential) {
@@ -222,6 +225,7 @@ class ReportsController extends Controller
         $rows = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->select($select)
             ->orderBy('users.employee_code')
             ->get();
@@ -247,6 +251,9 @@ class ReportsController extends Controller
             'employee_profiles.employment_type',
             'employee_profiles.personal_phone',
             'employee_profiles.personal_email',
+            'shifts.name as shift_name',
+            'shifts.start_time as shift_start',
+            'shifts.end_time as shift_end',
         ];
 
         if ($canSeeConfidential) {
@@ -264,6 +271,7 @@ class ReportsController extends Controller
         $rows = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->select($select)
             ->orderBy('users.employee_code')
             ->cursor();
@@ -273,7 +281,7 @@ class ReportsController extends Controller
         return response()->streamDownload(function () use ($rows, $canSeeConfidential) {
             $out = fopen('php://output', 'w');
 
-            $headers = ['Employee ID', 'Name', 'Email', 'Role', 'Department', 'Designation', 'DOJ', 'Probation End', 'Last Working Date', 'Status', 'Type', 'Phone', 'Personal Email'];
+            $headers = ['Employee ID', 'Name', 'Email', 'Role', 'Department', 'Designation', 'Shift', 'Shift Start', 'Shift End', 'DOJ', 'Probation End', 'Last Working Date', 'Status', 'Type', 'Phone', 'Personal Email'];
             if ($canSeeConfidential) {
                 $headers = array_merge($headers, ['Basic', 'House', 'Transport', 'Tax', 'Bank', 'Account', 'IBAN']);
             }
@@ -287,6 +295,9 @@ class ReportsController extends Controller
                     $r->role,
                     $r->department ?? '',
                     $r->designation ?? '',
+                    $r->shift_name ?? '',
+                    $r->shift_start ? substr((string) $r->shift_start, 0, 5) : '',
+                    $r->shift_end ? substr((string) $r->shift_end, 0, 5) : '',
                     $r->date_of_joining ?? '',
                     $r->probation_end_date ?? '',
                     $r->last_working_date ?? '',

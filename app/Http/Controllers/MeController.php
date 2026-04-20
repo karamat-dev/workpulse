@@ -26,6 +26,7 @@ class MeController extends Controller
             'employee_profiles.probation_end_date as dop',
             'employee_profiles.last_working_date as lwd',
             'employee_profiles.manager_user_id',
+            'employee_profiles.shift_id',
             'mgr.name as manager',
             'employee_profiles.employment_type as type',
             'employee_profiles.status',
@@ -41,6 +42,12 @@ class MeController extends Controller
             'employee_profiles.next_of_kin_name as kin',
             'employee_profiles.next_of_kin_relationship as kinRel',
             'employee_profiles.next_of_kin_phone as kinPhone',
+            'shifts.code as shiftCode',
+            'shifts.name as shiftName',
+            'shifts.start_time as shiftStart',
+            'shifts.end_time as shiftEnd',
+            'shifts.grace_minutes as shiftGrace',
+            'shifts.working_days as shiftWorkingDays',
         ];
 
         if ($canSeeConfidential) {
@@ -59,6 +66,7 @@ class MeController extends Controller
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->where('users.id', $user->id)
             ->select($select)
             ->first();

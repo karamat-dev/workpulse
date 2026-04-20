@@ -33,6 +33,7 @@ async function wpReload(){
       DB.users = [data.currentUser];
       DB.employees = data.employees || [];
       DB.departments = data.departments || [];
+      DB.shifts = data.shifts || [];
       DB.attendance = data.attendance || [];
       DB.liveAttendance = data.liveAttendance || [];
       DB.leaves = data.leaves || [];
@@ -46,6 +47,10 @@ async function wpReload(){
     syncLeaveTypeOptions();
     syncDepartmentOptions('ne-dept');
     syncDepartmentOptions('ee-dept');
+    syncShiftOptions('ne-shift');
+    syncShiftOptions('ee-shift');
+    syncAnnouncementAudienceOptions();
+    syncAnnouncementRecipientOptions();
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
@@ -138,6 +143,61 @@ function syncDepartmentOptions(targetId, preferredValue=''){
   } else if(values.length){
     select.value = values[0];
   }
+}
+
+function getShiftList(){
+  return Array.isArray(DB.shifts) ? DB.shifts : [];
+}
+
+function syncShiftOptions(targetId, preferredValue=''){
+  const select = document.getElementById(targetId);
+  if(!select) return;
+
+  const currentValue = preferredValue !== undefined && preferredValue !== null ? String(preferredValue) : String(select.value || '');
+  const options = ['<option value="">No Shift Assigned</option>'].concat(
+    getShiftList().map(shift => `<option value="${shift.id}">${shift.name} (${shift.start} - ${shift.end})</option>`)
+  );
+  select.innerHTML = options.join('');
+  if(currentValue) select.value = currentValue;
+}
+
+function syncAnnouncementAudienceOptions(){
+  const select = document.getElementById('ann-aud');
+  if(!select) return;
+
+  const currentValue = select.value || 'all';
+  const options = [
+    {value:'all', label:'All Employees'},
+    {value:'role:employee', label:'Employees Only'},
+    {value:'role:hr', label:'HR Only'},
+    {value:'role:admin', label:'Admins Only'},
+    ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Department: ${name}`})),
+    {value:'specific', label:'Specific Employees'},
+  ];
+  select.innerHTML = options.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
+  select.value = options.some(option => option.value === currentValue) ? currentValue : 'all';
+  toggleAnnouncementRecipients();
+}
+
+function syncAnnouncementRecipientOptions(){
+  const select = document.getElementById('ann-targets');
+  if(!select) return;
+
+  const selected = Array.from(select.selectedOptions || []).map(option => option.value);
+  select.innerHTML = (Array.isArray(DB.employees) ? DB.employees : [])
+    .map(employee => `<option value="${employee.id}">${employee.fname} ${employee.lname} (${employee.id})</option>`)
+    .join('');
+
+  selected.forEach(value => {
+    const option = Array.from(select.options).find(item => item.value === value);
+    if(option) option.selected = true;
+  });
+}
+
+function toggleAnnouncementRecipients(){
+  const audience = document.getElementById('ann-aud')?.value || 'all';
+  const wrap = document.getElementById('ann-recipient-wrap');
+  if(wrap) wrap.style.display = audience === 'specific' ? 'block' : 'none';
 }
 
 function getLeaveTypeCode(label){
@@ -447,6 +507,10 @@ document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
 syncLeaveTypeOptions();
 syncDepartmentOptions('ne-dept');
 syncDepartmentOptions('ee-dept');
+syncShiftOptions('ne-shift');
+syncShiftOptions('ee-shift');
+syncAnnouncementAudienceOptions();
+syncAnnouncementRecipientOptions();
 
 function submitRegulation(){
   const date=document.getElementById('reg-date').value;
@@ -467,12 +531,17 @@ function submitAnnouncement(){
   const cat=document.getElementById('ann-cat').value;
   const audience=document.getElementById('ann-aud').value;
   const msg=document.getElementById('ann-msg').value;
+  const recipientCodes = Array.from(document.getElementById('ann-targets')?.selectedOptions || []).map(option => option.value);
   if(!title||!msg){ showToast('Title and message required','red'); return; }
-  wpApi('/api/announcements', {method:'POST', body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg})})
+  if(audience==='specific' && !recipientCodes.length){ showToast('Select at least one employee','red'); return; }
+  wpApi('/api/announcements', {method:'POST', body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes})})
     .then(()=>wpReload())
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   document.getElementById('ann-title').value='';
   document.getElementById('ann-msg').value='';
+  document.getElementById('ann-aud').value='all';
+  Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => { option.selected = false; });
+  toggleAnnouncementRecipients();
   closeModal('announcementModal');
   showToast('Announcement published!','green');
   if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
@@ -498,6 +567,7 @@ function submitAddEmployee(){
   const bank=document.getElementById('ne-bank').value;
   const acct=document.getElementById('ne-acct').value;
   const iban=document.getElementById('ne-iban').value;
+  const shiftId=document.getElementById('ne-shift').value;
   const cnicDocument=document.getElementById('ne-cnic-document').files?.[0];
   if(!fn||!ln||!email||!dept||!desg||!doj||!cnicDocument){ showToast('Please fill all required fields, including CNIC document','red'); return; }
   const formData = new FormData();
@@ -513,6 +583,7 @@ function submitAddEmployee(){
   if(lwd) formData.append('lwd', lwd);
   if(type) formData.append('type', type);
   if(manager) formData.append('manager', manager);
+  formData.append('shift_id', shiftId || '');
   if(basic) formData.append('basic', basic);
   if(house) formData.append('house', house);
   if(transport) formData.append('transport', transport);
@@ -530,6 +601,7 @@ function submitAddEmployee(){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
   ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-desg','ne-manager','ne-dop','ne-lwd','ne-cnic-document','ne-basic','ne-house','ne-transport','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  if(document.getElementById('ne-shift')) document.getElementById('ne-shift').value='';
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
 
@@ -1837,6 +1909,7 @@ function pageAnnouncements(empView=false){
         <span class="badge bg-blue" style="flex-shrink:0;margin-left:8px;">${a.cat}</span>
       </div>
       <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
+      ${Array.isArray(a.recipients) && a.recipients.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${a.recipients.map(recipient => `<span class="badge bg-blue">${recipient.name}</span>`).join('')}</div>` : ''}
       <div class="ann-meta">By ${a.author} (${a.role}) | ${formatDate(a.date)} | Audience: ${a.audience}</div>
     </div>`).join('');
 
@@ -1879,7 +1952,7 @@ function pageCompany(){
     <div class="card-hdr">
       <div>
         <div class="card-title">Transfer Data</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Move company data safely by downloading a full transfer package or exporting module-wise files for another system.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Move company data safely by downloading a full transfer package or importing/exporting complete employee profiles.</div>
       </div>
       <span class="badge bg-blue">Admin Tool</span>
     </div>
@@ -1887,14 +1960,21 @@ function pageCompany(){
       <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub">Ready for transfer</div></div>
       <div class="stat-card"><div class="stat-label">Attendance Rows</div><div class="stat-val">${DB.attendance.length}</div><div class="stat-sub">Daily records included</div></div>
       <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
-      <div class="stat-card"><div class="stat-label">Departments</div><div class="stat-val">${DB.departments.length}</div><div class="stat-sub">Org structure snapshot</div></div>
+      <div class="stat-card"><div class="stat-label">Shifts</div><div class="stat-val">${(DB.shifts||[]).length}</div><div class="stat-sub">Standard schedules available</div></div>
     </div>
     <div class="alert al-info"><span>⇄</span><div><strong>Transfer package:</strong> includes employees, departments, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
+      <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Employee Profiles JSON</button>
+      <button class="btn" onclick="window.importEmployeeProfiles()">Import Employee Profiles JSON</button>
       <button class="btn" onclick="window.exportEmployeeCSV()">Employees CSV</button>
       <button class="btn" onclick="window.exportAttendanceCSV()">Attendance CSV</button>
       <button class="btn" onclick="window.exportLeaveCSV()">Leave CSV</button>
+    </div>
+    <div class="panel-card" style="margin-top:14px;">
+      <div class="panel-head"><div class="panel-title">Standard Shifts</div><button class="btn btn-sm btn-primary" onclick="window.openCreateShift()">+ Add Shift</button></div>
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Code</th><th>Time</th><th>Grace</th><th>Working Days</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${(DB.shifts||[]).map(shift => `<tr><td>${shift.name}</td><td>${shift.code}</td><td>${shift.start} - ${shift.end}</td><td>${shift.grace} min</td><td>${shift.workingDays||'-'}</td><td>${shift.active ? statusBadge('Active') : statusBadge('Inactive')}</td><td><div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openEditShift(${shift.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteShift(${shift.id})">Delete</button></div></td></tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No shifts configured.</td></tr>`}</tbody></table></div></div>
     </div>
   </div>`;
 }
@@ -2193,7 +2273,7 @@ function pageEmpProfileDetail(){
         <div class="panel-head"><div class="panel-title">Official</div><span class="badge bg-green">Live Profile</span></div>
         <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(e.status)}</span></div>
         <div class="irow"><span class="ikey">Employment</span><span class="ival">${e.type||'Permanent'}</span></div>
-        <div class="irow"><span class="ikey">Shift</span><span class="ival">Morning Shift Mon Fri</span></div>
+        <div class="irow"><span class="ikey">Shift</span><span class="ival">${e.shiftName ? `${e.shiftName} (${e.shiftStart||'-'} - ${e.shiftEnd||'-'})` : 'Not Assigned'}</span></div>
         <div class="irow"><span class="ikey">Hire Date</span><span class="ival">${formatDate(e.doj)}</span></div>
         <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(e.dop)}</span></div>
         <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
@@ -2283,8 +2363,8 @@ function pageEmpProfile(){
         <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(u.lwd)}</span></div>
         <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
         <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
-        <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 - 20:00</span></div>
-        <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon - Fri</span></div>
+        <div class="irow"><span class="ikey">Shift</span><span class="ival">${u.shiftName ? `${u.shiftName} (${u.shiftStart||'-'} - ${u.shiftEnd||'-'})` : 'Not Assigned'}</span></div>
+        <div class="irow"><span class="ikey">Working Days</span><span class="ival">${u.shiftWorkingDays || 'Mon - Fri'}</span></div>
       </div>
       <div class="panel-card">
         <div class="panel-head"><div class="panel-title">Personal & Emergency</div><span class="badge bg-blue">Self Service</span></div>

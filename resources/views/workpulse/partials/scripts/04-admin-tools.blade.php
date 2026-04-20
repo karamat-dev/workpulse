@@ -24,6 +24,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-kinPhone').value = e.kinPhone||'';
   // Job
     if(typeof syncDepartmentOptions === 'function') syncDepartmentOptions('ee-dept', e.dept||'Engineering');
+    if(typeof syncShiftOptions === 'function') syncShiftOptions('ee-shift', e.shiftId||'');
     document.getElementById('ee-dept').value = e.dept||'Engineering';
     document.getElementById('ee-desg').value = e.desg||'';
     document.getElementById('ee-doj').value = e.doj||'';
@@ -32,6 +33,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-type').value = e.type||'Permanent';
     document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-manager').value = e.manager==='-' ? '' : (e.manager||'');
+    document.getElementById('ee-shift').value = e.shiftId||'';
     document.getElementById('ee-email').value = e.email||'';
     document.getElementById('ee-password').value = '';
     document.getElementById('ee-cnic-document').value = '';
@@ -98,6 +100,7 @@ async function saveEditEmployee(){
   formData.append('type', document.getElementById('ee-type').value);
   formData.append('status', document.getElementById('ee-status').value);
   if(document.getElementById('ee-manager').value.trim()) formData.append('manager', document.getElementById('ee-manager').value.trim());
+  formData.append('shift_id', document.getElementById('ee-shift').value || '');
   formData.append('email', document.getElementById('ee-email').value.trim());
   if(document.getElementById('ee-password').value) formData.append('password', document.getElementById('ee-password').value);
   formData.append('basic', parseInt(document.getElementById('ee-basic').value)||0);
@@ -571,51 +574,110 @@ function exportEmployeeCSV(){
 }
 
 function exportTransferData(){
-  const today = new Date();
-  const stamp = today.toISOString().replace(/[:.]/g, '-');
-  const payload = {
-    app: 'WorkPulse',
-    exported_at: today.toISOString(),
-    exported_by: DB.currentUser ? {
-      id: DB.currentUser.id || null,
-      name: [DB.currentUser.fname, DB.currentUser.lname].filter(Boolean).join(' ') || DB.currentUser.name || null,
-      role: DB.currentRole || null,
-      email: DB.currentUser.email || null,
-    } : null,
-    summary: {
-      employees: Array.isArray(DB.employees) ? DB.employees.length : 0,
-      attendance_records: Array.isArray(DB.attendance) ? DB.attendance.length : 0,
-      leave_requests: Array.isArray(DB.leaves) ? DB.leaves.length : 0,
-      departments: Array.isArray(DB.departments) ? DB.departments.length : 0,
-      announcements: Array.isArray(DB.announcements) ? DB.announcements.length : 0,
-      holidays: Array.isArray(DB.holidays) ? DB.holidays.length : 0,
-    },
-    data: {
-      employees: Array.isArray(DB.employees) ? DB.employees : [],
-      departments: Array.isArray(DB.departments) ? DB.departments : [],
-      attendance: Array.isArray(DB.attendance) ? DB.attendance : [],
-      live_attendance: Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [],
-      leaves: Array.isArray(DB.leaves) ? DB.leaves : [],
-      leave_types: Array.isArray(DB.leaveTypes) ? DB.leaveTypes : [],
-      leave_policies: Array.isArray(DB.leavePolicies) ? DB.leavePolicies : [],
-      leave_balances: Array.isArray(DB.leaveBalances) ? DB.leaveBalances : [],
-      regulations: Array.isArray(DB.regulations) ? DB.regulations : [],
-      announcements: Array.isArray(DB.announcements) ? DB.announcements : [],
-      holidays: Array.isArray(DB.holidays) ? DB.holidays : [],
+  window.location.href = '/api/transfer/export';
+  showToast('Transfer data package downloaded.','green');
+}
+
+function exportEmployeeProfilesJson(){
+  window.location.href = '/api/transfer/employees/export';
+  showToast('Employee profile export started.','green');
+}
+
+function importEmployeeProfiles(){
+  const input = document.getElementById('transfer-import-file');
+  if(!input) return;
+  input.value = '';
+  input.onchange = async function(){
+    const file = input.files?.[0];
+    if(!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    try{
+      const data = await wpApi('/api/transfer/employees/import', {method:'POST', body: formData});
+      await wpReload();
+      showToast(`Imported ${data.imported || 0} employee profile(s).`,'green');
+      if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+    }catch(e){
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   };
+  input.click();
+}
 
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `workpulse_transfer_data_${stamp}.json`;
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  showToast('Transfer data package downloaded.','green');
+function openCreateShift(){
+  document.getElementById('shift-modal-title').textContent = 'Add Standard Shift';
+  document.getElementById('shift-id').value = '';
+  document.getElementById('shift-name').value = '';
+  document.getElementById('shift-code').value = '';
+  document.getElementById('shift-start').value = '11:00';
+  document.getElementById('shift-end').value = '20:00';
+  document.getElementById('shift-grace').value = '10';
+  document.getElementById('shift-days').value = 'Mon-Fri';
+  document.getElementById('shift-active').value = '1';
+  openModal('shiftModal');
+}
+
+function openEditShift(shiftId){
+  const shift = (DB.shifts||[]).find(item => String(item.id) === String(shiftId));
+  if(!shift){
+    showToast('Shift not found.','red');
+    return;
+  }
+
+  document.getElementById('shift-modal-title').textContent = 'Edit Standard Shift';
+  document.getElementById('shift-id').value = shift.id;
+  document.getElementById('shift-name').value = shift.name || '';
+  document.getElementById('shift-code').value = shift.code || '';
+  document.getElementById('shift-start').value = shift.start || '11:00';
+  document.getElementById('shift-end').value = shift.end || '20:00';
+  document.getElementById('shift-grace').value = shift.grace ?? 10;
+  document.getElementById('shift-days').value = shift.workingDays || 'Mon-Fri';
+  document.getElementById('shift-active').value = shift.active ? '1' : '0';
+  openModal('shiftModal');
+}
+
+async function saveShift(){
+  const shiftId = document.getElementById('shift-id').value;
+  const payload = {
+    name: document.getElementById('shift-name').value.trim(),
+    code: document.getElementById('shift-code').value.trim() || null,
+    start: document.getElementById('shift-start').value,
+    end: document.getElementById('shift-end').value,
+    grace: parseInt(document.getElementById('shift-grace').value, 10) || 0,
+    workingDays: document.getElementById('shift-days').value.trim(),
+    active: document.getElementById('shift-active').value === '1',
+  };
+
+  if(!payload.name || !payload.start || !payload.end){
+    showToast('Shift name, start time, and end time are required.','red');
+    return;
+  }
+
+  try{
+    await wpApi(shiftId ? `/api/shifts/${encodeURIComponent(shiftId)}` : '/api/shifts', {
+      method: shiftId ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    await wpReload();
+    closeModal('shiftModal');
+    showToast(`Shift ${shiftId ? 'updated' : 'created'} successfully.`,'green');
+    if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+function deleteShift(shiftId){
+  showConfirm('Delete Shift', 'This will remove the standard shift and unassign it from employees currently using it.', '⚠️', async function(){
+    try{
+      await wpApi(`/api/shifts/${encodeURIComponent(shiftId)}`, {method:'DELETE'});
+      await wpReload();
+      showToast('Shift deleted.','green');
+      if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+    }catch(e){
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
+    }
+  });
 }
 
 function printPage(){

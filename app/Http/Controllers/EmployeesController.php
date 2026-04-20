@@ -46,6 +46,7 @@ class EmployeesController extends Controller
             'type' => ['nullable', 'string', 'max:30'],
             'manager' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', 'max:20'], // default employee
+            'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'cnic_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'basic' => ['nullable', 'integer', 'min:0'],
             'house' => ['nullable', 'integer', 'min:0'],
@@ -118,6 +119,7 @@ class EmployeesController extends Controller
                 [
                     'department_id' => $departmentId,
                     'manager_user_id' => $managerUserId,
+                    'shift_id' => $validated['shift_id'] ?? null,
                     'designation' => $validated['desg'],
                     'date_of_joining' => $validated['doj'],
                     'probation_end_date' => $validated['dop'] ?? (($validated['type'] ?? '') === 'Probation'
@@ -184,6 +186,7 @@ class EmployeesController extends Controller
             'type' => ['nullable', 'string', 'max:30'],
             'status' => ['nullable', 'string', 'max:30'],
             'manager' => ['nullable', 'string', 'max:255'],
+            'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
@@ -249,6 +252,7 @@ class EmployeesController extends Controller
                 [
                     'department_id' => $departmentId,
                     'manager_user_id' => $managerUserId,
+                    'shift_id' => $validated['shift_id'] ?? null,
                     'designation' => $validated['desg'],
                     'date_of_joining' => $validated['doj'],
                     'probation_end_date' => $validated['dop'] ?? null,
@@ -372,6 +376,13 @@ class EmployeesController extends Controller
             'employee_profiles.next_of_kin_name',
             'employee_profiles.next_of_kin_relationship',
             'employee_profiles.next_of_kin_phone',
+            'shifts.id as shift_id',
+            'shifts.code as shift_code',
+            'shifts.name as shift_name',
+            'shifts.start_time',
+            'shifts.end_time',
+            'shifts.grace_minutes',
+            'shifts.working_days',
             'mgr.name as manager_name',
         ];
 
@@ -391,6 +402,7 @@ class EmployeesController extends Controller
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->select($select);
     }
 
@@ -428,6 +440,13 @@ class EmployeesController extends Controller
             'kin' => $record->next_of_kin_name,
             'kinRel' => $record->next_of_kin_relationship,
             'kinPhone' => $record->next_of_kin_phone,
+            'shiftId' => $record->shift_id,
+            'shiftCode' => $record->shift_code,
+            'shiftName' => $record->shift_name,
+            'shiftStart' => $record->start_time ? substr((string) $record->start_time, 0, 5) : null,
+            'shiftEnd' => $record->end_time ? substr((string) $record->end_time, 0, 5) : null,
+            'shiftGrace' => $record->grace_minutes !== null ? (int) $record->grace_minutes : null,
+            'shiftWorkingDays' => $record->working_days,
         ];
 
         if ($includeConfidential) {

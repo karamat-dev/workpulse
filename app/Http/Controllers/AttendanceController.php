@@ -61,7 +61,7 @@ class AttendanceController extends Controller
                 ->orderBy('punched_at')
                 ->get();
 
-            $summary = $this->buildAttendanceDaySummary($allPunches);
+            $summary = $this->buildAttendanceDaySummary($allPunches, $this->shiftForUser($user->id));
 
             $day = DB::table('attendance_days')->where('user_id', $user->id)->where('date', $date)->first();
 
@@ -109,7 +109,20 @@ class AttendanceController extends Controller
         }
     }
 
-    private function buildAttendanceDaySummary($punches): array
+    private function shiftForUser(int $userId): ?object
+    {
+        return DB::table('employee_profiles')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
+            ->where('employee_profiles.user_id', $userId)
+            ->select([
+                'shifts.start_time',
+                'shifts.end_time',
+                'shifts.grace_minutes',
+            ])
+            ->first();
+    }
+
+    private function buildAttendanceDaySummary($punches, ?object $shift = null): array
     {
         $clockIn = $punches->firstWhere('type', 'clock_in');
         $clockOut = $punches->firstWhere('type', 'clock_out');
@@ -144,13 +157,18 @@ class AttendanceController extends Controller
         }
 
         $workedMinutes = max(0, $workedMinutes);
-        $late = $clockInAt->copy()->greaterThan($clockInAt->copy()->setTime(11, 10));
+        $shiftStart = $shift?->start_time ? now()->parse((string) $shift->start_time) : now()->parse('11:00:00');
+        $shiftEnd = $shift?->end_time ? now()->parse((string) $shift->end_time) : now()->parse('20:00:00');
+        $graceMinutes = (int) ($shift?->grace_minutes ?? 10);
+        $lateCutoff = $clockInAt->copy()->setTime((int) $shiftStart->format('H'), (int) $shiftStart->format('i'));
+        $lateCutoff->addMinutes($graceMinutes);
+        $late = $clockInAt->greaterThan($lateCutoff);
         $overtimeMinutes = 0;
 
         if ($clockOutAt) {
-            $shiftEnd = $clockOutAt->copy()->setTime(20, 0);
-            if ($clockOutAt->greaterThan($shiftEnd)) {
-                $overtimeMinutes = $shiftEnd->diffInMinutes($clockOutAt);
+            $scheduledShiftEnd = $clockOutAt->copy()->setTime((int) $shiftEnd->format('H'), (int) $shiftEnd->format('i'));
+            if ($clockOutAt->greaterThan($scheduledShiftEnd)) {
+                $overtimeMinutes = $scheduledShiftEnd->diffInMinutes($clockOutAt);
             }
         }
 

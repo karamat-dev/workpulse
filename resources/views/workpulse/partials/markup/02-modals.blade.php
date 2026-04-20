@@ -50,8 +50,9 @@
       <div class="fg"><label class="fl">Category</label>
         <select class="fi" id="ann-cat"><option>General</option><option>Policy</option><option>Event</option><option>Important</option><option>Holiday</option></select></div>
       <div class="fg"><label class="fl">Audience</label>
-        <select class="fi" id="ann-aud"><option>All Employees</option><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Management</option></select></div>
+        <select class="fi" id="ann-aud" onchange="window.toggleAnnouncementRecipients()"></select></div>
     </div>
+    <div class="fg" id="ann-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ann-targets" multiple size="6"></select></div>
     <div class="fg"><label class="fl">Message</label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
@@ -87,6 +88,7 @@
       <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ne-lwd"></div>
     </div>
     <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
+    <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ne-shift"></select></div>
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="fg"><label class="fl">Basic Salary (PKR)</label><input type="number" class="fi" id="ne-basic" min="0"></div>
       <div class="fg"><label class="fl">House Allowance (PKR)</label><input type="number" class="fi" id="ne-house" min="0"></div>
@@ -184,6 +186,7 @@
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
       <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ee-manager"></div>
+      <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ee-shift"></select></div>
     </div>
     <!-- Salary Tab -->
     <div id="edit-tab-salary" style="display:none;">
@@ -211,6 +214,31 @@
     </div>
   </div>
 </div>
+
+<!-- Shift Modal -->
+<div class="modal-overlay" id="shiftModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="shift-modal-title">Add Standard Shift</div><button class="modal-close" onclick="window.closeModal('shiftModal')">×</button></div>
+    <input type="hidden" id="shift-id">
+    <div class="fg"><label class="fl">Shift Name</label><input type="text" class="fi" id="shift-name" placeholder="Morning Shift"></div>
+    <div class="fg"><label class="fl">Shift Code</label><input type="text" class="fi" id="shift-code" placeholder="morning_shift"></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Start Time</label><input type="time" class="fi" id="shift-start" value="11:00"></div>
+      <div class="fg"><label class="fl">End Time</label><input type="time" class="fi" id="shift-end" value="20:00"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Grace Minutes</label><input type="number" class="fi" id="shift-grace" min="0" max="240" value="10"></div>
+      <div class="fg"><label class="fl">Working Days</label><input type="text" class="fi" id="shift-days" value="Mon-Fri"></div>
+    </div>
+    <div class="fg"><label class="fl">Status</label><select class="fi" id="shift-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('shiftModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveShift()">Save Shift</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="transfer-import-file" accept=".json,application/json" style="display:none;">
 
 <!-- Edit Leave Balance Modal (Admin) -->
 <div class="modal-overlay" id="editLeaveModal">
