@@ -22,6 +22,7 @@ class MeController extends Controller
             'employee_profiles.designation as desg',
             'employee_profiles.date_of_joining as doj',
             'employee_profiles.probation_end_date as dop',
+            'employee_profiles.last_working_date as lwd',
             'employee_profiles.manager_user_id',
             'mgr.name as manager',
             'employee_profiles.employment_type as type',

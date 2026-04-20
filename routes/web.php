@@ -20,11 +20,10 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
-    Route::get('/workpulse', WorkpulseAppController::class)
-        ->middleware(['perm:attendance.view'])
-        ->name('workpulse');
+Route::get('/workpulse', WorkpulseAppController::class)
+    ->name('workpulse');
 
+Route::middleware('auth')->group(function () {
     Route::prefix('api')->group(function () {
         Route::get('/bootstrap', WorkpulseBootstrapController::class);
         Route::get('/me/profile', [MeController::class, 'profile']);
@@ -42,6 +41,7 @@ Route::middleware('auth')->group(function () {
         Route::prefix('attendance')->group(function () {
             Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');
             Route::get('/daily', [AttendanceController::class, 'dailyReport'])->middleware('perm:attendance.view');
+            Route::get('/daily.csv', [AttendanceController::class, 'dailyReportCsv'])->middleware('perm:attendance.view');
             Route::post('/regulations', [AttendanceController::class, 'createRegulation'])->middleware('perm:attendance.view');
             Route::delete('/regulations/{code}', [AttendanceController::class, 'destroyRegulation'])->middleware('perm:attendance.view');
             Route::patch('/regulations/{code}/review', [AttendanceController::class, 'reviewRegulation'])->middleware('perm:attendance.manage');

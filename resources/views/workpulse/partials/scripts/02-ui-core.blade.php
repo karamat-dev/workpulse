@@ -27,24 +27,59 @@ function doLogin(){
   const email = document.getElementById('l-email').value.trim();
   const pass = document.getElementById('l-pass').value.trim();
   const err = document.getElementById('l-err');
-  const user = DB.users.find(u=>u.email===email && u.pass===pass);
-  if(!user){ err.style.display='block'; return; }
-  err.style.display='none';
-  DB.currentUser = user;
-  DB.currentRole = user.role; // 'admin', 'hr', 'employee'
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('app').classList.add('visible');
-  initApp();
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  fetch('/login', {
+    method:'POST',
+    credentials:'same-origin',
+    headers:{
+      'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
+      'Accept':'application/json',
+      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {})
+    },
+    body: new URLSearchParams({
+      email,
+      password: pass,
+    }).toString(),
+  })
+    .then(async (res)=>{
+      const ct = res.headers.get('content-type') || '';
+      const data = ct.includes('application/json') ? await res.json().catch(()=>null) : null;
+      if(!res.ok){
+        const message = data?.message || data?.errors?.email?.[0] || 'Invalid credentials. Please try again.';
+        throw new Error(message);
+      }
+      err.style.display='none';
+      if(typeof window.bootWorkpulse === 'function'){
+        await window.bootWorkpulse();
+      } else {
+        window.location.href='/workpulse';
+      }
+    })
+    .catch((e)=>{
+      err.textContent = e?.message || 'Invalid credentials. Please try again.';
+      err.style.display='block';
+    });
 }
 
 function doLogout(){
   // Save punch state before logout — do NOT reset it
-  if(DB.currentUser){
-    savePunchState(DB.currentUser.id);
-  }
-  DB.currentUser=null; DB.currentRole=null;
-  document.getElementById('app').classList.remove('visible');
-  document.getElementById('login-screen').style.display='flex';
+  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  fetch('/logout', {
+    method:'POST',
+    credentials:'same-origin',
+    headers:{
+      'Accept':'application/json',
+      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {})
+    }
+  }).finally(()=>{
+    DB.currentUser=null; DB.currentRole=null;
+    document.getElementById('app').classList.remove('visible');
+    document.getElementById('login-screen').style.display='flex';
+    const err = document.getElementById('l-err');
+    if(err){
+      err.style.display='none';
+    }
+  });
 }
 
 function savePunchState(empId){
@@ -270,6 +305,7 @@ function showPage(id){
   if(!canAccessPage(id) && id!=='emp-profile-detail'){
     id = getDefaultPageForRole(DB.currentRole);
   }
+  window.__workpulseCurrentPage = id;
   document.getElementById('page-title').textContent = pageTitles[id]||id;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   const navEl = document.getElementById('nav-'+id);
@@ -282,9 +318,13 @@ function showPage(id){
     main.innerHTML = `<div class="card"><div class="card-title">Render Error</div><p style="margin-top:8px;color:var(--muted);">Could not render page: ${id}</p><p style="margin-top:6px;color:var(--red);font-size:12px;">${String(err && err.message ? err.message : err)}</p></div>`;
   }
   startClock(); // re-hook clock elements
+  if(typeof window.setupLiveAttendanceRefresh === 'function'){
+    window.setupLiveAttendanceRefresh(id);
+  }
   if(id==='reports' && typeof window.loadAttendanceReport === 'function'){
     setTimeout(()=>{
       window.loadAttendanceReport();
+      if(typeof window.loadMonthlyAttendanceReport === 'function') window.loadMonthlyAttendanceReport();
       if(typeof window.loadMonthlySummary === 'function') window.loadMonthlySummary();
       if(typeof window.exportEmployeeRecordsCSV === 'function'){
         // preload table
@@ -300,7 +340,7 @@ function renderPage(id){
       case 'dashboard': return pageAdminDashboard();
       case 'hr-dashboard': return pageHrDashboard();
       case 'attendance': return pageAttendance();
-      case 'realtime': return pageRealtime();
+      case 'realtime': return typeof pageRealtimeLive === 'function' ? pageRealtimeLive() : pageRealtime();
       case 'leave': return pageLeave();
       case 'employees': return pageEmployees();
       case 'departments': return pageDepartments();

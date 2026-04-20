@@ -9,6 +9,7 @@ Route::middleware('auth')->group(function () {
     Route::prefix('attendance')->group(function () {
         Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');
         Route::get('/daily', [AttendanceController::class, 'dailyReport'])->middleware('perm:attendance.view');
+        Route::get('/daily.csv', [AttendanceController::class, 'dailyReportCsv'])->middleware('perm:attendance.view');
 
         Route::post('/regulations', [AttendanceController::class, 'createRegulation'])->middleware('perm:attendance.view');
         Route::patch('/regulations/{code}/review', [AttendanceController::class, 'reviewRegulation'])->middleware('perm:attendance.manage');

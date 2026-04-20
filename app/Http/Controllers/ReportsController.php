@@ -110,6 +110,7 @@ class ReportsController extends Controller
             'employee_profiles.designation',
             'employee_profiles.date_of_joining',
             'employee_profiles.probation_end_date',
+            'employee_profiles.last_working_date',
             'employee_profiles.status',
             'employee_profiles.employment_type',
             'employee_profiles.personal_phone',
@@ -151,6 +152,7 @@ class ReportsController extends Controller
             'employee_profiles.designation',
             'employee_profiles.date_of_joining',
             'employee_profiles.probation_end_date',
+            'employee_profiles.last_working_date',
             'employee_profiles.status',
             'employee_profiles.employment_type',
             'employee_profiles.personal_phone',
@@ -181,7 +183,7 @@ class ReportsController extends Controller
         return response()->streamDownload(function () use ($rows, $canSeeConfidential) {
             $out = fopen('php://output', 'w');
 
-            $headers = ['Employee ID', 'Name', 'Email', 'Role', 'Department', 'Designation', 'DOJ', 'Probation End', 'Status', 'Type', 'Phone', 'Personal Email'];
+            $headers = ['Employee ID', 'Name', 'Email', 'Role', 'Department', 'Designation', 'DOJ', 'Probation End', 'Last Working Date', 'Status', 'Type', 'Phone', 'Personal Email'];
             if ($canSeeConfidential) {
                 $headers = array_merge($headers, ['Basic', 'House', 'Transport', 'Tax', 'Bank', 'Account', 'IBAN']);
             }
@@ -197,6 +199,7 @@ class ReportsController extends Controller
                     $r->designation ?? '',
                     $r->date_of_joining ?? '',
                     $r->probation_end_date ?? '',
+                    $r->last_working_date ?? '',
                     $r->status ?? '',
                     $r->employment_type ?? '',
                     $r->personal_phone ?? '',

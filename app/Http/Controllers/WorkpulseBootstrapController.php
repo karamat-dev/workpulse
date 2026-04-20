@@ -21,6 +21,7 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.designation',
                 'employee_profiles.date_of_joining',
                 'employee_profiles.probation_end_date',
+                'employee_profiles.last_working_date',
                 'employee_profiles.status',
                 'employee_profiles.employment_type',
                 'mgr.name as manager_name',
@@ -46,6 +47,7 @@ class WorkpulseBootstrapController extends Controller
             'desg' => $profile?->designation ?? ($user->role === 'admin' ? 'Administrator' : 'Employee'),
             'doj' => $profile?->date_of_joining,
             'dop' => $profile?->probation_end_date,
+            'lwd' => $profile?->last_working_date,
             'manager' => $profile?->manager_name ?? '-',
             'phone' => $profile?->personal_phone,
             'avatar' => $avatar,
@@ -68,6 +70,7 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.designation as desg',
                 'employee_profiles.date_of_joining as doj',
                 'employee_profiles.probation_end_date as dop',
+                'employee_profiles.last_working_date as lwd',
                 'employee_profiles.status',
                 'employee_profiles.employment_type as type',
                 'mgr.name as manager',
@@ -98,6 +101,7 @@ class WorkpulseBootstrapController extends Controller
                 'desg' => $employee->desg ?? '-',
                 'doj' => $employee->doj,
                 'dop' => $employee->dop,
+                'lwd' => $employee->lwd,
                 'manager' => $employee->manager ?? '-',
                 'phone' => $employee->phone,
                 'email' => $employee->email,
@@ -312,6 +316,55 @@ class WorkpulseBootstrapController extends Controller
             ->filter(fn (array $leave) => $leave['status'] === 'Approved' && $leave['from'] <= $today && $leave['to'] >= $today)
             ->groupBy('empId');
 
+        $liveAttendance = $employees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday, $today) {
+            $empId = $employee['id'];
+
+            if ($leaveByEmployeeToday->has($empId)) {
+                $leave = $leaveByEmployeeToday->get($empId)?->first();
+
+                return [
+                    'empId' => $empId,
+                    'name' => trim(($employee['fname'] ?? '').' '.($employee['lname'] ?? '')),
+                    'dept' => $employee['dept'] ?? '-',
+                    'status' => 'leave',
+                    'since' => $leave['type'] ?? 'Approved Leave',
+                    'clockIn' => null,
+                    'clockOut' => null,
+                ];
+            }
+
+            $todayPunches = $attendancePunches->get($empId.'|'.$today, collect());
+            $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
+            $clockOutPunch = $todayPunches->firstWhere('type', 'clock_out');
+            $breakOutCount = $todayPunches->where('type', 'break_out')->count();
+            $breakInCount = $todayPunches->where('type', 'break_in')->count();
+            $onBreak = $breakOutCount > $breakInCount;
+
+            $clockInTime = $clockInPunch?->punched_at ? now()->parse($clockInPunch->punched_at)->format('H:i') : null;
+            $clockOutTime = $clockOutPunch?->punched_at ? now()->parse($clockOutPunch->punched_at)->format('H:i') : null;
+
+            $status = 'not_checked_in';
+            $since = 'Not Checked In';
+
+            if ($clockInPunch && !$clockOutPunch) {
+                $status = $onBreak ? 'break' : 'in';
+                $since = $clockInTime ?? '-';
+            } elseif ($clockOutPunch) {
+                $status = 'out';
+                $since = $clockOutTime ?? '-';
+            }
+
+            return [
+                'empId' => $empId,
+                'name' => trim(($employee['fname'] ?? '').' '.($employee['lname'] ?? '')),
+                'dept' => $employee['dept'] ?? '-',
+                'status' => $status,
+                'since' => $since,
+                'clockIn' => $clockInTime,
+                'clockOut' => $clockOutTime,
+            ];
+        })->values();
+
         $departments = $departments->map(function (array $department) use ($employees, $attendanceByEmployeeToday, $leaveByEmployeeToday) {
             $departmentEmployees = $employees->where('dept', $department['name']);
             $count = $departmentEmployees->count();
@@ -397,6 +450,7 @@ class WorkpulseBootstrapController extends Controller
             'employees' => $employees,
             'departments' => $departments,
             'attendance' => $attendance,
+            'liveAttendance' => $liveAttendance,
             'leaves' => $leaves,
             'leaveTypes' => $leaveTypes,
             'leavePolicies' => $leavePolicies,

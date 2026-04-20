@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
@@ -252,6 +253,46 @@ class AttendanceController extends Controller
             'ok' => true,
             'date' => $date,
             'rows' => $rows,
+        ]);
+    }
+
+    public function dailyReportCsv(Request $request): StreamedResponse
+    {
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        $date = $validated['date'] ?? now()->toDateString();
+        $response = $this->dailyReport(new Request(['date' => $date]));
+        $payload = $response->getData(true);
+        $rows = $payload['rows'] ?? [];
+        $filename = 'attendance-daily-'.$date.'.csv';
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['Date', 'Employee ID', 'Name', 'Department', 'Designation', 'Status', 'Clock In', 'Break Out', 'Break In', 'Clock Out', 'Worked Minutes', 'Overtime Minutes', 'Late']);
+
+            foreach ($rows as $row) {
+                fputcsv($out, [
+                    $row['date'] ?? '',
+                    $row['employee_code'] ?? '',
+                    $row['name'] ?? '',
+                    $row['department'] ?? '',
+                    $row['designation'] ?? '',
+                    $row['status'] ?? '',
+                    $row['punches']['clock_in'] ?? '',
+                    $row['punches']['break_out'] ?? '',
+                    $row['punches']['break_in'] ?? '',
+                    $row['punches']['clock_out'] ?? '',
+                    $row['worked_minutes'] ?? 0,
+                    $row['overtime_minutes'] ?? 0,
+                    !empty($row['late']) ? 'Yes' : 'No',
+                ]);
+            }
+
+            fclose($out);
+        }, $filename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 

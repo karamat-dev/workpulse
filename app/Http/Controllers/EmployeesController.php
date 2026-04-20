@@ -37,6 +37,8 @@ class EmployeesController extends Controller
             'dept' => ['required', 'string', 'max:255'],
             'desg' => ['required', 'string', 'max:255'],
             'doj' => ['required', 'date_format:Y-m-d'],
+            'dop' => ['nullable', 'date_format:Y-m-d'],
+            'lwd' => ['nullable', 'date_format:Y-m-d'],
             'type' => ['nullable', 'string', 'max:30'],
             'manager' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', 'max:20'], // default employee
@@ -102,9 +104,10 @@ class EmployeesController extends Controller
                     'manager_user_id' => $managerUserId,
                     'designation' => $validated['desg'],
                     'date_of_joining' => $validated['doj'],
-                    'probation_end_date' => ($validated['type'] ?? '') === 'Probation'
+                    'probation_end_date' => $validated['dop'] ?? (($validated['type'] ?? '') === 'Probation'
                         ? now()->parse($validated['doj'])->addDays(90)->toDateString()
-                        : null,
+                        : null),
+                    'last_working_date' => $validated['lwd'] ?? null,
                     'employment_type' => $validated['type'] ?? 'Permanent',
                     'status' => ($validated['type'] ?? '') === 'Probation' ? 'Probation' : 'Active',
                     'personal_phone' => $validated['phone'] ?? null,
@@ -144,6 +147,7 @@ class EmployeesController extends Controller
             'desg' => ['required', 'string', 'max:255'],
             'doj' => ['required', 'date_format:Y-m-d'],
             'dop' => ['nullable', 'date_format:Y-m-d'],
+            'lwd' => ['nullable', 'date_format:Y-m-d'],
             'type' => ['nullable', 'string', 'max:30'],
             'status' => ['nullable', 'string', 'max:30'],
             'manager' => ['nullable', 'string', 'max:255'],
@@ -202,6 +206,7 @@ class EmployeesController extends Controller
                     'designation' => $validated['desg'],
                     'date_of_joining' => $validated['doj'],
                     'probation_end_date' => $validated['dop'] ?? null,
+                    'last_working_date' => $validated['lwd'] ?? null,
                     'employment_type' => $validated['type'] ?? 'Permanent',
                     'status' => $validated['status'] ?? 'Active',
                     'date_of_birth' => $validated['dob'] ?? null,
@@ -267,6 +272,7 @@ class EmployeesController extends Controller
             'employee_profiles.designation',
             'employee_profiles.date_of_joining',
             'employee_profiles.probation_end_date',
+            'employee_profiles.last_working_date',
             'employee_profiles.status',
             'employee_profiles.employment_type',
             'employee_profiles.personal_phone',
@@ -318,6 +324,7 @@ class EmployeesController extends Controller
             'desg' => $record->designation ?? '-',
             'doj' => $record->date_of_joining,
             'dop' => $record->probation_end_date,
+            'lwd' => $record->last_working_date,
             'status' => $record->status ?? 'Active',
             'type' => $record->employment_type,
             'phone' => $record->personal_phone,

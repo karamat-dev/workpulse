@@ -8,6 +8,23 @@
 
     <script>
         (function () {
+            function showLoginScreen() {
+                const loginScreen = document.getElementById('login-screen');
+                if (loginScreen) {
+                    loginScreen.style.display = 'flex';
+                }
+
+                const app = document.getElementById('app');
+                if (app) {
+                    app.classList.remove('visible');
+                }
+
+                if (typeof DB === 'object' && DB) {
+                    DB.currentUser = null;
+                    DB.currentRole = null;
+                }
+            }
+
             async function boot() {
                 try {
                     const res = await fetch('/api/bootstrap', {
@@ -16,6 +33,18 @@
                             'Accept': 'application/json',
                         },
                     });
+
+                    if (res.status === 401 || res.status === 403) {
+                        showLoginScreen();
+                        return;
+                    }
+
+                    const contentType = res.headers.get('content-type') || '';
+                    if (!contentType.includes('application/json')) {
+                        showLoginScreen();
+                        return;
+                    }
+
                     const data = await res.json();
 
                     if (!data || !data.ok) {
@@ -39,6 +68,7 @@
                         DB.employees = data.employees || [];
                         DB.departments = data.departments || [];
                         DB.attendance = data.attendance || [];
+                        DB.liveAttendance = data.liveAttendance || [];
                         DB.leaves = data.leaves || [];
                         DB.leaveBalances = data.leaveBalances || [];
                         DB.regulations = data.regulations || [];
@@ -68,6 +98,7 @@
                                 desg: p.desg || DB.currentUser.desg,
                                 doj: p.doj || DB.currentUser.doj,
                                 dop: p.dop || DB.currentUser.dop,
+                                lwd: p.lwd || DB.currentUser.lwd,
                                 manager: p.manager || DB.currentUser.manager,
                                 phone: p.phone || DB.currentUser.phone,
                             });
@@ -85,13 +116,16 @@
                     }
                 } catch (error) {
                     console.error(error);
+                    showLoginScreen();
 
                     try {
-                        showToast('Failed to load backend data. Please refresh.', 'red');
+                        showToast('Please sign in to continue.', 'red');
                     } catch (_) {
                     }
                 }
             }
+
+            window.bootWorkpulse = boot;
 
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', boot);

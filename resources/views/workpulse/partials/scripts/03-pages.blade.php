@@ -27,6 +27,7 @@ async function wpReload(){
       DB.employees = data.employees || [];
       DB.departments = data.departments || [];
       DB.attendance = data.attendance || [];
+      DB.liveAttendance = data.liveAttendance || [];
       DB.leaves = data.leaves || [];
       DB.leaveTypes = data.leaveTypes || [];
       DB.leavePolicies = data.leavePolicies || [];
@@ -441,10 +442,12 @@ function submitAddEmployee(){
   const dept=document.getElementById('ne-dept').value;
   const desg=document.getElementById('ne-desg').value;
   const doj=document.getElementById('ne-doj').value;
+  const dop=document.getElementById('ne-dop').value;
+  const lwd=document.getElementById('ne-lwd').value;
   const type=document.getElementById('ne-type').value;
   const manager=document.getElementById('ne-manager').value;
   if(!fn||!ln||!email||!dept||!desg||!doj){ showToast('Please fill all required fields','red'); return; }
-  wpApi('/api/employees', {method:'POST', body: JSON.stringify({fname:fn,lname:ln,email,phone,dept,desg,doj,type,manager})})
+  wpApi('/api/employees', {method:'POST', body: JSON.stringify({fname:fn,lname:ln,email,phone,dept,desg,doj,dop:dop||null,lwd:lwd||null,type,manager})})
     .then((data)=>{
       const tempMsg = data && data.temporary_password ? (' Temporary password: '+data.temporary_password) : '';
       showToast('Employee added: '+fn+' '+ln+tempMsg,'green');
@@ -452,7 +455,7 @@ function submitAddEmployee(){
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
-  ['ne-fname','ne-lname','ne-email','ne-phone','ne-desg','ne-manager'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  ['ne-fname','ne-lname','ne-email','ne-phone','ne-desg','ne-manager','ne-dop','ne-lwd'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
 
@@ -603,12 +606,19 @@ function dashboardUpcomingItems(){
 function pageAdminDashboard(){
   const today=new Date().toISOString().split('T')[0];
   const todayAtt=DB.attendance.filter(a=>a.date===today);
-  const present=todayAtt.filter(a=>a.status==='Present').length;
-  const absent=todayAtt.filter(a=>a.status==='Absent').length;
-  const onLeave=DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
+  const liveStatus = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
+  const present=liveStatus.filter(l=>l.status==='in'||l.status==='break').length || todayAtt.filter(a=>a.status==='Present').length;
+  const absent=liveStatus.filter(l=>l.status==='not_checked_in').length || todayAtt.filter(a=>a.status==='Absent').length;
+  const onLeave=liveStatus.filter(l=>l.status==='leave').length || DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
   const pendingLeaves=DB.leaves.filter(l=>l.status==='Pending').length;
   const lateToday=todayAtt.filter(a=>a.late).length;
   const newJoiners=DB.employees.filter(e=>e.doj===today).length;
+  const checkedInNow = liveStatus
+    .filter(l=>l.status==='in'||l.status==='break')
+    .slice(0,5);
+  const notCheckedInNow = liveStatus
+    .filter(l=>l.status==='not_checked_in')
+    .slice(0,5);
   const week = dashboardWeekDays().map(d=>({
     label: d.toLocaleDateString('en-GB',{weekday:'short'}),
     pct: dashboardAttendancePctForDate(d),
@@ -625,8 +635,8 @@ function pageAdminDashboard(){
 
   <div class="g4" style="margin-bottom:14px;">
     <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">↑ ${newJoiners} new today</div></div>
-    <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present||DB.liveAttendance.filter(l=>l.status==='in').length}</div><div class="stat-sub">Active in office</div></div>
-    <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave||DB.liveAttendance.filter(l=>l.status==='leave').length}</div><div class="stat-sub">Approved leave</div></div>
+    <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
+    <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
     <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests →</div></div>
   </div>
 
@@ -670,6 +680,31 @@ function pageAdminDashboard(){
         <div><strong style="font-size:13px;">${ev.title}</strong><div style="font-size:11px;color:var(--muted);">${ev.sub}</div></div>
         <span class="badge ${ev.badge}">${formatDate(ev.date)}</span>
       </div>`).join('') || `<p style="color:var(--muted);">No upcoming items.</p>`}
+    </div>
+  </div>
+
+  <div class="g2" style="margin-top:14px;">
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Checked In Live</div><button class="btn btn-sm" onclick="window.showPage('realtime')">Open Live Monitor</button></div>
+      ${checkedInNow.map(emp=>`
+      <div class="irow">
+        <div>
+          <strong style="font-size:13px;">${emp.name}</strong>
+          <div style="font-size:11px;color:var(--muted);">${emp.dept || '-'} | ${emp.status==='break' ? 'On Break' : 'Checked In'}</div>
+        </div>
+        <span class="badge bg-green">${emp.clockIn || emp.since || '-'}</span>
+      </div>`).join('') || `<p style="color:var(--muted);">No employees are checked in right now.</p>`}
+    </div>
+    <div class="card">
+      <div class="card-hdr"><div class="card-title">Not Checked In Yet</div><button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('dashboard'))">Refresh</button></div>
+      ${notCheckedInNow.map(emp=>`
+      <div class="irow">
+        <div>
+          <strong style="font-size:13px;">${emp.name}</strong>
+          <div style="font-size:11px;color:var(--muted);">${emp.dept || '-'} | Waiting for check-in</div>
+        </div>
+        <span class="badge bg-red">Not Checked In</span>
+      </div>`).join('') || `<p style="color:var(--muted);">Everyone has already checked in or is on leave.</p>`}
     </div>
   </div>`;
 }
@@ -1113,7 +1148,8 @@ function pageEmpProfileDetail(){
         <div class="card"><div class="card-title" style="margin-bottom:13px;">Job Details</div>
           <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${e.id}</span></div>
           <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(e.doj)}</span></div>
-          <div class="irow"><span class="ikey">Probation End</span><span class="ival">${formatDate(e.dop)}</span></div>
+          <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(e.dop)}</span></div>
+          <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
           <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
           <div class="irow"><span class="ikey">Designation</span><span class="ival">${e.desg}</span></div>
           <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${e.type}</span></div>
@@ -1468,6 +1504,7 @@ window.exportEmployeeRecordsCSV = exportEmployeeRecordsCSV;
 
 function pageReports(){
   const now = new Date();
+  const today = now.toISOString().slice(0,10);
   const ym = now.toISOString().slice(0,7);
   const monthRows = DB.attendance.filter(a=>(a.date||'').startsWith(ym));
   const uniqueEmployees = new Set(monthRows.map(a=>a.empId)).size || DB.employees.length;
@@ -1477,10 +1514,31 @@ function pageReports(){
   const totalOt = monthRows.reduce((sum,row)=>sum + (+row.overtime||0),0);
 
   return buildTabs('rp',[
-    {id:'att',label:'Attendance Analytics',content:`
+    {id:'daily',label:'Daily Attendance Report',content:`
       <div class="hero-panel" style="margin-bottom:14px;">
-        <div class="hero-title">Attendance Analytics Command Center</div>
-        <div class="hero-sub">A sharper reporting experience inspired by PayPeople dashboards: quick filters, headline metrics, department-level visibility, and export-ready data for monthly reviews.</div>
+        <div class="hero-title">Daily Attendance Report</div>
+        <div class="hero-sub">Review each employee's attendance status for a selected day, including punches, worked minutes, overtime, and late arrivals.</div>
+        <div class="hero-chip-row">
+          <div class="hero-chip"><div class="k">Selected Date</div><div class="v" id="rp-daily-date-label" style="font-size:17px;">${today}</div></div>
+          <div class="hero-chip"><div class="k">Present</div><div class="v" id="rp-daily-present">-</div></div>
+          <div class="hero-chip"><div class="k">Leave</div><div class="v" id="rp-daily-leave">-</div></div>
+          <div class="hero-chip"><div class="k">Absent</div><div class="v" id="rp-daily-absent">-</div></div>
+        </div>
+      </div>
+      <div class="toolbar-card" style="margin-bottom:14px;">
+        <div class="toolbar-grid">
+          <div><label class="fl">Date</label><input type="date" class="fi" id="rp-daily-date" value="${today}"></div>
+          <div><label class="fl">Department</label><select class="fi" id="rp-daily-dept"><option value="">All Departments</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Metrics</label><div class="data-pill-row"><span class="data-pill">Late <strong id="rp-daily-late">-</strong></span><span class="data-pill">OT mins <strong id="rp-daily-ot">-</strong></span></div></div>
+          <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceDailyCSV()">Export CSV</button></div>
+        </div>
+      </div>
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
+      <tbody id="rp-daily-tbody"><tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
+    {id:'monthly',label:'Monthly Attendance Report',content:`
+      <div class="hero-panel" style="margin-bottom:14px;">
+        <div class="hero-title">Monthly Attendance Report</div>
+        <div class="hero-sub">Track attendance performance across the selected month with employee-level summaries and department rollups.</div>
         <div class="hero-chip-row">
           <div class="hero-chip"><div class="k">Tracked Month</div><div class="v" style="font-size:17px;">${ym}</div></div>
           <div class="hero-chip"><div class="k">Employees Seen</div><div class="v">${uniqueEmployees}</div></div>
@@ -1491,9 +1549,9 @@ function pageReports(){
       <div class="toolbar-card" style="margin-bottom:14px;">
         <div class="toolbar-grid">
           <div><label class="fl">Month</label><input type="month" class="fi" id="rp-att-month" value="${ym}"></div>
-          <div><label class="fl">Department</label><select class="fi"><option>All Departments</option>${DB.departments.map(d=>`<option>${d.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Department</label><select class="fi" id="rp-monthly-dept"><option value="">All Departments</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
           <div><label class="fl">Insight</label><div class="data-pill-row"><span class="data-pill">Present <strong>${presentCount}</strong></span><span class="data-pill">Leave <strong>${approvedLeave}</strong></span></div></div>
-          <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceMonthlyCSV()">Export CSV</button></div>
+          <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadMonthlyAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceMonthlyCSV()">Export CSV</button></div>
         </div>
       </div>
       <div class="metric-strip" style="margin-bottom:14px;">
@@ -1525,7 +1583,7 @@ function pageReports(){
           <div class="irow"><span class="ikey">Review Queue</span><span class="ival">${DB.leaves.filter(l=>l.status==='Pending').length}</span></div>
         </div>
       </div>`},
-    {id:'monthly',label:'Monthly Summary',content:`
+    {id:'summary',label:'Monthly Summary',content:`
       <div class="metric-strip" style="margin-bottom:14px;">
         <div class="metric-box"><div class="eyebrow">Month</div><div class="value" id="rp-m-month" style="font-size:20px;">-</div><div class="meta">Current summary period</div></div>
         <div class="metric-box"><div class="eyebrow">Employees</div><div class="value" id="rp-m-emps">-</div><div class="meta">Included in summary</div></div>
@@ -1544,8 +1602,109 @@ function pageReports(){
         <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
         <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>
       </div>`},
-  ],'att');
+  ],'daily');
 }
+
+async function loadAttendanceReport(){
+  try{
+    const date = document.getElementById('rp-daily-date')?.value;
+    if(!date) return;
+
+    const data = await wpApi(`/api/attendance/daily?date=${encodeURIComponent(date)}`, {method:'GET', headers:{}});
+    const selectedDept = document.getElementById('rp-daily-dept')?.value || '';
+    const rows = ((data && data.rows) ? data.rows : []).filter(row => !selectedDept || (row.department || '') === selectedDept);
+    const tb = document.getElementById('rp-daily-tbody');
+    if(!tb) return;
+
+    tb.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${r.name || '-'}</td>
+        <td>${r.department || '-'}</td>
+        <td>${statusBadge(r.status || '-')}</td>
+        <td>${r.punches?.clock_in || '-'}</td>
+        <td>${r.punches?.break_out || '-'}</td>
+        <td>${r.punches?.break_in || '-'}</td>
+        <td>${r.punches?.clock_out || '-'}</td>
+        <td>${r.worked_minutes || 0}</td>
+        <td>${r.overtime_minutes || 0}</td>
+        <td>${r.late ? 'Yes' : 'No'}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
+
+    const summary = rows.reduce((acc, r) => {
+      const status = r.status || 'Absent';
+      if(status === 'Present') acc.present += 1;
+      else if(status === 'Leave') acc.leave += 1;
+      else acc.absent += 1;
+      if(r.late) acc.late += 1;
+      acc.ot += Number(r.overtime_minutes || 0);
+      return acc;
+    }, {present:0, leave:0, absent:0, late:0, ot:0});
+
+    const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = String(val); };
+    set('rp-daily-date-label', date);
+    set('rp-daily-present', summary.present);
+    set('rp-daily-leave', summary.leave);
+    set('rp-daily-absent', summary.absent);
+    set('rp-daily-late', summary.late);
+    set('rp-daily-ot', summary.ot);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+window.loadAttendanceReport = loadAttendanceReport;
+
+function downloadAttendanceDailyCSV(){
+  const date = document.getElementById('rp-daily-date')?.value;
+  if(!date) return;
+  window.location.href = `/api/attendance/daily.csv?date=${encodeURIComponent(date)}`;
+}
+
+window.downloadAttendanceDailyCSV = downloadAttendanceDailyCSV;
+
+async function loadMonthlyAttendanceReport(){
+  try{
+    const v = document.getElementById('rp-att-month')?.value;
+    if(!v) return;
+    const parts = v.split('-');
+    const year = parseInt(parts[0],10);
+    const month = parseInt(parts[1],10);
+    const data = await wpApi(`/api/reports/attendance/monthly?year=${year}&month=${month}`, {method:'GET', headers:{}});
+    const selectedDept = document.getElementById('rp-monthly-dept')?.value || '';
+    const rows = ((data && data.rows) ? data.rows : []).filter(row => !selectedDept || (row.department || '') === selectedDept);
+    const tb = document.getElementById('rp-att-tbody');
+    if(!tb) return;
+
+    tb.innerHTML = rows.map(r=>`
+      <tr>
+        <td>${r.name}</td>
+        <td>${r.department||'-'}</td>
+        <td>${r.present_days}</td>
+        <td>${r.absent_days}</td>
+        <td>${r.leave_days}</td>
+        <td>${r.late_days}</td>
+        <td>${r.overtime_minutes}</td>
+      </tr>
+    `).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
+
+    const sum = rows.reduce((acc,r)=>({
+      present: acc.present + (+r.present_days||0),
+      absent: acc.absent + (+r.absent_days||0),
+      late: acc.late + (+r.late_days||0),
+      ot: acc.ot + (+r.overtime_minutes||0),
+    }), {present:0,absent:0,late:0,ot:0});
+    const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = String(val); };
+    set('rp-present', sum.present);
+    set('rp-absent', sum.absent);
+    set('rp-late', sum.late);
+    set('rp-ot', sum.ot);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+window.loadMonthlyAttendanceReport = loadMonthlyAttendanceReport;
 
 function pageAnnouncements(empView=false){
   const items=DB.announcements.map(a=>`
@@ -1894,7 +2053,8 @@ function pageEmpProfileDetail(){
         <div class="irow"><span class="ikey">Employment</span><span class="ival">${e.type||'Permanent'}</span></div>
         <div class="irow"><span class="ikey">Shift</span><span class="ival">Morning Shift Mon Fri</span></div>
         <div class="irow"><span class="ikey">Hire Date</span><span class="ival">${formatDate(e.doj)}</span></div>
-        <div class="irow"><span class="ikey">Confirmation</span><span class="ival">${formatDate(e.dop)}</span></div>
+        <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(e.dop)}</span></div>
+        <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
         <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
         <div class="irow"><span class="ikey">Line Manager</span><span class="ival">${e.manager||'-'}</span></div>
       </div>
@@ -1966,11 +2126,12 @@ function pageEmpProfile(){
           <div style="margin-top:8px;"><span class="badge bg-green">Active</span> <span class="badge bg-blue">${u.dept}</span></div>
         </div>
         <div class="summary-stack">
-          <div class="summary-item"><span class="summary-key">Office Email</span><span class="summary-val">${u.email}</span></div>
-          <div class="summary-item"><span class="summary-key">Phone</span><span class="summary-val">${u.phone||'-'}</span></div>
-          <div class="summary-item"><span class="summary-key">Date of Joining</span><span class="summary-val">${formatDate(u.doj)}</span></div>
-          <div class="summary-item"><span class="summary-key">Manager</span><span class="summary-val">${u.manager||'-'}</span></div>
-          <div class="summary-item"><span class="summary-key">Status</span><span class="summary-val">${emp?.status||'Active'}</span></div>
+        <div class="summary-item"><span class="summary-key">Office Email</span><span class="summary-val">${u.email}</span></div>
+        <div class="summary-item"><span class="summary-key">Phone</span><span class="summary-val">${u.phone||'-'}</span></div>
+        <div class="summary-item"><span class="summary-key">Date of Joining</span><span class="summary-val">${formatDate(u.doj)}</span></div>
+        <div class="summary-item"><span class="summary-key">Probation Date</span><span class="summary-val">${formatDate(u.dop)}</span></div>
+        <div class="summary-item"><span class="summary-key">Manager</span><span class="summary-val">${u.manager||'-'}</span></div>
+        <div class="summary-item"><span class="summary-key">Status</span><span class="summary-val">${emp?.status||'Active'}</span></div>
         </div>
       </div>
     </div>
@@ -1981,6 +2142,8 @@ function pageEmpProfile(){
         <div class="irow"><span class="ikey">Department</span><span class="ival">${u.dept}</span></div>
         <div class="irow"><span class="ikey">Designation</span><span class="ival">${u.desg}</span></div>
         <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(u.doj)}</span></div>
+        <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(u.dop)}</span></div>
+        <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(u.lwd)}</span></div>
         <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
         <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
         <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 - 20:00</span></div>
@@ -2013,9 +2176,15 @@ function pageEmpTeam(){
   DB.liveAttendance.forEach(l=>{ liveMap[l.name]={status:l.status,since:l.since}; });
 
   const cards=teamMembers.map(e=>{
-    const lv=liveMap[e.fname+' '+e.lname]||{status:'out',since:'—'};
-    const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[lv.status]||'md-out';
-    const lbl={in:'In since '+lv.since,break:'On Break',out:'Not in office',leave:'On Leave'}[lv.status];
+    const lv=liveMap[e.fname+' '+e.lname]||{status:'not_checked_in',since:'-'};
+    const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave',not_checked_in:'md-out'}[lv.status]||'md-out';
+    const lbl={
+      in:'Checked In at '+(lv.since||'-'),
+      break:'On Break',
+      out:'Clocked Out',
+      leave:'On Leave',
+      not_checked_in:'Not Checked In Today'
+    }[lv.status] || 'Status unavailable';
     return`<div class="card" style="display:flex;align-items:center;gap:12px;">
       <div class="mon-dot ${dot}" style="width:10px;height:10px;"></div>
       <div class="av av-40" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
@@ -2036,6 +2205,73 @@ function pageEmpTeam(){
     <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'—'}</span></div>
   </div>
   <div class="g2">${cards||'<div class="card"><p style="color:var(--muted);">No other team members found.</p></div>'}</div>`;
+}
+
+let __liveAttendanceRefreshTimer = null;
+
+function setupLiveAttendanceRefresh(pageId){
+  if(__liveAttendanceRefreshTimer){
+    clearInterval(__liveAttendanceRefreshTimer);
+    __liveAttendanceRefreshTimer = null;
+  }
+
+  if(!['dashboard','realtime','hr-dashboard'].includes(pageId)) return;
+
+  __liveAttendanceRefreshTimer = setInterval(()=>{
+    if(typeof wpReload !== 'function') return;
+    wpReload().then(()=>{
+      const currentPage = window.__workpulseCurrentPage;
+      if(currentPage === pageId){
+        showPage(pageId);
+      }
+    }).catch(()=>{});
+  }, 30000);
+}
+
+function pageRealtimeLive(){
+  const liveAttendance = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
+  const inCount = liveAttendance.filter(l => l.status === 'in').length;
+  const breakCount = liveAttendance.filter(l => l.status === 'break').length;
+  const notCheckedInCount = liveAttendance.filter(l => l.status === 'not_checked_in').length;
+  const leaveCount = liveAttendance.filter(l => l.status === 'leave').length;
+  const cards = liveAttendance.map(e=>{
+    const dot = {in:'md-in',break:'md-break',out:'md-out',leave:'md-leave',not_checked_in:'md-out'}[e.status] || 'md-out';
+    const lbl = {
+      in:`Checked In at ${e.clockIn || e.since || '-'}`,
+      break:`On Break - Checked In at ${e.clockIn || e.since || '-'}`,
+      out:`Clocked Out at ${e.clockOut || e.since || '-'}`,
+      leave:`On Leave - ${e.since || 'Approved Leave'}`,
+      not_checked_in:'Not Checked In Today'
+    }[e.status] || 'Status unavailable';
+
+    return `<div class="mon-card"><div class="mon-dot ${dot}"></div>
+      <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
+      <div style="font-size:11px;color:var(--muted);">${e.dept} - ${lbl}</div></div></div>`;
+  }).join('');
+
+  return `
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label"><span class="live-dot" style="margin-right:4px;"></span>In Office</div><div class="stat-val" style="color:var(--green);">${inCount}</div></div>
+    <div class="stat-card"><div class="stat-label">On Break</div><div class="stat-val" style="color:var(--amber);">${breakCount}</div></div>
+    <div class="stat-card"><div class="stat-label">Not Checked In</div><div class="stat-val" style="color:var(--red);">${notCheckedInCount}</div></div>
+    <div class="stat-card"><div class="stat-label">On Leave</div><div class="stat-val" style="color:var(--purple);">${leaveCount}</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="card-title"><span class="live-dot" style="margin-right:6px;"></span>Live Employee Status</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input class="search-input" id="rt-search" placeholder="Search..." oninput="filterMonitor(this.value)" style="width:200px;">
+        <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('realtime'))">Refresh</button>
+      </div>
+    </div>
+    <div class="monitor-grid" id="monitor-grid">${cards || '<div style="color:var(--muted);font-size:13px;">No live attendance data available.</div>'}</div>
+    <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-in" style="flex-shrink:0;"></div>In Office</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-break" style="flex-shrink:0;"></div>On Break</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-out" style="flex-shrink:0;"></div>Not Checked In / Out</div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:12px;"><div class="mon-dot md-leave" style="flex-shrink:0;"></div>On Leave</div>
+    </div>
+  </div>`;
 }
 
 // ══════════════════════════════════════════════════

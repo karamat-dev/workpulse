@@ -39,6 +39,7 @@ window.exportAttendanceCSV = exportAttendanceCSV;
 window.exportLeaveCSV = exportLeaveCSV;
 window.exportEmployeeCSV = exportEmployeeCSV;
 window.printPage = printPage;
+window.wpReload = wpReload;
 
 
 document.addEventListener('keydown', function(e) {

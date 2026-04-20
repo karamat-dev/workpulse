@@ -27,6 +27,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-desg').value = e.desg||'';
     document.getElementById('ee-doj').value = e.doj||'';
     document.getElementById('ee-dop').value = e.dop||'';
+    document.getElementById('ee-lwd').value = e.lwd||'';
     document.getElementById('ee-type').value = e.type||'Permanent';
     document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-manager').value = e.manager==='-' ? '' : (e.manager||'');
@@ -90,6 +91,7 @@ async function saveEditEmployee(){
     desg: document.getElementById('ee-desg').value.trim(),
     doj: document.getElementById('ee-doj').value,
     dop: document.getElementById('ee-dop').value || null,
+    lwd: document.getElementById('ee-lwd').value || null,
     type: document.getElementById('ee-type').value,
     status: document.getElementById('ee-status').value,
     manager: document.getElementById('ee-manager').value.trim(),

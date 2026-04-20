@@ -80,6 +80,10 @@
       <div class="fg"><label class="fl">Employment Type</label>
         <select class="fi" id="ne-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
     </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Probation Date</label><input type="date" class="fi" id="ne-dop"></div>
+      <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ne-lwd"></div>
+    </div>
     <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('addEmpModal')">Cancel</button>
@@ -156,14 +160,17 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Date of Joining</label><input type="date" class="fi" id="ee-doj"></div>
-        <div class="fg"><label class="fl">Probation End Date</label><input type="date" class="fi" id="ee-dop"></div>
+        <div class="fg"><label class="fl">Probation Date</label><input type="date" class="fi" id="ee-dop"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
+        <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
       <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ee-manager"></div>
-      <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
     </div>
     <!-- Salary Tab -->
     <div id="edit-tab-salary" style="display:none;">
