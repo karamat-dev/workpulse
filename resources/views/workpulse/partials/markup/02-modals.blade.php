@@ -69,6 +69,8 @@
       <div class="fg"><label class="fl">Last Name</label><input type="text" class="fi" id="ne-lname" placeholder="Last name"></div>
     </div>
     <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
+    <div class="fg"><label class="fl">Login Password</label><input type="password" class="fi" id="ne-password" placeholder="Set employee password"></div>
+    <div class="fg"><label class="fl">CNIC Document</label><input type="file" class="fi" id="ne-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Department</label>
@@ -85,9 +87,18 @@
       <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ne-lwd"></div>
     </div>
     <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label class="fl">Basic Salary (PKR)</label><input type="number" class="fi" id="ne-basic" min="0"></div>
+      <div class="fg"><label class="fl">House Allowance (PKR)</label><input type="number" class="fi" id="ne-house" min="0"></div>
+      <div class="fg"><label class="fl">Transport Allowance (PKR)</label><input type="number" class="fi" id="ne-transport" min="0"></div>
+      <div class="fg"><label class="fl">Tax Deduction (PKR)</label><input type="number" class="fi" id="ne-tax" min="0"></div>
+      <div class="fg"><label class="fl">Bank Name</label><input type="text" class="fi" id="ne-bank"></div>
+      <div class="fg"><label class="fl">Account No</label><input type="text" class="fi" id="ne-acct"></div>
+      <div class="fg" style="grid-column:1 / -1;"><label class="fl">IBAN</label><input type="text" class="fi" id="ne-iban"></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('addEmpModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="window.submitAddEmployee()"">Add Employee</button>
+      <button class="btn btn-primary" onclick="window.submitAddEmployee()">Add Employee</button>
     </div>
   </div>
 </div>
@@ -166,6 +177,8 @@
         <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
         <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
       </div>
+      <div class="fg"><label class="fl">Replace CNIC Document</label><input type="file" class="fi" id="ee-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
+      <div class="fg"><label class="fl">Reset Login Password</label><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
@@ -240,6 +253,47 @@
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
       <button class="btn" onclick="window.closeModal('editLeavePolicyModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveLeavePolicy()">Save Policy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Account Settings Modal -->
+<div class="modal-overlay" id="accountSettingsModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title">Account Settings</div><button class="modal-close" onclick="window.closeModal('accountSettingsModal')">Ã—</button></div>
+    <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="acc-email" placeholder="your@company.com"></div>
+    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="acc-current-password" placeholder="Required to save changes"></div>
+    <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"></div>
+    <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"></div>
+    <div id="acc-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      Employees can update only their own email and password here. Profile, department, type, probation, and other HR details stay managed by admin.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('accountSettingsModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitAccountSettings()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Leave Type Modal -->
+<div class="modal-overlay" id="leaveTypeModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="lt-modal-title">Add Leave Type</div><button class="modal-close" onclick="window.closeModal('leaveTypeModal')">Ã—</button></div>
+    <input type="hidden" id="lt-original-code">
+    <div class="fg"><label class="fl">Leave Type Name</label><input type="text" class="fi" id="lt-name" placeholder="e.g. Study Leave"></div>
+    <div class="fg"><label class="fl">Leave Type Code</label><input type="text" class="fi" id="lt-code" placeholder="study_leave"></div>
+    <div class="fg">
+      <label class="fl">Paid Leave</label>
+      <select class="fi" id="lt-paid">
+        <option value="1">Paid</option>
+        <option value="0">Unpaid</option>
+      </select>
+    </div>
+    <div id="lt-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('leaveTypeModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveLeaveType()">Save Leave Type</button>
     </div>
   </div>
 </div>

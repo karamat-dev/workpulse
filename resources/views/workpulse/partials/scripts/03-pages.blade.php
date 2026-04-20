@@ -2,13 +2,20 @@
 // ══════════════════════════════════════════════════
 async function wpApi(path, opts={}){
   const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  const headers = {
+    'Accept':'application/json',
+    ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}),
+    ...(opts.headers||{})
+  };
+
+  if(!isFormData){
+    headers['Content-Type'] = 'application/json';
+  }
+
   const res = await fetch(path, {
     credentials: 'same-origin',
-    headers: {
-      'Content-Type':'application/json',
-      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}),
-      ...(opts.headers||{})
-    },
+    headers,
     ...opts,
   });
   const ct = res.headers.get('content-type') || '';
@@ -37,6 +44,8 @@ async function wpReload(){
       DB.holidays = data.holidays || [];
     }
     syncLeaveTypeOptions();
+    syncDepartmentOptions('ne-dept');
+    syncDepartmentOptions('ee-dept');
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
@@ -64,15 +73,19 @@ function getLeaveTypesList(){
 }
 
 function getLeavePoliciesList(){
-  if(Array.isArray(DB.leavePolicies) && DB.leavePolicies.length){
-    return DB.leavePolicies.map(policy => ({
-      code: policy.code,
-      name: policy.name || policy.code || 'Leave',
-      paid: Boolean(policy.paid),
-      quota_days: Number(policy.quota_days ?? 0),
-      pro_rata: Boolean(policy.pro_rata),
-      carry_forward_days: Number(policy.carry_forward_days ?? 0),
-    }));
+  if(Array.isArray(DB.leaveTypes) && DB.leaveTypes.length){
+    const policyMap = new Map((Array.isArray(DB.leavePolicies) ? DB.leavePolicies : []).map(policy => [policy.code, policy]));
+    return DB.leaveTypes.map(type => {
+      const policy = policyMap.get(type.code) || {};
+      return {
+        code: type.code,
+        name: policy.name || type.name || type.code || 'Leave',
+        paid: Boolean(type.paid ?? policy.paid),
+        quota_days: Number(policy.quota_days ?? 0),
+        pro_rata: Boolean(policy.pro_rata),
+        carry_forward_days: Number(policy.carry_forward_days ?? 0),
+      };
+    });
   }
 
   return getLeaveTypesList().map(type => ({
@@ -95,6 +108,35 @@ function syncLeaveTypeOptions(){
 
   if(current && types.some(type => type.code === current)){
     select.value = current;
+  }
+}
+
+function getDepartmentList(){
+  if(Array.isArray(DB.departments) && DB.departments.length){
+    return DB.departments
+      .map(department => department?.name)
+      .filter(Boolean);
+  }
+
+  return ['Engineering','Human Resources','Finance','Marketing','Product','Operations','Management'];
+}
+
+function syncDepartmentOptions(targetId, preferredValue=''){
+  const select = document.getElementById(targetId);
+  if(!select) return;
+
+  const currentValue = preferredValue || select.value || '';
+  const departments = getDepartmentList();
+  const values = currentValue && !departments.includes(currentValue)
+    ? [...departments, currentValue]
+    : departments;
+
+  select.innerHTML = values.map(name => `<option value="${name}">${name}</option>`).join('');
+
+  if(currentValue){
+    select.value = currentValue;
+  } else if(values.length){
+    select.value = values[0];
   }
 }
 
@@ -403,6 +445,8 @@ function calcLeaveDays(){
 
 document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
 syncLeaveTypeOptions();
+syncDepartmentOptions('ne-dept');
+syncDepartmentOptions('ee-dept');
 
 function submitRegulation(){
   const date=document.getElementById('reg-date').value;
@@ -438,6 +482,7 @@ function submitAddEmployee(){
   const fn=document.getElementById('ne-fname').value;
   const ln=document.getElementById('ne-lname').value;
   const email=document.getElementById('ne-email').value;
+  const password=document.getElementById('ne-password').value;
   const phone=document.getElementById('ne-phone').value;
   const dept=document.getElementById('ne-dept').value;
   const desg=document.getElementById('ne-desg').value;
@@ -446,8 +491,37 @@ function submitAddEmployee(){
   const lwd=document.getElementById('ne-lwd').value;
   const type=document.getElementById('ne-type').value;
   const manager=document.getElementById('ne-manager').value;
-  if(!fn||!ln||!email||!dept||!desg||!doj){ showToast('Please fill all required fields','red'); return; }
-  wpApi('/api/employees', {method:'POST', body: JSON.stringify({fname:fn,lname:ln,email,phone,dept,desg,doj,dop:dop||null,lwd:lwd||null,type,manager})})
+  const basic=document.getElementById('ne-basic').value;
+  const house=document.getElementById('ne-house').value;
+  const transport=document.getElementById('ne-transport').value;
+  const tax=document.getElementById('ne-tax').value;
+  const bank=document.getElementById('ne-bank').value;
+  const acct=document.getElementById('ne-acct').value;
+  const iban=document.getElementById('ne-iban').value;
+  const cnicDocument=document.getElementById('ne-cnic-document').files?.[0];
+  if(!fn||!ln||!email||!dept||!desg||!doj||!cnicDocument){ showToast('Please fill all required fields, including CNIC document','red'); return; }
+  const formData = new FormData();
+  formData.append('fname', fn);
+  formData.append('lname', ln);
+  formData.append('email', email);
+  if(password) formData.append('password', password);
+  if(phone) formData.append('phone', phone);
+  formData.append('dept', dept);
+  formData.append('desg', desg);
+  formData.append('doj', doj);
+  if(dop) formData.append('dop', dop);
+  if(lwd) formData.append('lwd', lwd);
+  if(type) formData.append('type', type);
+  if(manager) formData.append('manager', manager);
+  if(basic) formData.append('basic', basic);
+  if(house) formData.append('house', house);
+  if(transport) formData.append('transport', transport);
+  if(tax) formData.append('tax', tax);
+  if(bank) formData.append('bank', bank);
+  if(acct) formData.append('acct', acct);
+  if(iban) formData.append('iban', iban);
+  formData.append('cnic_document', cnicDocument);
+  wpApi('/api/employees', {method:'POST', body: formData})
     .then((data)=>{
       const tempMsg = data && data.temporary_password ? (' Temporary password: '+data.temporary_password) : '';
       showToast('Employee added: '+fn+' '+ln+tempMsg,'green');
@@ -455,7 +529,7 @@ function submitAddEmployee(){
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
-  ['ne-fname','ne-lname','ne-email','ne-phone','ne-desg','ne-manager','ne-dop','ne-lwd'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-desg','ne-manager','ne-dop','ne-lwd','ne-cnic-document','ne-basic','ne-house','ne-transport','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
 
@@ -932,8 +1006,10 @@ function pageLeave(){
     ? leaveBalanceList.map(balance => [balance.name, balance.remaining, balance.allocated || balance.remaining || 1, 'var(--accent)'])
     : [['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Maternity Leave',90,90,'var(--teal)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']];
 
-  const canManageLeaveBalances = DB.currentRole === 'admin' || DB.currentRole === 'hr';
+  const canManageLeaveBalances = DB.currentRole === 'admin';
+  const canManageLeaveTypes = DB.currentRole === 'admin';
   const leavePolicies = getLeavePoliciesList();
+  const leaveTypes = getLeaveTypesList();
   const employeeOptions = (DB.employees || [])
     .map(employee => `<option value="${employee.id}">${employee.id} - ${employee.fname} ${employee.lname}</option>`)
     .join('');
@@ -999,6 +1075,16 @@ function pageLeave(){
       </div>
     </div>`;
 
+  const leaveTypeRows = leaveTypes.map(type=>`
+    <tr>
+      <td>${type.name}</td>
+      <td><code>${type.code}</code></td>
+      <td>${type.paid ? statusBadge('Paid') : statusBadge('Unpaid')}</td>
+      <td>
+        ${canManageLeaveTypes ? `<div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openEditLeaveType('${type.code}')">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteLeaveType('${type.code}')">Delete</button></div>` : '-'}
+      </td>
+    </tr>`).join('');
+
   return buildTabs('lv',[
     {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
@@ -1009,6 +1095,15 @@ function pageLeave(){
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
       <tbody>${allRows}</tbody></table></div></div>`},
     {id:'balance',label:'Leave Balances',content:balanceHTML},
+    {id:'types',label:'Leave Types',content:`
+      <div class="card">
+        <div class="card-hdr">
+          <div class="card-title">Leave Types</div>
+          ${canManageLeaveTypes ? '<button class="btn btn-sm btn-primary" onclick="window.openCreateLeaveType()">+ Add Leave Type</button>' : ''}
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Code</th><th>Paid</th><th>Action</th></tr></thead>
+        <tbody>${leaveTypeRows || '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">No leave types configured</td></tr>'}</tbody></table></div>
+      </div>`},
     {id:'holidays',label:'National Holidays',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">National Holidays 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('holidayModal')">+ Add Holiday</button></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th>Type</th><th>Region</th></tr></thead>
@@ -1104,13 +1199,23 @@ function filterEmpDept(val){
   });
 }
 
-function viewEmpProfile(id){
+async function viewEmpProfile(id){
   window._viewEmpId=id;
+  try{
+    const data = await wpApi('/api/employees/'+encodeURIComponent(id), {method:'GET'});
+    if(data?.employee){
+      const existingIndex = (DB.employees || []).findIndex(emp => emp.id === id);
+      if(existingIndex >= 0){
+        DB.employees[existingIndex] = {...DB.employees[existingIndex], ...data.employee};
+      }
+    }
+  }catch(e){}
   showPage('emp-profile-detail');
 }
 
 function pageEmpProfileDetail(){
   const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
+  const canSeeConfidential = DB.currentRole === 'admin';
   const gross=(e.basic||0)+(e.house||0)+(e.transport||0);
   const net=gross-(e.tax||0);
 
@@ -1533,8 +1638,8 @@ function pageReports(){
           <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceDailyCSV()">Export CSV</button></div>
         </div>
       </div>
-      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Status</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
-      <tbody id="rp-daily-tbody"><tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
+      <tbody id="rp-daily-tbody"><tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
     {id:'monthly',label:'Monthly Attendance Report',content:`
       <div class="hero-panel" style="margin-bottom:14px;">
         <div class="hero-title">Monthly Attendance Report</div>
@@ -1560,8 +1665,9 @@ function pageReports(){
         <div class="metric-box"><div class="eyebrow">Absent Days Total</div><div class="value" id="rp-absent" style="color:var(--red);">-</div><div class="meta">Unavailability pattern</div></div>
         <div class="metric-box"><div class="eyebrow">OT Minutes</div><div class="value" id="rp-ot" style="color:var(--green);">-</div><div class="meta">Extra time logged</div></div>
       </div>
-      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
-      <tbody id="rp-att-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
+      <div class="soft-table"><div class="table-wrap" id="rp-monthly-matrix-wrap"><table><thead id="rp-att-head"><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
+      <tbody id="rp-att-tbody"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;">Codes: <strong>P</strong> Present, <strong>LT</strong> Late, <strong>L</strong> Leave, <strong>A</strong> Absent.</div>`},
     {id:'lv',label:'Leave Overview',content:`
       <div class="split-panel">
         <div class="panel-card" style="margin:0;">
@@ -1620,6 +1726,7 @@ async function loadAttendanceReport(){
       <tr>
         <td>${r.name || '-'}</td>
         <td>${r.department || '-'}</td>
+        <td>${r.designation || '-'}</td>
         <td>${statusBadge(r.status || '-')}</td>
         <td>${r.punches?.clock_in || '-'}</td>
         <td>${r.punches?.break_out || '-'}</td>
@@ -1629,7 +1736,7 @@ async function loadAttendanceReport(){
         <td>${r.overtime_minutes || 0}</td>
         <td>${r.late ? 'Yes' : 'No'}</td>
       </tr>
-    `).join('') || `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
+    `).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
 
     const summary = rows.reduce((acc, r) => {
       const status = r.status || 'Absent';
@@ -1673,20 +1780,36 @@ async function loadMonthlyAttendanceReport(){
     const data = await wpApi(`/api/reports/attendance/monthly?year=${year}&month=${month}`, {method:'GET', headers:{}});
     const selectedDept = document.getElementById('rp-monthly-dept')?.value || '';
     const rows = ((data && data.rows) ? data.rows : []).filter(row => !selectedDept || (row.department || '') === selectedDept);
+    const dates = (data && data.dates) ? data.dates : [];
     const tb = document.getElementById('rp-att-tbody');
-    if(!tb) return;
+    const head = document.getElementById('rp-att-head');
+    if(!tb || !head) return;
+
+    head.innerHTML = `<tr>
+      <th>Employee</th>
+      <th>Department</th>
+      <th>Designation</th>
+      ${dates.map(date => `<th>${new Date(date+'T00:00:00').getDate()}</th>`).join('')}
+      <th>Present</th>
+      <th>Absent</th>
+      <th>Leave</th>
+      <th>Late</th>
+      <th>Overtime (min)</th>
+    </tr>`;
 
     tb.innerHTML = rows.map(r=>`
       <tr>
         <td>${r.name}</td>
         <td>${r.department||'-'}</td>
+        <td>${r.designation||'-'}</td>
+        ${(r.days || []).map(day => `<td title="${day.date} - ${day.status}" style="text-align:center;">${day.code}</td>`).join('')}
         <td>${r.present_days}</td>
         <td>${r.absent_days}</td>
         <td>${r.leave_days}</td>
         <td>${r.late_days}</td>
         <td>${r.overtime_minutes}</td>
       </tr>
-    `).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
+    `).join('') || `<tr><td colspan="${dates.length + 8}" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
 
     const sum = rows.reduce((acc,r)=>({
       present: acc.present + (+r.present_days||0),
@@ -1998,6 +2121,7 @@ function pageEmpProfile(){
 
 function pageEmpProfileDetail(){
   const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
+  const canSeeConfidential = DB.currentRole === 'admin';
   const gross=(e.basic||0)+(e.house||0)+(e.transport||0);
   const net=gross-(e.tax||0);
   const reportingTeam=DB.employees.filter(emp=>emp.manager===`${e.fname} ${e.lname}` && emp.id!==e.id).slice(0,3);
@@ -2008,14 +2132,10 @@ function pageEmpProfileDetail(){
     {name:'Casual Leave',remaining:9,entitled:10,availed:1},
   ];
   const recentAttendance=DB.attendance.filter(a=>a.empId===e.id).slice(0,5);
-  const docTypes=[
-    ['National ID','Identity record on file','Approved'],
-    ['Passport','Travel document','Pending'],
-    ['Insurance Card','Benefits document','Pending'],
-    ['Offer Letter','Employment contract','Approved'],
-    ['Experience Certificate','History verification','Approved'],
-    ['Warning Letter','Disciplinary archive','Inactive'],
-  ];
+  const canManageEmployeeDocs = canSeeConfidential;
+  const cnicDocument = e.cnicDocumentUrl
+    ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><a class="btn btn-sm btn-primary" href="${e.cnicDocumentUrl}" target="_blank" rel="noopener">Open CNIC Document</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${e.id}')">Delete CNIC</button>` : ''}</div>`
+    : `<span style="font-size:12px;color:var(--muted);">CNIC document has not been uploaded yet.</span>`;
 
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
@@ -2058,7 +2178,7 @@ function pageEmpProfileDetail(){
         <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
         <div class="irow"><span class="ikey">Line Manager</span><span class="ival">${e.manager||'-'}</span></div>
       </div>
-      <div class="panel-card">
+      ${canSeeConfidential ? `<div class="panel-card">
         <div class="panel-head"><div class="panel-title">Salary</div><span class="badge bg-red">Confidential</span></div>
         <div class="irow"><span class="ikey">Basic Salary</span><span class="ival">PKR ${(e.basic||0).toLocaleString()}</span></div>
         <div class="irow"><span class="ikey">Allowances</span><span class="ival">PKR ${((e.house||0)+(e.transport||0)).toLocaleString()}</span></div>
@@ -2067,11 +2187,11 @@ function pageEmpProfileDetail(){
         <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);">PKR ${net.toLocaleString()}</span></div>
         <div class="irow"><span class="ikey">Bank</span><span class="ival">${e.bank||'-'}</span></div>
         <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'-'}</span></div>
-      </div>
+      </div>` : ''}
     </div>
     <div>
       <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Reporting Team (${reportingTeam.length})</div><button class="btn btn-sm">Edit Profile</button></div>
+        <div class="panel-head"><div class="panel-title">Reporting Team (${reportingTeam.length})</div><button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button></div>
         <div class="team-mini-list">
           ${reportingTeam.map(member=>`<div class="team-mini-item"><div class="av av-32" style="background:${member.avatarColor}22;color:${member.avatarColor};">${member.avatar}</div><div style="flex:1;"><div style="font-size:13px;font-weight:600;">${member.fname} ${member.lname}</div><div style="font-size:11px;color:var(--muted);">${member.desg}</div></div><span class="badge bg-blue">${member.dept}</span></div>`).join('') || `<div style="font-size:12px;color:var(--muted);">No direct reports assigned.</div>`}
         </div>
@@ -2079,7 +2199,7 @@ function pageEmpProfileDetail(){
       ${buildTabs('epdPlus',[
         {id:'leave',label:'Leave',content:`<div class="leave-mini-grid">${leaveBalances.map(card=>`<div class="leave-mini-card"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">${card.name}</div><div class="big">${card.remaining}</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">Entitled: ${card.entitled} | Availed: ${card.availed}</div></div>`).join('')}</div>`},
         {id:'attendance',label:'Attendance',content:`<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${recentAttendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No attendance records</td></tr>`}</tbody></table></div></div>`},
-        {id:'documents',label:'Documents',content:`<div class="doc-upload"><div class="panel-card" style="margin:0;"><div class="panel-title" style="margin-bottom:10px;">Upload Employee Docs</div><div class="fg"><label class="fl">Document Name</label><input class="fi" placeholder="Passport renewal, insurance card, experience letter"></div><div class="fg"><label class="fl">Select File</label><input class="fi" placeholder="Choose file"></div><button class="btn btn-sm btn-primary">Add To List</button></div><div class="panel-card" style="margin:0;"><div class="panel-title" style="margin-bottom:10px;">Profile Checklist</div><div class="irow"><span class="ikey">Identity Docs</span><span class="ival">${statusBadge('Approved')}</span></div><div class="irow"><span class="ikey">Offer Letter</span><span class="ival">${statusBadge('Approved')}</span></div><div class="irow"><span class="ikey">Benefits Card</span><span class="ival">${statusBadge('Pending')}</span></div></div></div><div class="doc-grid">${docTypes.map(([title,meta,state])=>`<div class="doc-card"><div class="t">${title}</div><div class="m">${meta}</div><div style="margin-top:10px;">${statusBadge(state)}</div></div>`).join('')}</div>`},
+        {id:'documents',label:'Documents',content:`<div class="panel-card" style="margin:0;"><div class="panel-head"><div class="panel-title">CNIC Document</div><span class="badge bg-blue">Required</span></div><div class="irow"><span class="ikey">Document</span><span class="ival">${e.cnicDocumentName || 'CNIC Upload'}</span></div><div class="irow"><span class="ikey">CNIC Number</span><span class="ival">${e.cnic || '-'}</span></div><div style="margin-top:12px;">${cnicDocument}</div></div>`},
       ],'leave')}
     </div>
   </div>`;
@@ -2096,14 +2216,9 @@ function pageEmpProfile(){
     {name:'Paternity Leave',remaining:5,allocated:5,used:0},
   ];
   const recentAttendance = DB.attendance.filter(a=>a.empId===u.id).slice(0,5);
-  const docTypes=[
-    ['National ID','Identity record complete','Approved'],
-    ['Offer Letter','Employment record','Approved'],
-    ['Driving License','Optional file','Pending'],
-    ['CV','Profile archive','Approved'],
-    ['Insurance Card','Benefits document','Pending'],
-    ['Training Certificate','Growth & learning','Inactive'],
-  ];
+  const cnicDocument = u.cnicDocumentUrl
+    ? `<a class="btn btn-sm btn-primary" href="${u.cnicDocumentUrl}" target="_blank" rel="noopener">Open My CNIC Document</a>`
+    : `<span style="font-size:12px;color:var(--muted);">Admin has not uploaded your CNIC document yet.</span>`;
 
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
@@ -2137,7 +2252,7 @@ function pageEmpProfile(){
     </div>
     <div>
       <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Official Profile</div><button class="btn btn-sm btn-primary">Edit Profile</button></div>
+        <div class="panel-head"><div class="panel-title">Official Profile</div><button class="btn btn-sm btn-primary" onclick="window.openAccountSettings()">Account Settings</button></div>
         <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${u.id||emp?.id}</span></div>
         <div class="irow"><span class="ikey">Department</span><span class="ival">${u.dept}</span></div>
         <div class="irow"><span class="ikey">Designation</span><span class="ival">${u.desg}</span></div>
@@ -2163,7 +2278,7 @@ function pageEmpProfile(){
       ${buildTabs('mePlus',[
         {id:'leave',label:'Leave',content:`<div class="leave-mini-grid">${balances.map(card=>`<div class="leave-mini-card"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">${card.name}</div><div class="big">${card.remaining}</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">Allocated: ${card.allocated||card.entitled} | Used: ${card.used||0}</div></div>`).join('')}</div>`},
         {id:'attendance',label:'Attendance',content:`<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${recentAttendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No attendance records</td></tr>`}</tbody></table></div></div>`},
-        {id:'documents',label:'Documents',content:`<div class="doc-upload"><div class="panel-card" style="margin:0;"><div class="panel-title" style="margin-bottom:10px;">Upload Employee Docs</div><div class="fg"><label class="fl">Document Name</label><input class="fi" placeholder="National ID, license, benefits card"></div><div class="fg"><label class="fl">Select File</label><input class="fi" placeholder="Choose file"></div><button class="btn btn-sm btn-primary">Add To List</button></div><div class="panel-card" style="margin:0;"><div class="panel-title" style="margin-bottom:10px;">Readiness</div><div class="irow"><span class="ikey">Identity Docs</span><span class="ival">${statusBadge('Approved')}</span></div><div class="irow"><span class="ikey">Employment Docs</span><span class="ival">${statusBadge('Approved')}</span></div><div class="irow"><span class="ikey">Benefits Docs</span><span class="ival">${statusBadge('Pending')}</span></div></div></div><div class="doc-grid">${docTypes.map(([title,meta,state])=>`<div class="doc-card"><div class="t">${title}</div><div class="m">${meta}</div><div style="margin-top:10px;">${statusBadge(state)}</div></div>`).join('')}</div>`},
+        {id:'documents',label:'Documents',content:`<div class="panel-card" style="margin:0;"><div class="panel-head"><div class="panel-title">CNIC Document</div><span class="badge bg-blue">Official Record</span></div><div class="irow"><span class="ikey">Document</span><span class="ival">${u.cnicDocumentName || 'CNIC Upload'}</span></div><div class="irow"><span class="ikey">CNIC Number</span><span class="ival">${emp?.cnic || '-'}</span></div><div style="margin-top:12px;">${cnicDocument}</div></div>`},
       ],'leave')}
     </div>
   </div>`;
@@ -2209,6 +2324,16 @@ function pageEmpTeam(){
 
 let __liveAttendanceRefreshTimer = null;
 
+async function refreshLiveAttendanceSnapshot(pageId){
+  try{
+    const data = await wpApi('/api/attendance/live', {method:'GET', headers:{}});
+    DB.liveAttendance = data.liveAttendance || [];
+    if(window.__workpulseCurrentPage === pageId){
+      showPage(pageId);
+    }
+  }catch(e){}
+}
+
 function setupLiveAttendanceRefresh(pageId){
   if(__liveAttendanceRefreshTimer){
     clearInterval(__liveAttendanceRefreshTimer);
@@ -2218,14 +2343,8 @@ function setupLiveAttendanceRefresh(pageId){
   if(!['dashboard','realtime','hr-dashboard'].includes(pageId)) return;
 
   __liveAttendanceRefreshTimer = setInterval(()=>{
-    if(typeof wpReload !== 'function') return;
-    wpReload().then(()=>{
-      const currentPage = window.__workpulseCurrentPage;
-      if(currentPage === pageId){
-        showPage(pageId);
-      }
-    }).catch(()=>{});
-  }, 30000);
+    refreshLiveAttendanceSnapshot(pageId);
+  }, 3000);
 }
 
 function pageRealtimeLive(){

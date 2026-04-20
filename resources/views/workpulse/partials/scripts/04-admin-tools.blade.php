@@ -23,6 +23,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-kinRel').value = e.kinRel||'';
     document.getElementById('ee-kinPhone').value = e.kinPhone||'';
   // Job
+    if(typeof syncDepartmentOptions === 'function') syncDepartmentOptions('ee-dept', e.dept||'Engineering');
     document.getElementById('ee-dept').value = e.dept||'Engineering';
     document.getElementById('ee-desg').value = e.desg||'';
     document.getElementById('ee-doj').value = e.doj||'';
@@ -32,6 +33,8 @@ async function openEditEmployee(id){
     document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-manager').value = e.manager==='-' ? '' : (e.manager||'');
     document.getElementById('ee-email').value = e.email||'';
+    document.getElementById('ee-password').value = '';
+    document.getElementById('ee-cnic-document').value = '';
   // Salary
     document.getElementById('ee-basic').value = e.basic||0;
     document.getElementById('ee-house').value = e.house||0;
@@ -75,40 +78,43 @@ function calcGross(){
 
 async function saveEditEmployee(){
   if(!_editEmpId) return;
-  const payload = {
-    fname: document.getElementById('ee-fname').value.trim(),
-    lname: document.getElementById('ee-lname').value.trim(),
-    dob: document.getElementById('ee-dob').value || null,
-    gender: document.getElementById('ee-gender').value,
-    cnic: document.getElementById('ee-cnic').value.trim(),
-    phone: document.getElementById('ee-phone').value.trim(),
-    address: document.getElementById('ee-address').value.trim(),
-    blood: document.getElementById('ee-blood').value,
-    kin: document.getElementById('ee-kin').value.trim(),
-    kinRel: document.getElementById('ee-kinRel').value.trim(),
-    kinPhone: document.getElementById('ee-kinPhone').value.trim(),
-    dept: document.getElementById('ee-dept').value,
-    desg: document.getElementById('ee-desg').value.trim(),
-    doj: document.getElementById('ee-doj').value,
-    dop: document.getElementById('ee-dop').value || null,
-    lwd: document.getElementById('ee-lwd').value || null,
-    type: document.getElementById('ee-type').value,
-    status: document.getElementById('ee-status').value,
-    manager: document.getElementById('ee-manager').value.trim(),
-    email: document.getElementById('ee-email').value.trim(),
-    basic: parseInt(document.getElementById('ee-basic').value)||0,
-    house: parseInt(document.getElementById('ee-house').value)||0,
-    transport: parseInt(document.getElementById('ee-transport').value)||0,
-    tax: parseInt(document.getElementById('ee-tax').value)||0,
-    bank: document.getElementById('ee-bank').value.trim(),
-    acct: document.getElementById('ee-acct').value.trim(),
-    iban: document.getElementById('ee-iban').value.trim(),
-  };
+  const formData = new FormData();
+  formData.append('fname', document.getElementById('ee-fname').value.trim());
+  formData.append('lname', document.getElementById('ee-lname').value.trim());
+  if(document.getElementById('ee-dob').value) formData.append('dob', document.getElementById('ee-dob').value);
+  formData.append('gender', document.getElementById('ee-gender').value);
+  if(document.getElementById('ee-cnic').value.trim()) formData.append('cnic', document.getElementById('ee-cnic').value.trim());
+  if(document.getElementById('ee-phone').value.trim()) formData.append('phone', document.getElementById('ee-phone').value.trim());
+  if(document.getElementById('ee-address').value.trim()) formData.append('address', document.getElementById('ee-address').value.trim());
+  formData.append('blood', document.getElementById('ee-blood').value);
+  if(document.getElementById('ee-kin').value.trim()) formData.append('kin', document.getElementById('ee-kin').value.trim());
+  if(document.getElementById('ee-kinRel').value.trim()) formData.append('kinRel', document.getElementById('ee-kinRel').value.trim());
+  if(document.getElementById('ee-kinPhone').value.trim()) formData.append('kinPhone', document.getElementById('ee-kinPhone').value.trim());
+  formData.append('dept', document.getElementById('ee-dept').value);
+  formData.append('desg', document.getElementById('ee-desg').value.trim());
+  formData.append('doj', document.getElementById('ee-doj').value);
+  if(document.getElementById('ee-dop').value) formData.append('dop', document.getElementById('ee-dop').value);
+  if(document.getElementById('ee-lwd').value) formData.append('lwd', document.getElementById('ee-lwd').value);
+  formData.append('type', document.getElementById('ee-type').value);
+  formData.append('status', document.getElementById('ee-status').value);
+  if(document.getElementById('ee-manager').value.trim()) formData.append('manager', document.getElementById('ee-manager').value.trim());
+  formData.append('email', document.getElementById('ee-email').value.trim());
+  if(document.getElementById('ee-password').value) formData.append('password', document.getElementById('ee-password').value);
+  formData.append('basic', parseInt(document.getElementById('ee-basic').value)||0);
+  formData.append('house', parseInt(document.getElementById('ee-house').value)||0);
+  formData.append('transport', parseInt(document.getElementById('ee-transport').value)||0);
+  formData.append('tax', parseInt(document.getElementById('ee-tax').value)||0);
+  if(document.getElementById('ee-bank').value.trim()) formData.append('bank', document.getElementById('ee-bank').value.trim());
+  if(document.getElementById('ee-acct').value.trim()) formData.append('acct', document.getElementById('ee-acct').value.trim());
+  if(document.getElementById('ee-iban').value.trim()) formData.append('iban', document.getElementById('ee-iban').value.trim());
+  const cnicDocument = document.getElementById('ee-cnic-document').files?.[0];
+  if(cnicDocument) formData.append('cnic_document', cnicDocument);
+  formData.append('_method', 'PATCH');
 
   try{
     await wpApi('/api/employees/'+encodeURIComponent(_editEmpId), {
-      method:'PATCH',
-      body: JSON.stringify(payload)
+      method:'POST',
+      body: formData
     });
     await wpReload();
     closeModal('editEmpModal');
@@ -124,6 +130,82 @@ async function saveEditEmployee(){
 // ══════════════════════════════════════════════════
 //  EDIT LEAVE BALANCE (Admin)
 // ══════════════════════════════════════════════════
+function openAccountSettings(){
+  const errEl = document.getElementById('acc-err');
+  if(errEl){
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  const emailEl = document.getElementById('acc-email');
+  if(emailEl) emailEl.value = DB.currentUser?.email || '';
+
+  ['acc-current-password','acc-new-password','acc-confirm-password'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+
+  openModal('accountSettingsModal');
+}
+
+async function submitAccountSettings(){
+  const email = document.getElementById('acc-email')?.value?.trim() || '';
+  const currentPassword = document.getElementById('acc-current-password')?.value || '';
+  const newPassword = document.getElementById('acc-new-password')?.value || '';
+  const confirmPassword = document.getElementById('acc-confirm-password')?.value || '';
+  const errEl = document.getElementById('acc-err');
+
+  if(errEl){
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  if(!email || !currentPassword){
+    if(errEl){
+      errEl.textContent = 'Email and current password are required.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if(newPassword && newPassword.length < 8){
+    if(errEl){
+      errEl.textContent = 'New password must be at least 8 characters.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if(newPassword !== confirmPassword){
+    if(errEl){
+      errEl.textContent = 'New password and confirmation do not match.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  try{
+    await wpApi('/api/me/account', {
+      method:'PATCH',
+      body: JSON.stringify({
+        email,
+        current_password: currentPassword,
+        password: newPassword || null,
+        password_confirmation: confirmPassword || null
+      })
+    });
+    await wpReload();
+    closeModal('accountSettingsModal');
+    showToast('Account settings updated.','green');
+    if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+  }catch(e){
+    if(errEl){
+      errEl.textContent = e?.message || 'Account update failed.';
+      errEl.style.display = 'block';
+    }
+  }
+}
+
 let _editLeaveEmpId = null;
 let _editLeaveBalancesSnapshot = {};
 
@@ -248,6 +330,113 @@ function renderLeavePolicyEditorRows(policies){
   `).join('');
 
   container.innerHTML = rows || '<div style="font-size:12px;color:var(--muted);">No leave policies available.</div>';
+}
+
+function openCreateLeaveType(){
+  const errEl = document.getElementById('lt-err');
+  if(errEl){
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  document.getElementById('lt-modal-title').textContent = 'Add Leave Type';
+  document.getElementById('lt-original-code').value = '';
+  document.getElementById('lt-name').value = '';
+  document.getElementById('lt-code').value = '';
+  document.getElementById('lt-paid').value = '1';
+  openModal('leaveTypeModal');
+}
+
+function openEditLeaveType(code){
+  const type = getLeaveTypesList().find(item => item.code === code);
+  if(!type){
+    showToast('Leave type not found.','red');
+    return;
+  }
+
+  const errEl = document.getElementById('lt-err');
+  if(errEl){
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  document.getElementById('lt-modal-title').textContent = 'Edit Leave Type';
+  document.getElementById('lt-original-code').value = type.code || '';
+  document.getElementById('lt-name').value = type.name || '';
+  document.getElementById('lt-code').value = type.code || '';
+  document.getElementById('lt-paid').value = type.paid ? '1' : '0';
+  openModal('leaveTypeModal');
+}
+
+async function saveLeaveType(){
+  const originalCode = document.getElementById('lt-original-code')?.value || '';
+  const name = document.getElementById('lt-name')?.value?.trim() || '';
+  const code = document.getElementById('lt-code')?.value?.trim() || '';
+  const paid = document.getElementById('lt-paid')?.value === '1';
+  const errEl = document.getElementById('lt-err');
+
+  if(errEl){
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+  }
+
+  if(!name){
+    if(errEl){
+      errEl.textContent = 'Leave type name is required.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  const payload = {
+    name,
+    code: code || null,
+    paid,
+  };
+
+  try{
+    await wpApi(originalCode ? '/api/leave/types/'+encodeURIComponent(originalCode) : '/api/leave/types', {
+      method: originalCode ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    await wpReload();
+    closeModal('leaveTypeModal');
+    showToast(`Leave type ${originalCode ? 'updated' : 'created'} successfully!`,'green');
+    if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+  }catch(e){
+    if(errEl){
+      errEl.textContent = e?.message || 'Unable to save leave type.';
+      errEl.style.display = 'block';
+    }
+  }
+}
+
+function deleteLeaveType(code){
+  showConfirm('Delete Leave Type', 'This will remove the leave type only if it has never been used in requests, balances, or policies.', '⚠️', async function(){
+    try{
+      await wpApi('/api/leave/types/'+encodeURIComponent(code), {method:'DELETE'});
+      await wpReload();
+      showToast('Leave type deleted.','green');
+      if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+    }catch(e){
+      showToast(e?.message || 'Unable to delete leave type.','red');
+    }
+  });
+}
+
+function deleteEmployeeCnicDocument(employeeCode){
+  showConfirm('Delete CNIC Document', 'This will remove the uploaded CNIC document from the employee profile. You can upload a new one later.', '⚠️', async function(){
+    try{
+      await wpApi('/api/employees/'+encodeURIComponent(employeeCode)+'/cnic-document', {method:'DELETE'});
+      await wpReload();
+      showToast('CNIC document deleted.','green');
+      const title = document.getElementById('page-title').textContent;
+      if(title==='Employee Profile') showPage('emp-profile-detail');
+      if(title==='Employees') showPage('employees');
+    }catch(e){
+      showToast(e?.message || 'Unable to delete CNIC document.','red');
+    }
+  });
 }
 
 async function openEditLeavePolicy(){

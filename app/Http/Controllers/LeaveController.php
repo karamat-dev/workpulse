@@ -11,6 +11,21 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
+    private function ensureAdmin(Request $request): void
+    {
+        if ($request->user()->role !== 'admin') {
+            abort(403);
+        }
+    }
+
+    private function makeLeaveTypeCode(string $name): string
+    {
+        $base = Str::of($name)->lower()->slug('_')->value();
+        $base = trim($base, '_');
+
+        return $base !== '' ? $base : 'leave_type';
+    }
+
     private function getOrCreateLeaveBalance(int $userId, int $year, int $leaveTypeId): object
     {
         $existing = DB::table('leave_balances')
@@ -102,6 +117,87 @@ class LeaveController extends Controller
         return response()->json(['ok' => true, 'year' => $year, 'types' => $rows]);
     }
 
+    public function storeType(Request $request): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['nullable', 'string', 'max:50', 'regex:/^[a-z0-9_]+$/', 'unique:leave_types,code'],
+            'paid' => ['nullable', 'boolean'],
+        ]);
+
+        $code = $validated['code'] ?? $this->makeLeaveTypeCode($validated['name']);
+        $originalCode = $code;
+        $suffix = 1;
+        while (DB::table('leave_types')->where('code', $code)->exists()) {
+            $code = $originalCode.'_'.$suffix;
+            $suffix++;
+        }
+
+        DB::table('leave_types')->insert([
+            'name' => $validated['name'],
+            'code' => $code,
+            'paid' => (bool) ($validated['paid'] ?? true),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json(['ok' => true, 'code' => $code], 201);
+    }
+
+    public function updateType(Request $request, string $code): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $leaveType = DB::table('leave_types')->where('code', $code)->first();
+        if (!$leaveType) {
+            return response()->json(['ok' => false, 'message' => 'Not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'code' => ['required', 'string', 'max:50', 'regex:/^[a-z0-9_]+$/', Rule::unique('leave_types', 'code')->ignore($leaveType->id)],
+            'paid' => ['nullable', 'boolean'],
+        ]);
+
+        DB::table('leave_types')
+            ->where('id', $leaveType->id)
+            ->update([
+                'name' => $validated['name'],
+                'code' => $validated['code'],
+                'paid' => (bool) ($validated['paid'] ?? true),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function destroyType(Request $request, string $code): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $leaveType = DB::table('leave_types')->where('code', $code)->first();
+        if (!$leaveType) {
+            return response()->json(['ok' => false, 'message' => 'Not found'], 404);
+        }
+
+        $hasUsage = DB::table('leave_requests')->where('leave_type_id', $leaveType->id)->exists()
+            || DB::table('leave_balances')->where('leave_type_id', $leaveType->id)->exists()
+            || DB::table('leave_policies')->where('leave_type_id', $leaveType->id)->exists();
+
+        if ($hasUsage) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'This leave type is already in use and cannot be deleted.',
+            ], 422);
+        }
+
+        DB::table('leave_types')->where('id', $leaveType->id)->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function myBalance(Request $request): JsonResponse
     {
         $year = (int) ($request->query('year', now()->year));
@@ -125,6 +221,8 @@ class LeaveController extends Controller
 
     public function employeeBalance(Request $request, string $employeeCode): JsonResponse
     {
+        $this->ensureAdmin($request);
+
         $year = (int) ($request->query('year', now()->year));
         $userId = DB::table('users')->where('employee_code', $employeeCode)->value('id');
 
@@ -413,6 +511,8 @@ class LeaveController extends Controller
 
     public function updateEmployeeBalance(Request $request, string $employeeCode): JsonResponse
     {
+        $this->ensureAdmin($request);
+
         $validated = $request->validate([
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'mode' => ['nullable', Rule::in(['absolute', 'adjust'])],
@@ -538,6 +638,8 @@ class LeaveController extends Controller
 
     public function updatePolicies(Request $request): JsonResponse
     {
+        $this->ensureAdmin($request);
+
         $validated = $request->validate([
             'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
             'policies' => ['required', 'array', 'min:1'],

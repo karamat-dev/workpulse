@@ -27,11 +27,13 @@ Route::middleware('auth')->group(function () {
     Route::prefix('api')->group(function () {
         Route::get('/bootstrap', WorkpulseBootstrapController::class);
         Route::get('/me/profile', [MeController::class, 'profile']);
+        Route::patch('/me/account', [MeController::class, 'updateAccount']);
 
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');
             Route::get('/{employeeCode}', [EmployeesController::class, 'show'])->middleware('perm:employees.view');
             Route::patch('/{employeeCode}', [EmployeesController::class, 'update'])->middleware('perm:employees.manage');
+            Route::delete('/{employeeCode}/cnic-document', [EmployeesController::class, 'deleteCnicDocument'])->middleware('perm:employees.manage');
             Route::delete('/{employeeCode}', [EmployeesController::class, 'destroy'])->middleware('perm:employees.manage');
         });
 
@@ -40,6 +42,7 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('attendance')->group(function () {
             Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');
+            Route::get('/live', [AttendanceController::class, 'liveStatus'])->middleware('perm:attendance.view');
             Route::get('/daily', [AttendanceController::class, 'dailyReport'])->middleware('perm:attendance.view');
             Route::get('/daily.csv', [AttendanceController::class, 'dailyReportCsv'])->middleware('perm:attendance.view');
             Route::post('/regulations', [AttendanceController::class, 'createRegulation'])->middleware('perm:attendance.view');
@@ -49,6 +52,9 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('leave')->group(function () {
             Route::get('/types', [LeaveController::class, 'types'])->middleware('perm:leave.apply');
+            Route::post('/types', [LeaveController::class, 'storeType'])->middleware('perm:leave.manage');
+            Route::patch('/types/{code}', [LeaveController::class, 'updateType'])->middleware('perm:leave.manage');
+            Route::delete('/types/{code}', [LeaveController::class, 'destroyType'])->middleware('perm:leave.manage');
             Route::get('/policies', [LeaveController::class, 'policies'])->middleware('perm:leave.apply');
             Route::get('/my/balance', [LeaveController::class, 'myBalance'])->middleware('perm:leave.apply');
             Route::get('/my/requests', [LeaveController::class, 'myRequests'])->middleware('perm:leave.apply');

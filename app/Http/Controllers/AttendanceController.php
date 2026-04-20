@@ -296,6 +296,123 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function liveStatus(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = now()->toDateString();
+
+        $employeesQuery = DB::table('users')
+            ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
+            ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
+            ->whereIn('users.role', ['employee', 'hr', 'admin'])
+            ->select([
+                'users.id as user_id',
+                'users.employee_code',
+                'users.name',
+                'departments.name as dept',
+            ])
+            ->orderBy('users.employee_code');
+
+        if ($user->role === 'employee') {
+            $teamUserIds = DB::table('reporting_lines')->where('manager_user_id', $user->id)->pluck('user_id');
+            $employeesQuery->where(function ($q) use ($user, $teamUserIds) {
+                $q->where('users.id', $user->id)->orWhereIn('users.id', $teamUserIds);
+            });
+        }
+
+        $employees = $employeesQuery->get()->map(function ($employee) {
+            $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
+            $fname = $parts[0] ?? $employee->name;
+            $lname = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
+
+            return [
+                'id' => $employee->employee_code,
+                'name' => trim($fname.' '.$lname),
+                'dept' => $employee->dept ?? '-',
+            ];
+        })->values();
+
+        $attendancePunches = DB::table('attendance_punches')
+            ->join('users', 'users.id', '=', 'attendance_punches.user_id')
+            ->where('attendance_punches.date', $today)
+            ->select([
+                'users.employee_code as emp_id',
+                'attendance_punches.type',
+                'attendance_punches.punched_at',
+            ])
+            ->orderBy('attendance_punches.punched_at')
+            ->get()
+            ->groupBy('emp_id');
+
+        $leaveByEmployeeToday = DB::table('leave_requests')
+            ->join('users', 'users.id', '=', 'leave_requests.user_id')
+            ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
+            ->where('leave_requests.status', 'Approved')
+            ->where('leave_requests.from_date', '<=', $today)
+            ->where('leave_requests.to_date', '>=', $today)
+            ->select([
+                'users.employee_code as empId',
+                'leave_types.name as leave_type',
+            ])
+            ->get()
+            ->groupBy('empId');
+
+        $liveAttendance = $employees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday) {
+            $empId = $employee['id'];
+
+            if ($leaveByEmployeeToday->has($empId)) {
+                $leave = $leaveByEmployeeToday->get($empId)?->first();
+
+                return [
+                    'empId' => $empId,
+                    'name' => $employee['name'],
+                    'dept' => $employee['dept'],
+                    'status' => 'leave',
+                    'since' => $leave->leave_type ?? 'Approved Leave',
+                    'clockIn' => null,
+                    'clockOut' => null,
+                ];
+            }
+
+            $todayPunches = $attendancePunches->get($empId, collect());
+            $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
+            $clockOutPunch = $todayPunches->firstWhere('type', 'clock_out');
+            $breakOutCount = $todayPunches->where('type', 'break_out')->count();
+            $breakInCount = $todayPunches->where('type', 'break_in')->count();
+            $onBreak = $breakOutCount > $breakInCount;
+
+            $clockInTime = $clockInPunch?->punched_at ? now()->parse($clockInPunch->punched_at)->format('H:i') : null;
+            $clockOutTime = $clockOutPunch?->punched_at ? now()->parse($clockOutPunch->punched_at)->format('H:i') : null;
+
+            $status = 'not_checked_in';
+            $since = 'Not Checked In';
+
+            if ($clockInPunch && !$clockOutPunch) {
+                $status = $onBreak ? 'break' : 'in';
+                $since = $clockInTime ?? '-';
+            } elseif ($clockOutPunch) {
+                $status = 'out';
+                $since = $clockOutTime ?? '-';
+            }
+
+            return [
+                'empId' => $empId,
+                'name' => $employee['name'],
+                'dept' => $employee['dept'],
+                'status' => $status,
+                'since' => $since,
+                'clockIn' => $clockInTime,
+                'clockOut' => $clockOutTime,
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'date' => $today,
+            'liveAttendance' => $liveAttendance,
+        ]);
+    }
+
     public function createRegulation(Request $request): JsonResponse
     {
         $validated = $request->validate([

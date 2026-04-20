@@ -26,6 +26,8 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.employment_type',
                 'mgr.name as manager_name',
                 'employee_profiles.personal_phone',
+                'employee_profiles.cnic_document_path',
+                'employee_profiles.cnic_document_name',
             ])
             ->first();
 
@@ -50,6 +52,9 @@ class WorkpulseBootstrapController extends Controller
             'lwd' => $profile?->last_working_date,
             'manager' => $profile?->manager_name ?? '-',
             'phone' => $profile?->personal_phone,
+            'cnicDocumentPath' => $profile?->cnic_document_path,
+            'cnicDocumentName' => $profile?->cnic_document_name,
+            'cnicDocumentUrl' => $profile?->cnic_document_path ? asset($profile->cnic_document_path) : null,
             'avatar' => $avatar,
             'avatarColor' => $avatarColor,
             'status' => $profile?->status ?? 'Active',
@@ -75,6 +80,8 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.employment_type as type',
                 'mgr.name as manager',
                 'employee_profiles.personal_phone as phone',
+                'employee_profiles.cnic_document_path as cnic_document_path',
+                'employee_profiles.cnic_document_name as cnic_document_name',
             ])
             ->orderBy('users.employee_code');
 
@@ -105,6 +112,9 @@ class WorkpulseBootstrapController extends Controller
                 'manager' => $employee->manager ?? '-',
                 'phone' => $employee->phone,
                 'email' => $employee->email,
+                'cnicDocumentPath' => $employee->cnic_document_path,
+                'cnicDocumentName' => $employee->cnic_document_name,
+                'cnicDocumentUrl' => $employee->cnic_document_path ? asset($employee->cnic_document_path) : null,
                 'avatar' => $av,
                 'avatarColor' => $color,
                 'status' => $employee->status ?? 'Active',

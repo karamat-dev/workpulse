@@ -4,14 +4,16 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class MeController extends Controller
 {
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $canSeeConfidential = $user->hasPermission('employees.view_confidential');
+        $canSeeConfidential = $user->role === 'admin';
 
         $select = [
             'users.employee_code',
@@ -63,5 +65,36 @@ class MeController extends Controller
 
         return response()->json(['ok' => true, 'profile' => $row]);
     }
-}
 
+    public function updateAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('users', 'email')->ignore($user->id),
+            ],
+            'current_password' => ['required', 'current_password'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $update = [
+            'email' => $validated['email'],
+            'updated_at' => now(),
+        ];
+
+        if (!empty($validated['password'])) {
+            $update['password'] = Hash::make($validated['password']);
+        }
+
+        DB::table('users')->where('id', $user->id)->update($update);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Account updated successfully.',
+        ]);
+    }
+}
