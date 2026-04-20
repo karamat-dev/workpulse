@@ -141,10 +141,7 @@ function initApp(){
   // Always reset punchState to clean defaults first, then restore from storage
   DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,sessionLogs:[]};
 
-  if(DB.currentRole==='employee'){
-    // Load persisted punch state — only restores if saved TODAY
-    loadPunchState(u.id);
-  }
+  loadPunchState(u.id);
 
   buildNav();
   startClock();

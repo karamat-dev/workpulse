@@ -8,6 +8,7 @@ use App\Http\Controllers\WorkpulseBootstrapController;
 use App\Http\Controllers\WorkpulseAppController;
 use App\Http\Controllers\EmployeesController;
 use App\Http\Controllers\AnnouncementsController;
+use App\Http\Controllers\DepartmentsController;
 use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\ShiftsController;
@@ -37,6 +38,12 @@ Route::middleware('auth')->group(function () {
             Route::patch('/{employeeCode}', [EmployeesController::class, 'update'])->middleware('perm:employees.manage');
             Route::delete('/{employeeCode}/cnic-document', [EmployeesController::class, 'deleteCnicDocument'])->middleware('perm:employees.manage');
             Route::delete('/{employeeCode}', [EmployeesController::class, 'destroy'])->middleware('perm:employees.manage');
+        });
+
+        Route::prefix('departments')->group(function () {
+            Route::post('/', [DepartmentsController::class, 'store'])->middleware('perm:employees.manage');
+            Route::patch('/{name}', [DepartmentsController::class, 'update'])->middleware('perm:employees.manage');
+            Route::delete('/{name}', [DepartmentsController::class, 'destroy'])->middleware('perm:employees.manage');
         });
 
         Route::post('/announcements', [AnnouncementsController::class, 'store'])->middleware('perm:announcements.manage');

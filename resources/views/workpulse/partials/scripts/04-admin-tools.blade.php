@@ -2,6 +2,7 @@
 // ══════════════════════════════════════════════════
 let _editEmpId = null;
 let _editTab = 'personal';
+let _editDepartmentName = null;
 
 async function openEditEmployee(id){
   _editEmpId = id;
@@ -62,6 +63,83 @@ function switchEditTab(tab){
   document.querySelectorAll('#edit-emp-tabs .tab').forEach((el,i)=>{
     const tabs = ['personal','job','salary'];
     el.classList.toggle('active', tabs[i]===tab);
+  });
+}
+
+function syncDepartmentHeadOptions(selectedCode=''){
+  const select = document.getElementById('dept-head');
+  if(!select) return;
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  select.innerHTML = ['<option value="">No Head Assigned</option>'].concat(
+    employees.map(employee => `<option value="${employee.id}">${employee.fname} ${employee.lname} (${employee.id})</option>`)
+  ).join('');
+  if(selectedCode) select.value = selectedCode;
+}
+
+function openCreateDepartment(){
+  _editDepartmentName = null;
+  document.getElementById('dept-modal-title').textContent = 'Add Department';
+  document.getElementById('dept-original-name').value = '';
+  document.getElementById('dept-name').value = '';
+  document.getElementById('dept-color').value = '#2447D0';
+  syncDepartmentHeadOptions('');
+  openModal('departmentModal');
+}
+
+function openEditDepartment(name){
+  const department = (DB.departments||[]).find(item => item.name === name);
+  if(!department){
+    showToast('Department not found.','red');
+    return;
+  }
+
+  _editDepartmentName = name;
+  document.getElementById('dept-modal-title').textContent = 'Edit Department';
+  document.getElementById('dept-original-name').value = name;
+  document.getElementById('dept-name').value = department.name || '';
+  document.getElementById('dept-color').value = department.color || '#2447D0';
+  const headEmployee = (DB.employees||[]).find(employee => `${employee.fname} ${employee.lname}` === department.head);
+  syncDepartmentHeadOptions(headEmployee?.id || '');
+  openModal('departmentModal');
+}
+
+async function saveDepartment(){
+  const originalName = document.getElementById('dept-original-name').value || '';
+  const payload = {
+    name: document.getElementById('dept-name').value.trim(),
+    color: document.getElementById('dept-color').value || '#2447D0',
+    head_employee_code: document.getElementById('dept-head').value || null,
+  };
+
+  if(!payload.name){
+    showToast('Department name is required.','red');
+    return;
+  }
+
+  try{
+    await wpApi(originalName ? `/api/departments/${encodeURIComponent(originalName)}` : '/api/departments', {
+      method: originalName ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload)
+    });
+    await wpReload();
+    closeModal('departmentModal');
+    showToast(`Department ${originalName ? 'updated' : 'created'} successfully.`,'green');
+    if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+function deleteDepartment(name){
+  showConfirm('Delete Department', 'This will remove the department and unassign it from employees currently linked to it.', '⚠️', async function(){
+    try{
+      await wpApi(`/api/departments/${encodeURIComponent(name)}`, {method:'DELETE'});
+      await wpReload();
+      showToast('Department deleted.','green');
+      if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+    }catch(e){
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
+    }
   });
 }
 

@@ -1375,7 +1375,7 @@ function pageEmpProfileDetail(){
 function pageDepartments(){
   return `
   <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
-    <button class="btn btn-sm btn-primary">+ Add Department</button>
+    <button class="btn btn-sm btn-primary" onclick="window.openCreateDepartment()">+ Add Department</button>
   </div>
   <div class="g3">
     ${DB.departments.map(d=>`
@@ -1391,7 +1391,11 @@ function pageDepartments(){
         <div class="irow"><span class="ikey">Absent</span><span class="ival" style="color:var(--red);">${d.absent}</span></div>
         <div class="prog-bar" style="margin-top:10px;"><div class="prog-fill" style="width:${Math.round(d.present/d.count*100)}%;background:${d.color};"></div></div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">${Math.round(d.present/d.count*100)}% attendance rate</div>
-        <button class="btn btn-sm" style="width:100%;margin-top:10px;justify-content:center;" onclick="window.showPage('employees')">View Employees</button>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="window.showPage('employees')">View Employees</button>
+          <button class="btn btn-sm" onclick="window.openEditDepartment('${d.name.replace(/'/g,"\\'")}')">Edit</button>
+          <button class="btn btn-sm btn-danger" onclick="window.deleteDepartment('${d.name.replace(/'/g,"\\'")}')">Delete</button>
+        </div>
       </div>
     </div>`).join('')}
   </div>`;

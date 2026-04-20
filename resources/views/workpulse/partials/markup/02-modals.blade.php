@@ -120,6 +120,23 @@
   </div>
 </div>
 
+<!-- Department Modal -->
+<div class="modal-overlay" id="departmentModal">
+  <div class="modal">
+    <div class="modal-hdr"><div class="modal-title" id="dept-modal-title">Add Department</div><button class="modal-close" onclick="window.closeModal('departmentModal')">×</button></div>
+    <input type="hidden" id="dept-original-name">
+    <div class="fg"><label class="fl">Department Name</label><input type="text" class="fi" id="dept-name" placeholder="Human Resources"></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Color</label><input type="color" class="fi" id="dept-color" value="#2447D0" style="height:44px;padding:6px;"></div>
+      <div class="fg"><label class="fl">Department Head</label><select class="fi" id="dept-head"></select></div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('departmentModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.saveDepartment()">Save Department</button>
+    </div>
+  </div>
+</div>
+
 <!-- Leave Approval Modal -->
 <div class="modal-overlay" id="approvalModal">
   <div class="modal">
