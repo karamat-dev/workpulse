@@ -570,6 +570,54 @@ function exportEmployeeCSV(){
   exportCSV('employee_data.csv', rows, headers);
 }
 
+function exportTransferData(){
+  const today = new Date();
+  const stamp = today.toISOString().replace(/[:.]/g, '-');
+  const payload = {
+    app: 'WorkPulse',
+    exported_at: today.toISOString(),
+    exported_by: DB.currentUser ? {
+      id: DB.currentUser.id || null,
+      name: [DB.currentUser.fname, DB.currentUser.lname].filter(Boolean).join(' ') || DB.currentUser.name || null,
+      role: DB.currentRole || null,
+      email: DB.currentUser.email || null,
+    } : null,
+    summary: {
+      employees: Array.isArray(DB.employees) ? DB.employees.length : 0,
+      attendance_records: Array.isArray(DB.attendance) ? DB.attendance.length : 0,
+      leave_requests: Array.isArray(DB.leaves) ? DB.leaves.length : 0,
+      departments: Array.isArray(DB.departments) ? DB.departments.length : 0,
+      announcements: Array.isArray(DB.announcements) ? DB.announcements.length : 0,
+      holidays: Array.isArray(DB.holidays) ? DB.holidays.length : 0,
+    },
+    data: {
+      employees: Array.isArray(DB.employees) ? DB.employees : [],
+      departments: Array.isArray(DB.departments) ? DB.departments : [],
+      attendance: Array.isArray(DB.attendance) ? DB.attendance : [],
+      live_attendance: Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [],
+      leaves: Array.isArray(DB.leaves) ? DB.leaves : [],
+      leave_types: Array.isArray(DB.leaveTypes) ? DB.leaveTypes : [],
+      leave_policies: Array.isArray(DB.leavePolicies) ? DB.leavePolicies : [],
+      leave_balances: Array.isArray(DB.leaveBalances) ? DB.leaveBalances : [],
+      regulations: Array.isArray(DB.regulations) ? DB.regulations : [],
+      announcements: Array.isArray(DB.announcements) ? DB.announcements : [],
+      holidays: Array.isArray(DB.holidays) ? DB.holidays : [],
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `workpulse_transfer_data_${stamp}.json`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Transfer data package downloaded.','green');
+}
+
 function printPage(){
   window.print();
 }

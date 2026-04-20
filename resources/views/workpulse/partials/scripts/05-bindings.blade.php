@@ -45,6 +45,7 @@ window.showConfirm = showConfirm;
 window.exportAttendanceCSV = exportAttendanceCSV;
 window.exportLeaveCSV = exportLeaveCSV;
 window.exportEmployeeCSV = exportEmployeeCSV;
+window.exportTransferData = exportTransferData;
 window.printPage = printPage;
 window.wpReload = wpReload;
 

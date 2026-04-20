@@ -1874,6 +1874,28 @@ function pageCompany(){
         <button class="btn btn-sm">Download Log</button>
       </div>
     </div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">Transfer Data</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Move company data safely by downloading a full transfer package or exporting module-wise files for another system.</div>
+      </div>
+      <span class="badge bg-blue">Admin Tool</span>
+    </div>
+    <div class="g4" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub">Ready for transfer</div></div>
+      <div class="stat-card"><div class="stat-label">Attendance Rows</div><div class="stat-val">${DB.attendance.length}</div><div class="stat-sub">Daily records included</div></div>
+      <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
+      <div class="stat-card"><div class="stat-label">Departments</div><div class="stat-val">${DB.departments.length}</div><div class="stat-sub">Org structure snapshot</div></div>
+    </div>
+    <div class="alert al-info"><span>⇄</span><div><strong>Transfer package:</strong> includes employees, departments, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+      <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
+      <button class="btn" onclick="window.exportEmployeeCSV()">Employees CSV</button>
+      <button class="btn" onclick="window.exportAttendanceCSV()">Attendance CSV</button>
+      <button class="btn" onclick="window.exportLeaveCSV()">Leave CSV</button>
+    </div>
   </div>`;
 }
 
