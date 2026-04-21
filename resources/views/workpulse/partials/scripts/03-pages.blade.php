@@ -43,6 +43,7 @@ async function wpReload(){
       DB.regulations = data.regulations || [];
       DB.announcements = data.announcements || [];
       DB.holidays = data.holidays || [];
+      DB.events = data.events || [];
       DB.notifications = data.notifications || [];
       DB.notificationCount = data.notificationCount || 0;
     }
@@ -64,13 +65,18 @@ async function wpReload(){
   }
 }
 
-async function refreshMyLeaveBalancesSnapshot(pageId){
+async function refreshEmployeeWorkspaceSnapshot(pageId){
   if(DB.currentRole !== 'employee' || !DB.currentUser) return;
 
   try{
-    const data = await wpApi('/api/leave/my/balance?year='+new Date().getFullYear(), {method:'GET', headers:{}});
-    DB.leaveBalances = data.balances || [];
+    const data = await wpApi('/api/bootstrap', {method:'GET', headers:{}});
+    DB.leaveBalances = data.leaveBalances || [];
+    DB.announcements = data.announcements || [];
+    DB.events = data.events || [];
+    DB.notifications = data.notifications || [];
+    DB.notificationCount = data.notificationCount || 0;
     if(window.__workpulseCurrentPage === pageId){
+      if(typeof updateNotificationUI === 'function') updateNotificationUI();
       showPage(pageId);
     }
   }catch(e){}
@@ -338,6 +344,7 @@ function clonePunchState(){
     breakOutTime: ps.breakOutTime ? new Date(ps.breakOutTime.getTime()) : null,
     breakInTime: ps.breakInTime ? new Date(ps.breakInTime.getTime()) : null,
     totalBreakMs: ps.totalBreakMs || 0,
+    currentSessionBreakMs: ps.currentSessionBreakMs || 0,
     sessionLogs: Array.isArray(ps.sessionLogs) ? ps.sessionLogs.map(item => ({...item})) : [],
   };
 }
@@ -362,6 +369,7 @@ async function punchIn(){
   ps.clockOutTime = null;
   ps.breakOutTime = null;
   ps.breakInTime = null;
+  ps.currentSessionBreakMs = 0;
   ps.sessionLogs.push({event:'Clock In',time:actionLabel});
 
   const today = getTodayLocalDate();
@@ -392,6 +400,7 @@ async function punchOut(){
   ps.clockOutTime = actionTime;
   ps.breakOutTime = null;
   ps.breakInTime = null;
+  ps.currentSessionBreakMs = 0;
   ps.sessionLogs.push({event:'Clock Out',time:actionLabel});
 
   const today = getTodayLocalDate();
@@ -447,6 +456,7 @@ async function breakIn(){
   ps.onBreak = false;
   const diff = actionTime - ps.breakOutTime;
   ps.totalBreakMs += diff;
+  ps.currentSessionBreakMs += diff;
   ps.breakOutTime = null;
   ps.breakInTime = actionTime;
   ps.sessionLogs.push({event:'Break In',time:actionLabel});
@@ -511,17 +521,19 @@ function submitLeave(){
   const typeCode=document.getElementById('lv-type').value;
   const from=document.getElementById('lv-from').value;
   const to=document.getElementById('lv-to').value;
+  const durationType=document.getElementById('lv-duration').value || 'full_day';
+  const halfDaySlot=document.getElementById('lv-half-slot').value || 'first_half';
   const reason=document.getElementById('lv-reason').value;
   const handover=document.getElementById('lv-handover').value;
   if(!from||!to||!reason){ showToast('Please fill all required fields','red'); return; }
-  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
   wpApi('/api/leave/apply', {
     method:'POST',
     body: JSON.stringify({
       leave_type_code: typeCode || 'annual',
       from_date: from,
       to_date: to,
-      days,
+      duration_type: durationType,
+      half_day_slot: durationType === 'half_day' ? halfDaySlot : null,
       reason,
       handover_to: handover,
     })
@@ -536,11 +548,48 @@ function submitLeave(){
   showToast('Leave request submitted!','green');
 }
 
+function formatLeaveDuration(leave){
+  if((leave?.durationType || leave?.duration_type) === 'half_day'){
+    return (leave?.halfDaySlot || leave?.half_day_slot) === 'second_half' ? 'Second Half (0.5)' : 'First Half (0.5)';
+  }
+  const days = Number(leave?.days || 0);
+  return `${days} day${days===1 ? '' : 's'}`;
+}
+
+function formatLeaveBalanceValue(value){
+  const num = Number(value || 0);
+  if(!Number.isFinite(num)) return '0';
+  const roundedHalf = Math.round(num * 2) / 2;
+  if(Math.abs(num - roundedHalf) < 0.001 && !Number.isInteger(roundedHalf)){
+    return roundedHalf.toFixed(1);
+  }
+  return String(Math.round(num));
+}
+
+function toggleLeaveDurationFields(){
+  const duration = document.getElementById('lv-duration')?.value || 'full_day';
+  const wrap = document.getElementById('lv-half-slot-wrap');
+  const toInput = document.getElementById('lv-to');
+  const fromInput = document.getElementById('lv-from');
+  if(wrap) wrap.style.display = duration === 'half_day' ? 'block' : 'none';
+  if(duration === 'half_day' && fromInput && toInput && fromInput.value){
+    toInput.value = fromInput.value;
+  }
+  calcLeaveDays();
+}
+
 function calcLeaveDays(){
   const from=document.getElementById('lv-from')?.value;
   const to=document.getElementById('lv-to')?.value;
+  const duration=document.getElementById('lv-duration')?.value || 'full_day';
+  const toInput=document.getElementById('lv-to');
   if(from&&to){
-    const days=Math.max(0,Math.round((new Date(to)-new Date(from))/86400000)+1);
+    if(duration === 'half_day' && toInput){
+      toInput.value = from;
+    }
+    const days=duration === 'half_day'
+      ? 0.5
+      : Math.max(0,Math.round((new Date(to)-new Date(from))/86400000)+1);
     const c=document.getElementById('lv-calc');
     const d=document.getElementById('lv-days');
     if(c&&d){c.style.display='block';d.textContent=days;}
@@ -548,6 +597,8 @@ function calcLeaveDays(){
 }
 
 document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
+document.getElementById('lv-duration')?.addEventListener('change',toggleLeaveDurationFields);
+toggleLeaveDurationFields();
 syncLeaveTypeOptions();
 syncDepartmentOptions('ne-dept');
 syncDepartmentOptions('ee-dept');
@@ -568,6 +619,152 @@ function submitRegulation(){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('regulationModal');
   showToast('Regulation request submitted!','green');
+}
+
+function getRegulationDateRange(){
+  const from = document.getElementById('reg-from')?.value;
+  const to = document.getElementById('reg-to')?.value || from;
+  if(!from || !to) return [];
+  const dates = [];
+  let cursor = new Date(from+'T00:00:00');
+  const end = new Date(to+'T00:00:00');
+  while(cursor <= end){
+    dates.push(cursor.toISOString().split('T')[0]);
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
+}
+
+function openRegulationModal(){
+  const user = DB.currentUser || {};
+  const today = getTodayLocalDate();
+  const employeeField = document.getElementById('reg-employee');
+  const fromField = document.getElementById('reg-from');
+  const toField = document.getElementById('reg-to');
+  const rows = document.getElementById('reg-rows');
+  if(employeeField) employeeField.value = `${user.fname || ''} ${user.lname || ''}`.trim() || user.name || '-';
+  if(fromField) fromField.value = fromField.value || today;
+  if(toField) toField.value = toField.value || today;
+  if(rows){
+    rows.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Choose a date range and click Fetch Attendance.</td></tr>`;
+  }
+  openModal('regulationModal');
+}
+
+function toggleRegulationRow(checkbox){
+  const row = checkbox.closest('tr');
+  if(!row) return;
+  row.querySelectorAll('input[data-reg-edit="1"], textarea[data-reg-edit="1"]').forEach(field => {
+    field.disabled = !checkbox.checked;
+  });
+}
+
+function removeRegulationRow(button){
+  const row = button.closest('tr');
+  if(row) row.remove();
+  const rows = document.getElementById('reg-rows');
+  if(rows && !rows.querySelector('tr[data-reg-date]')){
+    rows.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">No rows left. Fetch attendance again to rebuild the list.</td></tr>`;
+  }
+}
+
+async function loadRegulationRows(){
+  const dates = getRegulationDateRange();
+  const tbody = document.getElementById('reg-rows');
+  const user = DB.currentUser || {};
+  if(!tbody) return;
+  if(!dates.length){
+    showToast('Select a valid date range first','red');
+    return;
+  }
+
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Loading attendance records...</td></tr>`;
+
+  try{
+    const query = new URLSearchParams({
+      from,
+      to,
+      employee_code: user.id || '',
+    });
+    const data = await wpApi('/api/attendance/records?'+query.toString(), {method:'GET'});
+    const attendance = Array.isArray(data.rows) ? data.rows : [];
+
+    tbody.innerHTML = dates.map((date, index) => {
+      const att = attendance.find(a => a.date === date) || {};
+      const oldIn = att.in || '--:--';
+      const oldOut = att.out || '--:--';
+      return `<tr data-reg-date="${date}">
+      <td><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" onchange="window.toggleRegulationRow(this)"><span>${index + 1}</span></label></td>
+      <td>${formatDate(date)}</td>
+      <td>${oldIn} - ${oldOut}</td>
+      <td><input type="date" class="fi" value="${date}" data-reg-edit="1" data-field="inDate" disabled></td>
+      <td><input type="time" class="fi" value="${att.in || ''}" data-reg-edit="1" data-field="inTime" disabled></td>
+      <td><input type="date" class="fi" value="${date}" data-reg-edit="1" data-field="outDate" disabled></td>
+      <td><input type="time" class="fi" value="${att.out || ''}" data-reg-edit="1" data-field="outTime" disabled></td>
+      <td><textarea class="fi" rows="2" placeholder="Reason / remarks" data-reg-edit="1" data-field="reason" disabled></textarea></td>
+      <td><button type="button" class="btn btn-sm" onclick="window.removeRegulationRow(this)">Remove</button></td>
+    </tr>`;
+    }).join('');
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--red);padding:24px;">Could not fetch attendance records.</td></tr>`;
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+async function submitRegulation(){
+  const type=document.getElementById('reg-type').value;
+  const rows = Array.from(document.querySelectorAll('#reg-rows tr[data-reg-date]'));
+  const selected = rows.filter(row => row.querySelector('input[type="checkbox"]')?.checked);
+  if(!selected.length){ showToast('Select at least one row to submit','red'); return; }
+
+  const payloads = [];
+  for(const row of selected){
+    const date = row.getAttribute('data-reg-date');
+    const oldLabel = (row.children[2]?.textContent || '').trim();
+    const inDate = row.querySelector('[data-field="inDate"]')?.value || date;
+    const inTime = row.querySelector('[data-field="inTime"]')?.value || '';
+    const outDate = row.querySelector('[data-field="outDate"]')?.value || date;
+    const outTime = row.querySelector('[data-field="outTime"]')?.value || '';
+    const reason = row.querySelector('[data-field="reason"]')?.value.trim() || '';
+
+    if(!reason){
+      showToast('Each selected row needs remarks','red');
+      return;
+    }
+
+    if(!inTime && !outTime){
+      showToast('Add at least one requested time in each selected row','red');
+      return;
+    }
+
+    const requestedParts = [];
+    if(inTime) requestedParts.push(`In ${inDate} ${inTime}`);
+    if(outTime) requestedParts.push(`Out ${outDate} ${outTime}`);
+
+    payloads.push({
+      date,
+      type,
+      original_value: oldLabel || '-',
+      requested_value: requestedParts.join(' | '),
+      reason,
+    });
+  }
+
+  try{
+    for(const payload of payloads){
+      await wpApi('/api/attendance/regulations', {method:'POST', body: JSON.stringify(payload)});
+    }
+    await wpReload();
+    closeModal('regulationModal');
+    showToast(`${payloads.length} regulation request(s) submitted`,'green');
+    if(window.__workpulseCurrentPage === 'attendance' || window.__workpulseCurrentPage === 'emp-attendance'){
+      showPage(window.__workpulseCurrentPage);
+    }
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
 }
 
 function submitAnnouncement(){
@@ -597,16 +794,33 @@ function submitAddEmployee(){
   const email=document.getElementById('ne-email').value;
   const password=document.getElementById('ne-password').value;
   const phone=document.getElementById('ne-phone').value;
+  const personalEmail=document.getElementById('ne-personal-email').value;
   const dept=document.getElementById('ne-dept').value;
   const desg=document.getElementById('ne-desg').value;
   const doj=document.getElementById('ne-doj').value;
   const dop=document.getElementById('ne-dop').value;
   const lwd=document.getElementById('ne-lwd').value;
+  const confirmationDate=document.getElementById('ne-confirmation-date').value;
   const type=document.getElementById('ne-type').value;
+  const workLocation=document.getElementById('ne-work-location').value;
   const manager=document.getElementById('ne-manager').value;
+  const dob=document.getElementById('ne-dob').value;
+  const gender=document.getElementById('ne-gender').value;
+  const cnic=document.getElementById('ne-cnic').value;
+  const passportNo=document.getElementById('ne-passport-no').value;
+  const address=document.getElementById('ne-address').value;
+  const maritalStatus=document.getElementById('ne-marital-status').value;
+  const blood=document.getElementById('ne-blood').value;
+  const kin=document.getElementById('ne-kin').value;
+  const kinRel=document.getElementById('ne-kinRel').value;
+  const kinPhone=document.getElementById('ne-kinPhone').value;
   const basic=document.getElementById('ne-basic').value;
   const house=document.getElementById('ne-house').value;
   const transport=document.getElementById('ne-transport').value;
+  const payPeriod=document.getElementById('ne-pay-period').value;
+  const salaryStartDate=document.getElementById('ne-salary-start-date').value;
+  const contribution=document.getElementById('ne-contribution').value;
+  const otherDeductions=document.getElementById('ne-other-deductions').value;
   const tax=document.getElementById('ne-tax').value;
   const bank=document.getElementById('ne-bank').value;
   const acct=document.getElementById('ne-acct').value;
@@ -620,17 +834,34 @@ function submitAddEmployee(){
   formData.append('email', email);
   if(password) formData.append('password', password);
   if(phone) formData.append('phone', phone);
+  if(personalEmail) formData.append('personal_email', personalEmail);
   formData.append('dept', dept);
   formData.append('desg', desg);
   formData.append('doj', doj);
   if(dop) formData.append('dop', dop);
   if(lwd) formData.append('lwd', lwd);
+  if(confirmationDate) formData.append('confirmation_date', confirmationDate);
   if(type) formData.append('type', type);
+  if(workLocation) formData.append('work_location', workLocation);
   if(manager) formData.append('manager', manager);
   formData.append('shift_id', shiftId || '');
+  if(dob) formData.append('dob', dob);
+  if(gender) formData.append('gender', gender);
+  if(cnic) formData.append('cnic', cnic);
+  if(passportNo) formData.append('passport_no', passportNo);
+  if(address) formData.append('address', address);
+  if(maritalStatus) formData.append('marital_status', maritalStatus);
+  if(blood) formData.append('blood', blood);
+  if(kin) formData.append('kin', kin);
+  if(kinRel) formData.append('kinRel', kinRel);
+  if(kinPhone) formData.append('kinPhone', kinPhone);
   if(basic) formData.append('basic', basic);
   if(house) formData.append('house', house);
   if(transport) formData.append('transport', transport);
+  if(payPeriod) formData.append('pay_period', payPeriod);
+  if(salaryStartDate) formData.append('salary_start_date', salaryStartDate);
+  if(contribution) formData.append('contribution', contribution);
+  if(otherDeductions) formData.append('other_deductions', otherDeductions);
   if(tax) formData.append('tax', tax);
   if(bank) formData.append('bank', bank);
   if(acct) formData.append('acct', acct);
@@ -644,7 +875,7 @@ function submitAddEmployee(){
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
-  ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-desg','ne-manager','ne-dop','ne-lwd','ne-cnic-document','ne-basic','ne-house','ne-transport','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-personal-email','ne-work-location','ne-desg','ne-manager','ne-dop','ne-lwd','ne-confirmation-date','ne-cnic-document','ne-dob','ne-gender','ne-cnic','ne-passport-no','ne-address','ne-marital-status','ne-blood','ne-kin','ne-kinRel','ne-kinPhone','ne-basic','ne-house','ne-transport','ne-pay-period','ne-salary-start-date','ne-contribution','ne-other-deductions','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
   if(document.getElementById('ne-shift')) document.getElementById('ne-shift').value='';
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
@@ -672,7 +903,7 @@ function openApproval(leaveId){
       <div class="irow"><span class="ikey">Employee</span><span class="ival">${lv.empName}</span></div>
       <div class="irow"><span class="ikey">Department</span><span class="ival">${lv.dept}</span></div>
       <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${lv.type}</span></div>
-      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} → ${formatDate(lv.to)} (${lv.days} day${lv.days>1?'s':''})</span></div>
+      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} → ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
       <div class="irow"><span class="ikey">Reason</span><span class="ival">${lv.reason}</span></div>
       <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'—'}</span></div>
     </div>`;
@@ -693,8 +924,8 @@ function approveLeave(decision){
 async function markAllNotificationsRead(){
   await wpApi('/api/me/notifications/read-all', {method:'PATCH'});
   await wpReload();
-  if(window.__workpulseCurrentPage === 'emp-notifications'){
-    showPage('emp-notifications');
+  if(window.__workpulseCurrentPage === 'emp-notifications' || window.__workpulseCurrentPage === 'notifications'){
+    showPage(window.__workpulseCurrentPage);
   }
 }
 
@@ -1042,7 +1273,7 @@ function pageAttendance(){
       <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
       <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
       <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours</span><span class="ival" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</span></div>
+      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" id="work-hours-live">${getLiveWorkedTimeLabel()}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
       <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 – 20:00</span></div>
     </div>
@@ -1050,14 +1281,14 @@ function pageAttendance(){
   ${buildTabs('att',[
     {id:'log',label:'Daily Log',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
-      <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openModal('regulationModal')">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button></div></div>
+      <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button></div></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Hours</th><th>OT</th><th>Status</th></tr></thead>
       <tbody>${logRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div></div>`},
     {id:'today',label:"Today's Log",content:`
       <div class="card"><div class="card-title" style="margin-bottom:14px;">Session Activity</div>
       <div class="tl">${logTimeline}</div></div>`},
     {id:'regulation',label:'Regulation Requests',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('regulationModal')">New Request</button></div>
+      <div class="card"><div class="card-hdr"><div class="card-title">Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openRegulationModal()">New Request</button></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Original</th><th>Requested</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${regRows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No regulation requests</td></tr>'}</tbody></table></div></div>`},
     {id:'monthly',label:'Monthly',content:`
@@ -1077,7 +1308,7 @@ function pageAttendance(){
 function cancelRegulation(id){
   wpApi('/api/attendance/regulations/'+encodeURIComponent(id), {method:'DELETE'})
     .then(()=>wpReload())
-    .then(()=>{ showToast('Regulation request cancelled','amber'); showPage('attendance'); })
+    .then(()=>{ showToast('Regulation request cancelled','amber'); showPage(DB.currentRole === 'employee' ? 'emp-attendance' : 'attendance'); })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
@@ -1152,7 +1383,7 @@ function pageLeave(){
     <tr>
       <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${l.empName.split(' ').map(x=>x[0]).join('')}</div>
       <div class="ucell-info"><div class="n">${l.empName}</div><div class="s">${l.dept}</div></div></div></td>
-      <td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${l.days}</td><td>${l.reason}</td>
+      <td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td><td>${l.reason}</td>
       <td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm bg-green" onclick="openApproval('${l.id}')">Review</button>
@@ -1162,7 +1393,7 @@ function pageLeave(){
   const allRows=all.map(l=>`
     <tr>
       <td>${l.empName}</td><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td>
-      <td>${l.days}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td>
+      <td>${formatLeaveDuration(l)}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td>
       <td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
     </tr>`).join('');
 
@@ -1180,7 +1411,7 @@ function pageLeave(){
           const percent = Math.max(0, Math.min(100, Math.round((safeRemaining / safeTotal) * 100)));
           return `
         <div class="ltr">
-          <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${safeRemaining} / ${safeTotal} days remaining</span></div>
+          <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${formatLeaveBalanceValue(safeRemaining)} / ${formatLeaveBalanceValue(safeTotal)} days remaining</span></div>
           <div class="prog-bar"><div class="prog-fill" style="width:${percent}%;background:${c};"></div></div>
         </div>`;
         }).join('')}
@@ -1213,11 +1444,11 @@ function pageLeave(){
   return buildTabs('lv',[
     {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
       <tbody>${pendingRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
     {id:'all',label:'All Requests',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
       <tbody>${allRows}</tbody></table></div></div>`},
     {id:'balance',label:'Leave Balances',content:balanceHTML},
     {id:'types',label:'Leave Types',content:`
@@ -1482,12 +1713,39 @@ function pageOrgChart(){
   </div>`;
 }
 
+function getAudienceAnnouncementEvents(){
+  return (Array.isArray(DB.announcements) ? DB.announcements : []).map(item => ({
+    date: item.date,
+    label: item.title,
+    description: item.msg,
+    badge: item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : item.cat === 'Important' ? 'bg-red' : 'bg-blue',
+    type: 'announcement',
+  }));
+}
+
+function getCalendarEventFeed(){
+  const companyEvents = (Array.isArray(DB.events) ? DB.events : [])
+    .map(event => ({
+      date: String(event.start || event.date || '').slice(0, 10),
+      label: event.title || 'Event',
+      description: event.desc || '',
+      badge: event.type === 'holiday' ? 'bg-amber' : event.type === 'meeting' ? 'bg-purple' : 'bg-blue',
+      type: 'event',
+    }))
+    .filter(event => event.date);
+
+  return companyEvents
+    .concat(getAudienceAnnouncementEvents())
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
 function pageCalendar(empView=false){
   const today=new Date();
   const month=today.getMonth(), year=today.getFullYear();
   const firstDay=(new Date(year,month,1).getDay()+6)%7;
   const daysInMonth=new Date(year,month+1,0).getDate();
   const todayDate=today.getDate();
+  const events = getCalendarEventFeed();
 
   let calDays='';
   for(let i=0;i<firstDay;i++) calDays+=`<div class="cal-day"></div>`;
@@ -1496,11 +1754,13 @@ function pageCalendar(empView=false){
     const isToday=d===todayDate;
     const isHoliday=DB.holidays.some(h=>h.date===dateStr);
     const hasLeave=DB.leaves.some(l=>l.status==='Approved'&&l.from<=dateStr&&l.to>=dateStr);
-    const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':'';
-    calDays+=`<div class="cal-day ${cls}" title="${isHoliday?DB.holidays.find(h=>h.date===dateStr).name:''}">${d}</div>`;
+    const hasEvent=events.some(ev=>ev.date===dateStr);
+    const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':hasEvent?'cal-event':'';
+    const title=isHoliday ? DB.holidays.find(h=>h.date===dateStr).name : (events.filter(ev=>ev.date===dateStr).map(ev=>ev.label).join(' | ') || '');
+    calDays+=`<div class="cal-day ${cls}" title="${title}">${d}</div>`;
   }
 
-  const events=[
+  const legacyEvents=[
     {date:'Today',label:'🎂 Sara Ahmed Birthday',badge:'bg-amber'},
     {date:'Apr 20–22',label:'🏖️ Eid-ul-Fitr Holiday',badge:'bg-amber'},
     {date:'Apr 22',label:'📋 Q2 Town Hall',badge:'bg-purple'},
@@ -1509,6 +1769,7 @@ function pageCalendar(empView=false){
   ];
 
   return `
+  ${empView ? renderEmployeeWorkspaceTabs('emp-calendar') : ''}
   <div class="g2">
     <div class="card">
       <div class="card-hdr">
@@ -1522,13 +1783,14 @@ function pageCalendar(empView=false){
       <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--green-bg);border:1px solid var(--green);"></div>Leave</div>
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--amber-bg);border:1px solid var(--amber);"></div>Holiday</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--purple-bg);border:1px solid var(--purple);"></div>Events & Announcements</div>
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:9px;height:9px;border-radius:2px;background:var(--accent);"></div>Today</div>
       </div>
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Events & Reminders</div>${!empView?`<button class="btn btn-sm btn-primary">+ Event</button>`:''}</div>
-      ${events.map(ev=>`
-      <div class="irow"><div><strong style="font-size:13px;">${ev.label}</strong></div><span class="badge ${ev.badge}">${ev.date}</span></div>`).join('')}
+      ${events.slice(0,6).map(ev=>`
+      <div class="irow"><div><strong style="font-size:13px;">${ev.label}</strong><div style="font-size:11px;color:var(--muted);margin-top:3px;">${ev.description || (ev.type==='announcement'?'Audience announcement':'Company event')}</div></div><span class="badge ${ev.badge}">${formatDate(ev.date)}</span></div>`).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
       <div style="margin-top:14px;">
         <div class="card-title" style="margin-bottom:10px;">National Holidays</div>
         ${DB.holidays.slice(0,5).map(h=>`
@@ -2039,6 +2301,20 @@ function pageCompany(){
 // ══════════════════════════════════════════════════
 //  ██████ EMPLOYEE PAGES ██████
 // ══════════════════════════════════════════════════
+function renderEmployeeWorkspaceTabs(activePage){
+  const tabs = [
+    {label:'Dashboard', page:'emp-dashboard'},
+    {label:'My Profile', page:'emp-profile'},
+    {label:'Team Profile', page:'emp-team'},
+    {label:'Attendance', page:'emp-attendance'},
+    {label:'Calendar', page:'emp-calendar'},
+  ];
+
+  return `<div class="emp-pp-tabs">
+    ${tabs.map(tab => `<button class="${tab.page===activePage ? 'active' : ''}" ${tab.page===activePage ? '' : `onclick="window.showPage('${tab.page}')"`}>${tab.label}</button>`).join('')}
+  </div>`;
+}
+
 function pageEmpDashboard(){
   try{
     const u=DB.currentUser || {};
@@ -2064,29 +2340,24 @@ function pageEmpDashboard(){
     }));
     const whoOff = leaves.filter(l=>l.status==='Approved' && l.from<=today && l.to>=today).length;
     const myLogs = attendance.filter(a=>a.empId===u.id).slice(0,5);
+    const latestAnnouncements = (Array.isArray(DB.announcements) ? DB.announcements : []).slice(0,3);
     const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):(shiftCompleted?'Completed':(todayRec.out?'Clocked Out':'Not Started'));
 
     return `
-  <div class="emp-pp-tabs">
-    <button class="active">Dashboard</button>
-    <button onclick="window.showPage('emp-profile')">My Profile</button>
-    <button onclick="window.showPage('emp-team')">Team Profile</button>
-    <button onclick="window.showPage('emp-attendance')">Attendance</button>
-    <button onclick="window.showPage('emp-calendar')">Calendar</button>
-  </div>
+  ${renderEmployeeWorkspaceTabs('emp-dashboard')}
 
   <div class="emp-pp-layout">
     <div class="emp-pp-left">
       <div class="emp-pp-card emp-pp-clock">
         <div>
           <div class="emp-pp-title">Welcome ${u.fname}</div>
-          <div class="emp-pp-sub">Clock IN / Clock Out</div>
+          <div class="emp-pp-sub">Today's worked hours</div>
           <div class="emp-pp-clock-lines">
             <div><strong>Clock In:</strong> ${todayRec.in||'--:--'}</div>
             <div><strong>Clock Out:</strong> ${todayRec.out||'--:--'}</div>
             <div><strong>Status:</strong> ${statusLabel}</div>
           </div>
-          <div class="emp-pp-hours" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</div>
+          <div class="emp-pp-hours" id="work-hours-live">${getLiveWorkedTimeLabel()}</div>
           <div class="emp-pp-actions">
             ${!ps.punchedIn && !shiftCompleted
               ? `<button class="btn btn-sm btn-primary" onclick="punchIn()">Clock In</button>`
@@ -2109,9 +2380,9 @@ function pageEmpDashboard(){
             <div class="emp-pp-leaf">
               <div>
                 <span>${card.name}</span>
-                <div class="emp-pp-leaf-meta">Quota: ${card.quota} Days · Used: ${card.used} Days</div>
+                <div class="emp-pp-leaf-meta">Quota: ${formatLeaveBalanceValue(card.quota)} Days · Used: ${formatLeaveBalanceValue(card.used)} Days</div>
               </div>
-              <strong>${card.left} Left</strong>
+              <strong>${formatLeaveBalanceValue(card.left)} Left</strong>
             </div>
           `).join('')}
         </div>
@@ -2141,6 +2412,18 @@ function pageEmpDashboard(){
         <div class="card-hdr"><div class="emp-pp-title">Upcoming Birthday</div></div>
         <div class="emp-pp-empty">${employees.filter(e=>String(e.dob||'').slice(5)===today.slice(5)).length ? 'Birthday alerts available' : 'No birthday right now'}</div>
       </div>
+      <div class="emp-pp-card">
+        <div class="card-hdr"><div class="emp-pp-title">Latest Announcements</div><button class="btn btn-sm" onclick="window.showPage('emp-announcements')">View All</button></div>
+        ${latestAnnouncements.map(item=>`
+          <div class="irow" style="align-items:flex-start;">
+            <div>
+              <div style="font-size:13px;font-weight:600;">${item.title}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">${item.msg}</div>
+            </div>
+            <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatDate(item.date)}</span>
+          </div>
+        `).join('') || `<div class="emp-pp-empty">No announcements for your audience right now</div>`}
+      </div>
     </div>
   </div>`;
   }catch(e){
@@ -2164,13 +2447,14 @@ function pageEmpAttendance(){
     <td>${a.in||'—'}</td><td>${a.breakOut||'—'}</td><td>${a.breakIn||'—'}</td><td>${a.out||'—'}</td>
     <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
     <td>${statusBadge(a.late?'Late':a.status)}</td>
-    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openModal('regulationModal')">Regulate</button>`:'—'}</td>
+    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'—'}</td>
     </tr>`).join('');
 
   const regRows=DB.regulations.filter(r=>r.empId===u.id).map(r=>`
     <tr><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.orig}</td><td>${r.req}</td><td>${r.reason}</td><td>${statusBadge(r.status)}</td></tr>`).join('');
 
   return `
+  ${renderEmployeeWorkspaceTabs('emp-attendance')}
   <div class="g2" style="margin-bottom:18px;">
     <div class="clock-widget">
       <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
@@ -2189,20 +2473,20 @@ function pageEmpAttendance(){
       <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
       <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
       <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours</span><span class="ival" id="work-hours-live">${ps.punchedIn?'Counting...':calcWorkHours(todayRec)}</span></div>
+      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" id="work-hours-live">${getLiveWorkedTimeLabel()}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
     </div>
   </div>
   ${buildTabs('ema',[
     {id:'log',label:'My Log',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
-        <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openModal('regulationModal')">+ Regulation</button></div>
+        <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button></div>
       </div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Break Out</th><th>Break In</th><th>Out</th><th>Hours</th><th>OT</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${logRows||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div>
     </div>`},
     {id:'reg',label:'Regulation Requests',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">My Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('regulationModal')">+ New</button></div>
+      <div class="card"><div class="card-hdr"><div class="card-title">My Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openRegulationModal()">+ New</button></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Original</th><th>Requested</th><th>Reason</th><th>Status</th></tr></thead>
       <tbody>${regRows||'<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No requests</td></tr>'}</tbody></table></div>
     </div>`},
@@ -2217,7 +2501,7 @@ function pageEmpLeaves(){
     ? leaveBalanceList.map(balance => [balance.name, balance.remaining, balance.allocated || balance.remaining || 1, 'var(--accent)'])
     : [['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']];
   const rows=myLeaves.map(l=>`
-    <tr><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${l.days}</td>
+    <tr><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td>
     <td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
 
   return `
@@ -2226,7 +2510,7 @@ function pageEmpLeaves(){
       <div class="card-hdr"><div class="card-title">My Leave Balance 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
       ${leaveBalances.map(([n,r,t,c])=>`
       <div class="ltr">
-        <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${r}/${t} days remaining</span></div>
+        <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${formatLeaveBalanceValue(r)}/${formatLeaveBalanceValue(t)} days remaining</span></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(r/t*100)}%;background:${c};"></div></div>
       </div>`).join('')}
       <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: Jan–Dec. Carry forward: max 5 days.</div>
@@ -2247,12 +2531,26 @@ function pageEmpLeaves(){
   </div>`;
 }
 
-function pageEmpNotifications(){
+function pageNotifications(employeeView=false){
   const notifications = Array.isArray(DB.notifications) ? DB.notifications : [];
   const unreadCount = Number(DB.notificationCount || 0);
+  const refreshPage = employeeView ? 'emp-notifications' : 'notifications';
+  const heroSub = employeeView
+    ? 'Approval updates for your leave requests and attendance regulation requests appear here automatically.'
+    : 'New employee requests and review-related updates appear here for admins and HR.';
+  const emptyText = employeeView
+    ? 'No notifications yet. Once admin reviews your leave or attendance requests, updates will appear here.'
+    : 'No notifications yet. New leave and attendance regulation requests will appear here.';
+
   const items = notifications.map(notification => {
     const toneClass = notification.isRead ? '' : ' unread';
-    const badge = notification.type === 'leave_review' ? 'Leave' : notification.type === 'regulation_review' ? 'Attendance' : 'Update';
+    const badgeMap = {
+      leave_review: 'Leave',
+      regulation_review: 'Attendance',
+      regulation_request_submitted: 'Request',
+      leave_request_submitted: 'Request',
+    };
+    const badge = badgeMap[notification.type] || 'Update';
     const message = notification.message || 'You have a new update.';
 
     return `<div class="notif-card${toneClass}">
@@ -2271,7 +2569,7 @@ function pageEmpNotifications(){
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
     <div class="hero-title">Notifications</div>
-    <div class="hero-sub">Approval updates for your leave requests and attendance regulation requests appear here automatically.</div>
+    <div class="hero-sub">${heroSub}</div>
     <div class="hero-chip-row">
       <div class="hero-chip"><div class="k">Unread</div><div class="v">${unreadCount}</div></div>
       <div class="hero-chip"><div class="k">Total</div><div class="v">${notifications.length}</div></div>
@@ -2281,12 +2579,16 @@ function pageEmpNotifications(){
     <div class="card-hdr">
       <div class="card-title">Recent Updates</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('emp-notifications'))">Refresh</button>
+        <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('${refreshPage}'))">Refresh</button>
         <button class="btn btn-sm btn-primary" onclick="window.markAllNotificationsRead().catch(e=>showToast(e?.message||'Failed','red'))" ${notifications.length ? '' : 'disabled'}>Mark All Read</button>
       </div>
     </div>
-    <div class="notif-list">${items || `<div class="notif-empty">No notifications yet. Once admin reviews your leave or attendance requests, updates will appear here.</div>`}</div>
+    <div class="notif-list">${items || `<div class="notif-empty">${emptyText}</div>`}</div>
   </div>`;
+}
+
+function pageEmpNotifications(){
+  return pageNotifications(true);
 }
 
 function pageEmpProfile(){
@@ -2332,175 +2634,257 @@ function pageEmpProfile(){
   </div>`;
 }
 
-function pageEmpProfileDetail(){
-  const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
-  const canSeeConfidential = DB.currentRole === 'admin';
-  const gross=(e.basic||0)+(e.house||0)+(e.transport||0);
-  const net=gross-(e.tax||0);
-  const reportingTeam=DB.employees.filter(emp=>emp.manager===`${e.fname} ${e.lname}` && emp.id!==e.id).slice(0,3);
-  const leaveBalances=[
-    {name:'Annual Leave',remaining:3,entitled:4,availed:1},
-    {name:'Mobile Hours',remaining:100,entitled:100,availed:0},
-    {name:'Unpaid Leave',remaining:30,entitled:30,availed:0},
-    {name:'Casual Leave',remaining:9,entitled:10,availed:1},
-  ];
-  const recentAttendance=DB.attendance.filter(a=>a.empId===e.id).slice(0,5);
-  const canManageEmployeeDocs = canSeeConfidential;
-  const cnicDocument = e.cnicDocumentUrl
-    ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><a class="btn btn-sm btn-primary" href="${e.cnicDocumentUrl}" target="_blank" rel="noopener">Open CNIC Document</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${e.id}')">Delete CNIC</button>` : ''}</div>`
-    : `<span style="font-size:12px;color:var(--muted);">CNIC document has not been uploaded yet.</span>`;
+function profileValue(value, fallback='-'){
+  return value===undefined || value===null || value==='' ? fallback : value;
+}
 
-  return `
-  <div class="hero-panel" style="margin-bottom:14px;">
-    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-      <div>
-        <div class="hero-title">${e.fname} ${e.lname}</div>
-        <div class="hero-sub">${e.desg} in ${e.dept}. This profile brings official data, reporting lines, leave visibility, attendance history, salary information, and documents into one cleaner HR workspace.</div>
-      </div>
-      <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>
+function profileInfoRow(label, value, formatter=null){
+  const display = formatter ? formatter(value) : profileValue(value);
+  return `<div class="pp-info-row"><div class="label">${label}</div><div class="value">${display}</div></div>`;
+}
+
+function profileMoney(amount){
+  return `PKR ${Number(amount||0).toLocaleString()}`;
+}
+
+function profileLeaveCardsForEmployee(employee){
+  const employeeLeaves = (DB.leaves||[]).filter(l => l.empId===employee.id);
+  const liveBalances = employee.id===DB.currentUser?.id ? getLeaveBalancesList() : [];
+  if(liveBalances.length){
+    return liveBalances.slice(0,4).map(item => ({
+      name: item.name,
+      allocated: Number(item.allocated||0),
+      used: Number(item.used||0),
+      remaining: Number(item.remaining||0),
+    }));
+  }
+
+  return (DB.leavePolicies||[])
+    .slice(0,4)
+    .map(policy => {
+      const used = employeeLeaves
+        .filter(leave => leave.status==='Approved' && leave.type===policy.name)
+        .reduce((sum, leave) => sum + Number(leave.days||0), 0);
+      const allocated = Number(policy.quota_days||0);
+      return {
+        name: policy.name,
+        allocated,
+        used,
+        remaining: Math.max(allocated-used, 0),
+      };
+    });
+}
+
+function profileLeaveHistory(employee){
+  return (DB.leaves||[])
+    .filter(l => l.empId===employee.id)
+    .sort((a,b)=>String(b.applied||b.from).localeCompare(String(a.applied||a.from)))
+    .slice(0,8);
+}
+
+function profileAttendanceRows(employee){
+  return (DB.attendance||[])
+    .filter(a => a.empId===employee.id)
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)))
+    .slice(0,8);
+}
+
+function profileTimeline(employee){
+  const items = [
+    employee.doj ? {title:'Joined company', meta:`Started as ${profileValue(employee.desg)}`, date:employee.doj} : null,
+    employee.confirmationDate ? {title:'Confirmation date', meta:'Moved to confirmed employment status', date:employee.confirmationDate} : null,
+    employee.dop ? {title:'Probation review date', meta:'Probation milestone tracked by HR', date:employee.dop} : null,
+    employee.lwd ? {title:'Last working date', meta:'Exit date recorded', date:employee.lwd} : null,
+  ].filter(Boolean);
+
+  const latestLeave = profileLeaveHistory(employee)[0];
+  if(latestLeave){
+    items.push({
+      title:`${latestLeave.type} request ${String(latestLeave.status||'Pending').toLowerCase()}`,
+      meta:`${formatDate(latestLeave.from)} to ${formatDate(latestLeave.to)} • ${formatLeaveDuration(latestLeave)}`,
+      date: latestLeave.applied || latestLeave.from,
+    });
+  }
+
+  return items
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))
+    .slice(0,6);
+}
+
+function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='Open Document'){
+  const cnicDocument = employee.cnicDocumentUrl
+    ? `<div class="pp-doc-actions"><a class="btn btn-sm btn-primary" href="${employee.cnicDocumentUrl}" target="_blank" rel="noopener">${selfLabel}</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${employee.id}')">Delete CNIC</button>` : ''}</div>`
+    : `<div class="pp-mini-empty">CNIC document has not been uploaded yet.</div>`;
+
+  return `<div class="pp-doc-grid">
+    <div class="pp-doc-card">
+      <div class="panel-title">CNIC Document</div>
+      <div class="meta">${employee.cnicDocumentName || 'Official ID record'}</div>
+      <div style="margin-top:10px;">${profileInfoRow('National ID', employee.cnic)}</div>
+      ${cnicDocument}
     </div>
-  </div>
-  <div class="profile-shell">
-    <div class="profile-summary">
-      <div class="profile-cover"></div>
-      <div class="profile-summary-body">
-        <div class="profile-avatar-wrap"><div class="av av-64" style="background:${e.avatarColor}22;color:${e.avatarColor};border:4px solid #fff;">${e.avatar}</div></div>
-        <div style="text-align:center;margin-top:10px;">
-          <div class="panel-title">${e.fname} ${e.lname}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:3px;">${e.desg}</div>
-          <div style="margin-top:8px;">${statusBadge(e.status)} <span class="badge bg-blue">${e.dept}</span></div>
-        </div>
-        <div class="summary-stack">
-          <div class="summary-item"><span class="summary-key">Employee ID</span><span class="summary-val">${e.id}</span></div>
-          <div class="summary-item"><span class="summary-key">Office Email</span><span class="summary-val">${e.email}</span></div>
-          <div class="summary-item"><span class="summary-key">Phone</span><span class="summary-val">${e.phone||'-'}</span></div>
-          <div class="summary-item"><span class="summary-key">Joining Date</span><span class="summary-val">${formatDate(e.doj)}</span></div>
-          <div class="summary-item"><span class="summary-key">Manager</span><span class="summary-val">${e.manager||'-'}</span></div>
-        </div>
+    <div class="pp-doc-card">
+      <div class="panel-title">Passport</div>
+      <div class="meta">Travel document information</div>
+      <div style="margin-top:10px;">
+        ${profileInfoRow('Passport No', employee.passportNo)}
+        ${profileInfoRow('Personal Email', employee.personalEmail || employee.email)}
       </div>
-    </div>
-    <div>
-      <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Official</div><span class="badge bg-green">Live Profile</span></div>
-        <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(e.status)}</span></div>
-        <div class="irow"><span class="ikey">Employment</span><span class="ival">${e.type||'Permanent'}</span></div>
-        <div class="irow"><span class="ikey">Shift</span><span class="ival">${e.shiftName ? `${e.shiftName} (${e.shiftStart||'-'} - ${e.shiftEnd||'-'})` : 'Not Assigned'}</span></div>
-        <div class="irow"><span class="ikey">Hire Date</span><span class="ival">${formatDate(e.doj)}</span></div>
-        <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(e.dop)}</span></div>
-        <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
-        <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
-        <div class="irow"><span class="ikey">Line Manager</span><span class="ival">${e.manager||'-'}</span></div>
-      </div>
-      ${canSeeConfidential ? `<div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Salary</div><span class="badge bg-red">Confidential</span></div>
-        <div class="irow"><span class="ikey">Basic Salary</span><span class="ival">PKR ${(e.basic||0).toLocaleString()}</span></div>
-        <div class="irow"><span class="ikey">Allowances</span><span class="ival">PKR ${((e.house||0)+(e.transport||0)).toLocaleString()}</span></div>
-        <div class="irow"><span class="ikey">Gross Salary</span><span class="ival">PKR ${gross.toLocaleString()}</span></div>
-        <div class="irow"><span class="ikey">Tax</span><span class="ival">PKR ${(e.tax||0).toLocaleString()}</span></div>
-        <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);">PKR ${net.toLocaleString()}</span></div>
-        <div class="irow"><span class="ikey">Bank</span><span class="ival">${e.bank||'-'}</span></div>
-        <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'-'}</span></div>
-      </div>` : ''}
-    </div>
-    <div>
-      <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Reporting Team (${reportingTeam.length})</div><button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button></div>
-        <div class="team-mini-list">
-          ${reportingTeam.map(member=>`<div class="team-mini-item"><div class="av av-32" style="background:${member.avatarColor}22;color:${member.avatarColor};">${member.avatar}</div><div style="flex:1;"><div style="font-size:13px;font-weight:600;">${member.fname} ${member.lname}</div><div style="font-size:11px;color:var(--muted);">${member.desg}</div></div><span class="badge bg-blue">${member.dept}</span></div>`).join('') || `<div style="font-size:12px;color:var(--muted);">No direct reports assigned.</div>`}
-        </div>
-      </div>
-      ${buildTabs('epdPlus',[
-        {id:'leave',label:'Leave',content:`<div class="leave-mini-grid">${leaveBalances.map(card=>`<div class="leave-mini-card"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">${card.name}</div><div class="big">${card.remaining}</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">Entitled: ${card.entitled} | Availed: ${card.availed}</div></div>`).join('')}</div>`},
-        {id:'attendance',label:'Attendance',content:`<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${recentAttendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No attendance records</td></tr>`}</tbody></table></div></div>`},
-        {id:'documents',label:'Documents',content:`<div class="panel-card" style="margin:0;"><div class="panel-head"><div class="panel-title">CNIC Document</div><span class="badge bg-blue">Required</span></div><div class="irow"><span class="ikey">Document</span><span class="ival">${e.cnicDocumentName || 'CNIC Upload'}</span></div><div class="irow"><span class="ikey">CNIC Number</span><span class="ival">${e.cnic || '-'}</span></div><div style="margin-top:12px;">${cnicDocument}</div></div>`},
-      ],'leave')}
     </div>
   </div>`;
+}
+
+function profileTabsMarkup(employee, opts={}){
+  const leaveCards = profileLeaveCardsForEmployee(employee);
+  const leaveRows = profileLeaveHistory(employee);
+  const attendanceRows = profileAttendanceRows(employee);
+  const timelineRows = profileTimeline(employee);
+
+  return `<div class="pp-tab-shell">${buildTabs(opts.group || 'profileTabs',[
+    {id:'leave',label:'Leave',content: leaveCards.length ? `<div class="pp-leave-grid">${leaveCards.map(card=>`<div class="pp-leave-card"><h4>${card.name}</h4><div class="pp-leave-stat"><span>Remaining</span><strong>${formatLeaveBalanceValue(card.remaining)}</strong></div><div class="pp-leave-stat"><span>Entitled</span><strong>${formatLeaveBalanceValue(card.allocated)}</strong></div><div class="pp-leave-stat"><span>Used</span><strong>${formatLeaveBalanceValue(card.used)}</strong></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">No leave balances available yet.</div>`},
+    {id:'leave-history',label:'Leave History',content: leaveRows.length ? `<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Applied</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Status</th></tr></thead><tbody>${leaveRows.map(row=>`<tr><td>${formatDate(row.applied || row.from)}</td><td>${row.type}</td><td>${formatDate(row.from)}</td><td>${formatDate(row.to)}</td><td>${formatLeaveDuration(row)}</td><td>${statusBadge(row.status)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="pp-mini-empty">No leave history available.</div>`},
+    {id:'attendance',label:'Attendance',content: attendanceRows.length ? `<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${attendanceRows.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="pp-mini-empty">No attendance records found.</div>`},
+    {id:'dependent',label:'Dependent',content:`<div class="pp-main-card" style="padding:0;border:none;box-shadow:none;background:transparent;"><div class="pp-info-grid">${profileInfoRow('Next of Kin', employee.kin)}${profileInfoRow('Relationship', employee.kinRel)}${profileInfoRow('Contact Number', employee.kinPhone)}${profileInfoRow('Marital Status', employee.maritalStatus)}</div></div>`},
+    {id:'timeline',label:'Timeline',content: timelineRows.length ? `<div class="pp-timeline">${timelineRows.map(item=>`<div class="pp-timeline-item"><div class="pp-timeline-dot"></div><div class="pp-timeline-copy"><div style="font-size:13px;font-weight:700;">${item.title}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${item.meta}</div><div style="font-size:11px;color:var(--muted);margin-top:6px;">${formatDate(item.date)}</div></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">Timeline items will appear here as HR updates are recorded.</div>`},
+    {id:'documents',label:'Documents',content: profileDocumentsCard(employee, !!opts.canManageEmployeeDocs, opts.documentButtonLabel || 'Open Document')},
+    {id:'assets',label:'Assets',content:`<div class="pp-mini-empty">No company assets have been assigned yet.</div>`},
+  ], opts.defaultTab || 'leave')}</div>`;
+}
+
+function renderProfileWorkspace(employee, options={}){
+  const isSelf = !!options.isSelf;
+  const canSeeSalary = !!options.canSeeSalary;
+  const reportingTeam = (DB.employees||[]).filter(emp=>emp.manager===`${employee.fname} ${employee.lname}` && emp.id!==employee.id).slice(0,6);
+  const gross = Number(employee.basic||0) + Number(employee.house||0) + Number(employee.transport||0);
+  const totalDeductions = Number(employee.contribution||0) + Number(employee.otherDeductions||0) + Number(employee.tax||0);
+  const net = gross - totalDeductions;
+
+  const salaryCard = canSeeSalary ? `<div class="pp-main-card">
+    <div class="pp-card-title"><h3>Salary</h3><span class="badge bg-red">${isSelf ? 'Personal' : 'Confidential'}</span></div>
+    <div class="pp-info-grid">
+      ${profileInfoRow('Pay Period', employee.payPeriod)}
+      ${profileInfoRow('Salary Start Date', employee.salaryStartDate, formatDate)}
+      ${profileInfoRow('Base Salary', profileMoney(employee.basic))}
+      ${profileInfoRow('Allowances', profileMoney(Number(employee.house||0) + Number(employee.transport||0)))}
+      ${profileInfoRow('Contributions', profileMoney(employee.contribution))}
+      ${profileInfoRow('Other Deductions', profileMoney(employee.otherDeductions))}
+      ${profileInfoRow('Tax', profileMoney(employee.tax))}
+      ${profileInfoRow('Net Salary', `<span style="color:var(--green);">${profileMoney(net)}</span>`)}
+    </div>
+  </div>` : '';
+
+  const methodCard = canSeeSalary ? `<div class="pp-main-card">
+    <div class="pp-card-title"><h3>Method</h3><span class="badge bg-blue">Bank</span></div>
+    <div class="pp-info-grid">
+      ${profileInfoRow('Bank Name', employee.bank)}
+      ${profileInfoRow('Account No', employee.acct)}
+      ${profileInfoRow('IBAN', employee.iban)}
+      ${profileInfoRow('Gross Salary', profileMoney(gross))}
+    </div>
+  </div>` : '';
+
+  return `
+  <div class="hero-panel" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+      <div>
+        <div class="hero-title">${options.heroTitle || `${employee.fname} ${employee.lname}`}</div>
+        <div class="hero-sub">${options.heroSub || 'A richer employee workspace with official records, profile identity, salary overview, reporting view, documents, and history in one place.'}</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${options.headerAction || ''}
+      </div>
+    </div>
+  </div>
+  <div class="pp-profile-shell">
+    <div class="pp-summary-card">
+      <div class="pp-cover"></div>
+      <div class="pp-summary-body">
+        <div class="pp-avatar-stage"><div class="av av-64" style="background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;">${employee.avatar}</div></div>
+        <div class="pp-name">${employee.id || '-' } : ${employee.fname} ${employee.lname}</div>
+        <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` • ${employee.workLocation}` : ''}</div>
+        <div class="pp-chipbar">${statusBadge(employee.status || 'Active')}<span class="badge bg-blue">${profileValue(employee.dept)}</span></div>
+        <div class="pp-meta-list">
+          <div class="pp-meta-row"><div class="pp-meta-key">Login ID</div><div class="pp-meta-val">${profileValue(employee.id)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Address</div><div class="pp-meta-val">${profileValue(employee.address)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Personal Email</div><div class="pp-meta-val">${profileValue(employee.personalEmail || employee.email)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Official Email</div><div class="pp-meta-val">${profileValue(employee.email)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">DOB</div><div class="pp-meta-val">${formatDate(employee.dob)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Marital Status</div><div class="pp-meta-val">${profileValue(employee.maritalStatus)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">National ID</div><div class="pp-meta-val">${profileValue(employee.cnic)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Passport No</div><div class="pp-meta-val">${profileValue(employee.passportNo)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Employee Code</div><div class="pp-meta-val">${profileValue(employee.id)}</div></div>
+          <div class="pp-meta-row"><div class="pp-meta-key">Phone</div><div class="pp-meta-val">${profileValue(employee.phone)}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pp-main-stack">
+      <div class="pp-main-card">
+        <div class="pp-card-title"><h3>Official</h3><span class="badge bg-green">Live Profile</span></div>
+        <div class="pp-info-grid">
+          ${profileInfoRow('Status', statusBadge(employee.status || 'Active'))}
+          ${profileInfoRow('Employment', employee.type)}
+          ${profileInfoRow('Shift', employee.shiftName ? `${employee.shiftName} (${employee.shiftStart||'-'} - ${employee.shiftEnd||'-'})` : 'Not Assigned')}
+          ${profileInfoRow('Hire Date', employee.doj, formatDate)}
+          ${profileInfoRow('Joining Date', employee.doj, formatDate)}
+          ${profileInfoRow('Confirmation Date', employee.confirmationDate, formatDate)}
+          ${profileInfoRow('Work Location', employee.workLocation)}
+          ${profileInfoRow('Designation', employee.desg)}
+          ${profileInfoRow('Department', employee.dept)}
+          ${profileInfoRow('Line Manager', employee.manager)}
+        </div>
+      </div>
+      ${salaryCard}
+      ${methodCard}
+    </div>
+    <div class="pp-side-stack">
+      <div class="pp-side-card">
+        <div class="pp-card-title"><h3>Reporting Team (${reportingTeam.length})</h3>${options.sideAction || ''}</div>
+        ${reportingTeam.length ? `<div class="team-mini-list">${reportingTeam.map(member=>`<div class="team-mini-item"><div class="av av-32" style="background:${member.avatarColor}22;color:${member.avatarColor};">${member.avatar}</div><div style="flex:1;"><div style="font-size:13px;font-weight:700;">${member.fname} ${member.lname}</div><div style="font-size:11px;color:var(--muted);">${member.desg}</div></div><span class="badge bg-blue">${member.dept}</span></div>`).join('')}</div>` : `<div class="pp-reporting-empty">No team member</div>`}
+      </div>
+      ${profileTabsMarkup(employee, {
+        group: options.tabGroup || 'profileTabs',
+        canManageEmployeeDocs: options.canManageEmployeeDocs,
+        documentButtonLabel: options.documentButtonLabel,
+        defaultTab: 'leave',
+      })}
+    </div>
+  </div>`;
+}
+
+function pageEmpProfileDetail(){
+  const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
+  return renderProfileWorkspace(e, {
+    heroTitle: `${e.fname} ${e.lname}`,
+    heroSub: `${profileValue(e.desg)} in ${profileValue(e.dept)} with a complete profile workspace for official records, salary visibility, reporting structure, leave history, attendance, documents, and lifecycle details.`,
+    canSeeSalary: DB.currentRole === 'admin',
+    canManageEmployeeDocs: DB.currentRole === 'admin',
+    documentButtonLabel: 'Open CNIC Document',
+    tabGroup: 'epdPlus',
+    headerAction: `<button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>`,
+    sideAction: DB.currentRole === 'admin' ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button>` : '',
+  });
 }
 
 function pageEmpProfile(){
   const u=DB.currentUser;
   const emp=DB.employees.find(e=>e.id===u.id)||DB.employees.find(e=>e.email===u.email)||DB.employees[0]||{};
-  const leaveBalanceList = getLeaveBalancesList();
-  const balances = leaveBalanceList.length ? leaveBalanceList.slice(0,4) : [
-    {name:'Annual Leave',remaining:18,allocated:21,used:3},
-    {name:'Sick Leave',remaining:7,allocated:10,used:3},
-    {name:'Casual Leave',remaining:3,allocated:5,used:2},
-    {name:'Paternity Leave',remaining:5,allocated:5,used:0},
-  ];
-  const recentAttendance = DB.attendance.filter(a=>a.empId===u.id).slice(0,5);
-  const cnicDocument = u.cnicDocumentUrl
-    ? `<a class="btn btn-sm btn-primary" href="${u.cnicDocumentUrl}" target="_blank" rel="noopener">Open My CNIC Document</a>`
-    : `<span style="font-size:12px;color:var(--muted);">Admin has not uploaded your CNIC document yet.</span>`;
-
-  return `
-  <div class="hero-panel" style="margin-bottom:14px;">
-    <div class="hero-title">My Profile</div>
-    <div class="hero-sub">A self-service growth profile inspired by PayPeople: personal identity, official employment details, leave visibility, attendance history, and documents in one calm workspace.</div>
-    <div class="hero-chip-row">
-      <div class="hero-chip"><div class="k">Employee Code</div><div class="v">${u.id||emp?.id}</div></div>
-      <div class="hero-chip"><div class="k">Department</div><div class="v" style="font-size:17px;">${u.dept}</div></div>
-      <div class="hero-chip"><div class="k">Line Manager</div><div class="v" style="font-size:17px;">${u.manager||'-'}</div></div>
-    </div>
-  </div>
-  <div class="profile-shell">
-    <div class="profile-summary">
-      <div class="profile-cover"></div>
-      <div class="profile-summary-body">
-        <div class="profile-avatar-wrap"><div class="av av-64" style="background:${u.avatarColor}22;color:${u.avatarColor};border:4px solid #fff;">${u.avatar}</div></div>
-        <div style="text-align:center;margin-top:10px;">
-          <div class="panel-title">${u.fname} ${u.lname}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:3px;">${u.desg}</div>
-          <div style="margin-top:8px;"><span class="badge bg-green">Active</span> <span class="badge bg-blue">${u.dept}</span></div>
-        </div>
-        <div class="summary-stack">
-        <div class="summary-item"><span class="summary-key">Office Email</span><span class="summary-val">${u.email}</span></div>
-        <div class="summary-item"><span class="summary-key">Phone</span><span class="summary-val">${u.phone||'-'}</span></div>
-        <div class="summary-item"><span class="summary-key">Date of Joining</span><span class="summary-val">${formatDate(u.doj)}</span></div>
-        <div class="summary-item"><span class="summary-key">Probation Date</span><span class="summary-val">${formatDate(u.dop)}</span></div>
-        <div class="summary-item"><span class="summary-key">Manager</span><span class="summary-val">${u.manager||'-'}</span></div>
-        <div class="summary-item"><span class="summary-key">Status</span><span class="summary-val">${emp?.status||'Active'}</span></div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Official Profile</div><button class="btn btn-sm btn-primary" onclick="window.openAccountSettings()">Account Settings</button></div>
-        <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${u.id||emp?.id}</span></div>
-        <div class="irow"><span class="ikey">Department</span><span class="ival">${u.dept}</span></div>
-        <div class="irow"><span class="ikey">Designation</span><span class="ival">${u.desg}</span></div>
-        <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(u.doj)}</span></div>
-        <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(u.dop)}</span></div>
-        <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(u.lwd)}</span></div>
-        <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
-        <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
-        <div class="irow"><span class="ikey">Shift</span><span class="ival">${u.shiftName ? `${u.shiftName} (${u.shiftStart||'-'} - ${u.shiftEnd||'-'})` : 'Not Assigned'}</span></div>
-        <div class="irow"><span class="ikey">Working Days</span><span class="ival">${u.shiftWorkingDays || 'Mon - Fri'}</span></div>
-      </div>
-      <div class="panel-card">
-        <div class="panel-head"><div class="panel-title">Personal & Emergency</div><span class="badge bg-blue">Self Service</span></div>
-        <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(emp?.dob)||'-'}</span></div>
-        <div class="irow"><span class="ikey">CNIC</span><span class="ival">${emp?.cnic||'-'}</span></div>
-        <div class="irow"><span class="ikey">Address</span><span class="ival">${emp?.address||'-'}</span></div>
-        <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'-'}</span></div>
-        <div class="irow"><span class="ikey">Next of Kin</span><span class="ival">${emp?.kin||'-'}</span></div>
-        <div class="irow"><span class="ikey">Emergency Contact</span><span class="ival">${emp?.kinPhone||'-'}</span></div>
-      </div>
-    </div>
-    <div>
-      ${buildTabs('mePlus',[
-        {id:'leave',label:'Leave',content:`<div class="leave-mini-grid">${balances.map(card=>`<div class="leave-mini-card"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;">${card.name}</div><div class="big">${card.remaining}</div><div style="font-size:12px;color:var(--muted);margin-top:6px;">Allocated: ${card.allocated||card.entitled} | Used: ${card.used||0}</div></div>`).join('')}</div>`},
-        {id:'attendance',label:'Attendance',content:`<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${recentAttendance.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No attendance records</td></tr>`}</tbody></table></div></div>`},
-        {id:'documents',label:'Documents',content:`<div class="panel-card" style="margin:0;"><div class="panel-head"><div class="panel-title">CNIC Document</div><span class="badge bg-blue">Official Record</span></div><div class="irow"><span class="ikey">Document</span><span class="ival">${u.cnicDocumentName || 'CNIC Upload'}</span></div><div class="irow"><span class="ikey">CNIC Number</span><span class="ival">${emp?.cnic || '-'}</span></div><div style="margin-top:12px;">${cnicDocument}</div></div>`},
-      ],'leave')}
-    </div>
-  </div>`;
+  const profile = Object.assign({}, emp, u, { id: u.id || emp.id, fname: u.fname || emp.fname, lname: u.lname || emp.lname });
+  return `${renderEmployeeWorkspaceTabs('emp-profile')}${renderProfileWorkspace(profile, {
+    heroTitle: 'My Profile',
+    heroSub: 'A PayPeople-inspired profile workspace with all major employee identity, employment, salary, bank, leave, history, document, and lifecycle sections in one view.',
+    canSeeSalary: true,
+    canManageEmployeeDocs: false,
+    documentButtonLabel: 'Open My CNIC Document',
+    tabGroup: 'mePlus',
+    headerAction: `<button class="btn btn-sm btn-primary" onclick="window.openAccountSettings()">Account Settings</button>`,
+  })}`;
 }
 
 function pageEmpTeam(){
   const u=DB.currentUser;
   const teamMembers=DB.employees.filter(e=>e.dept===u.dept&&e.email!==u.email);
   const liveMap={};
+  const teamTabs = renderEmployeeWorkspaceTabs('emp-team');
   DB.liveAttendance.forEach(l=>{ liveMap[l.name]={status:l.status,since:l.since}; });
 
   const cards=teamMembers.map(e=>{
@@ -2525,6 +2909,7 @@ function pageEmpTeam(){
   }).join('');
 
   return `
+  ${teamTabs}
   <div class="alert al-info"><span>ℹ️</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
   <div class="card" style="margin-bottom:14px;">
     <div class="card-hdr"><div class="card-title">My Department — ${u.dept}</div></div>
@@ -2565,9 +2950,9 @@ function setupLiveAttendanceRefresh(pageId){
     }, 3000);
   }
 
-  if(DB.currentRole === 'employee' && ['emp-dashboard','emp-leaves','emp-profile'].includes(pageId)){
+  if(DB.currentRole === 'employee' && ['emp-dashboard','emp-leaves','emp-profile','emp-calendar','emp-announcements'].includes(pageId)){
     __employeeLeaveSyncTimer = setInterval(()=>{
-      refreshMyLeaveBalancesSnapshot(pageId);
+      refreshEmployeeWorkspaceSnapshot(pageId);
     }, 10000);
   }
 }

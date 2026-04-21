@@ -67,7 +67,7 @@ class MeController extends Controller
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $canSeeConfidential = $user->role === 'admin';
+        $canSeeConfidential = true;
 
         $select = [
             'users.employee_code',
@@ -84,13 +84,17 @@ class MeController extends Controller
             'mgr.name as manager',
             'employee_profiles.employment_type as type',
             'employee_profiles.status',
+            'employee_profiles.work_location',
+            'employee_profiles.confirmation_date',
             // personal
             'employee_profiles.date_of_birth as dob',
             'employee_profiles.gender',
             'employee_profiles.cnic',
+            'employee_profiles.passport_no',
             'employee_profiles.personal_phone as phone',
             'employee_profiles.personal_email',
             'employee_profiles.address',
+            'employee_profiles.marital_status',
             'employee_profiles.blood_group as blood',
             // next of kin
             'employee_profiles.next_of_kin_name as kin',
@@ -109,6 +113,10 @@ class MeController extends Controller
                 'employee_profiles.basic_salary as basic',
                 'employee_profiles.house_allowance as house',
                 'employee_profiles.transport_allowance as transport',
+                'employee_profiles.pay_period',
+                'employee_profiles.salary_start_date',
+                'employee_profiles.contribution_amount as contribution',
+                'employee_profiles.other_deductions',
                 'employee_profiles.tax_deduction as tax',
                 'employee_profiles.bank_name as bank',
                 'employee_profiles.bank_account_no as acct',

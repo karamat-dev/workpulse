@@ -93,6 +93,7 @@ function savePunchState(empId){
       breakOutTime: ps.breakOutTime ? ps.breakOutTime.getTime() : null,
       breakInTime: ps.breakInTime ? ps.breakInTime.getTime() : null,
       totalBreakMs: ps.totalBreakMs,
+      currentSessionBreakMs: ps.currentSessionBreakMs || 0,
       sessionLogs: ps.sessionLogs,
       savedDate: new Date().toISOString().split('T')[0],
     };
@@ -123,6 +124,7 @@ function loadPunchState(empId){
     DB.punchState.breakOutTime = snap.breakOutTime ? new Date(snap.breakOutTime) : null;
     DB.punchState.breakInTime  = snap.breakInTime  ? new Date(snap.breakInTime)  : null;
     DB.punchState.totalBreakMs = snap.totalBreakMs || 0;
+    DB.punchState.currentSessionBreakMs = snap.currentSessionBreakMs || 0;
     DB.punchState.sessionLogs  = snap.sessionLogs  || [];
     return true;
   } catch(e){ return false; }
@@ -139,7 +141,7 @@ function initApp(){
   document.getElementById('sb-avatar').style.background = u.avatarColor;
 
   // Always reset punchState to clean defaults first, then restore from storage
-  DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,sessionLogs:[]};
+  DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,currentSessionBreakMs:0,sessionLogs:[]};
 
   loadPunchState(u.id);
 
@@ -165,7 +167,7 @@ function getNavForRole(role){
 }
 
 function getNotificationPageForRole(){
-  return DB.currentRole === 'employee' ? 'emp-notifications' : 'leave';
+  return DB.currentRole === 'employee' ? 'emp-notifications' : 'notifications';
 }
 
 function getUnreadNotificationCount(){
@@ -184,10 +186,18 @@ function updateNotificationUI(){
 }
 
 function openNotificationsPage(){
-  showPage(getNotificationPageForRole());
+  const targetPage = getNotificationPageForRole();
+  if(typeof window.wpReload === 'function'){
+    window.wpReload()
+      .catch(() => {})
+      .finally(() => showPage(targetPage));
+    return;
+  }
+  showPage(targetPage);
 }
 
 function canAccessPage(pageId){
+  if(pageId === 'notifications') return true;
   const nav = getNavForRole(DB.currentRole);
   return nav.some(section => section.items.some(item => item.page === pageId));
 }
@@ -201,7 +211,7 @@ function scheduleMidnightReset(){
   const msUntilMidnight = midnight - now;
   setTimeout(function(){
     if(DB.currentUser){
-      DB.punchState={punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,sessionLogs:[]};
+      DB.punchState={punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,currentSessionBreakMs:0,sessionLogs:[]};
       try{ localStorage.removeItem('punchState_'+DB.currentUser.id); } catch(e){}
       refreshPunchUI();
       showToast('New shift started — Clock In when ready','green');
@@ -214,7 +224,7 @@ function buildTopbarActions(){
   const el = document.getElementById('topbar-actions');
   if(DB.currentRole==='employee'){
     el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
-    <button class="btn btn-sm btn-ghost" onclick="window.openModal('regulationModal')">Regulation</button>`;
+    <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
   } else {
     el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ Announce</button>
     <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
@@ -318,6 +328,7 @@ const pageTitles = {
   leave:'Leave Management',employees:'Employees',departments:'Departments',
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
   announcements:'Announcements',company:'Company Details',
+  notifications:'Notifications',
   'hr-dashboard':'HR Dashboard',
   'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
   'emp-leaves':'My Leaves','emp-notifications':'Notifications','emp-profile':'My Profile',
@@ -374,6 +385,7 @@ function renderPage(id){
       case 'reports': return pageReports();
       case 'announcements': return pageAnnouncements();
       case 'company': return pageCompany();
+      case 'notifications': return pageNotifications();
       // Employee pages
       case 'emp-dashboard': return pageEmpDashboard();
       case 'emp-attendance': return pageEmpAttendance();
@@ -433,6 +445,60 @@ function calcWorkMinutes(attRecord){
     mins -= (bih*60+bim)-(boh*60+bom);
   }
   return Math.max(0, mins);
+}
+
+function formatWorkedMinutesLabel(totalMinutes, includeSeconds=false){
+  const safeMinutes = Math.max(0, Number(totalMinutes || 0));
+  const totalSeconds = Math.max(0, Math.floor(safeMinutes * 60));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if(!includeSeconds){
+    return `${h}h ${m}m`;
+  }
+  const s = totalSeconds % 60;
+  return `${h}h ${m}m ${s}s`;
+}
+
+function getTodayAttendanceRecord(){
+  const currentUser = DB.currentUser;
+  if(!currentUser || !Array.isArray(DB.attendance)) return null;
+  const today = getTodayLocalDate();
+  return DB.attendance.find(a => a.empId === currentUser.id && a.date === today) || null;
+}
+
+function getCompletedWorkedMinutesToday(){
+  const record = getTodayAttendanceRecord();
+  return Math.max(0, Number(record?.workedMinutes || 0));
+}
+
+function getCurrentSessionWorkedMinutes(asOf = new Date()){
+  const ps = DB.punchState || {};
+  if(!ps.punchedIn || !ps.clockInTime) return 0;
+  const endTime = ps.onBreak && ps.breakOutTime ? ps.breakOutTime : asOf;
+  const elapsedMs = Math.max(0, endTime - ps.clockInTime);
+  const breakMs = Math.max(0, Number(ps.currentSessionBreakMs || 0));
+  return Math.max(0, Math.floor((elapsedMs - breakMs) / 60000));
+}
+
+function getLiveWorkedMinutesToday(asOf = new Date()){
+  return getCompletedWorkedMinutesToday() + getCurrentSessionWorkedMinutes(asOf);
+}
+
+function getLiveWorkedTimeLabel(asOf = new Date()){
+  const ps = DB.punchState || {};
+  const includeSeconds = !!ps.punchedIn;
+  let totalMinutes = getLiveWorkedMinutesToday(asOf);
+
+  if(includeSeconds && ps.clockInTime){
+    const completedMs = getCompletedWorkedMinutesToday() * 60000;
+    const endTime = ps.onBreak && ps.breakOutTime ? ps.breakOutTime : asOf;
+    const elapsedMs = Math.max(0, endTime - ps.clockInTime);
+    const breakMs = Math.max(0, Number(ps.currentSessionBreakMs || 0));
+    const totalMs = Math.max(0, completedMs + elapsedMs - breakMs);
+    return formatWorkedMinutesLabel(totalMs / 60000, true);
+  }
+
+  return formatWorkedMinutesLabel(totalMinutes, false);
 }
 
 function formatDate(d){ return d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'; }

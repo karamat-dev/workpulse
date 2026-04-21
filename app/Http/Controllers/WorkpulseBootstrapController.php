@@ -25,6 +25,30 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.last_working_date',
                 'employee_profiles.status',
                 'employee_profiles.employment_type',
+                'employee_profiles.work_location',
+                'employee_profiles.confirmation_date',
+                'employee_profiles.date_of_birth',
+                'employee_profiles.gender',
+                'employee_profiles.cnic',
+                'employee_profiles.passport_no',
+                'employee_profiles.personal_email',
+                'employee_profiles.address',
+                'employee_profiles.marital_status',
+                'employee_profiles.blood_group',
+                'employee_profiles.next_of_kin_name',
+                'employee_profiles.next_of_kin_relationship',
+                'employee_profiles.next_of_kin_phone',
+                'employee_profiles.basic_salary',
+                'employee_profiles.house_allowance',
+                'employee_profiles.transport_allowance',
+                'employee_profiles.pay_period',
+                'employee_profiles.salary_start_date',
+                'employee_profiles.contribution_amount',
+                'employee_profiles.other_deductions',
+                'employee_profiles.tax_deduction',
+                'employee_profiles.bank_name',
+                'employee_profiles.bank_account_no',
+                'employee_profiles.bank_iban',
                 'mgr.name as manager_name',
                 'employee_profiles.personal_phone',
                 'employee_profiles.cnic_document_path',
@@ -59,6 +83,8 @@ class WorkpulseBootstrapController extends Controller
             'dop' => $profile?->probation_end_date,
             'lwd' => $profile?->last_working_date,
             'manager' => $profile?->manager_name ?? '-',
+            'workLocation' => $profile?->work_location,
+            'confirmationDate' => $profile?->confirmation_date,
             'shiftId' => $profile?->shift_id,
             'shiftCode' => $profile?->shift_code,
             'shiftName' => $profile?->shift_name,
@@ -67,6 +93,28 @@ class WorkpulseBootstrapController extends Controller
             'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : null,
             'shiftWorkingDays' => $profile?->working_days,
             'phone' => $profile?->personal_phone,
+            'personalEmail' => $profile?->personal_email,
+            'dob' => $profile?->date_of_birth,
+            'gender' => $profile?->gender,
+            'cnic' => $profile?->cnic,
+            'passportNo' => $profile?->passport_no,
+            'address' => $profile?->address,
+            'maritalStatus' => $profile?->marital_status,
+            'blood' => $profile?->blood_group,
+            'kin' => $profile?->next_of_kin_name,
+            'kinRel' => $profile?->next_of_kin_relationship,
+            'kinPhone' => $profile?->next_of_kin_phone,
+            'basic' => $profile?->basic_salary,
+            'house' => $profile?->house_allowance,
+            'transport' => $profile?->transport_allowance,
+            'payPeriod' => $profile?->pay_period,
+            'salaryStartDate' => $profile?->salary_start_date,
+            'contribution' => $profile?->contribution_amount,
+            'otherDeductions' => $profile?->other_deductions,
+            'tax' => $profile?->tax_deduction,
+            'bank' => $profile?->bank_name,
+            'acct' => $profile?->bank_account_no,
+            'iban' => $profile?->bank_iban,
             'cnicDocumentPath' => $profile?->cnic_document_path,
             'cnicDocumentName' => $profile?->cnic_document_name,
             'cnicDocumentUrl' => $profile?->cnic_document_path ? asset($profile->cnic_document_path) : null,
@@ -76,36 +124,67 @@ class WorkpulseBootstrapController extends Controller
             'type' => $profile?->employment_type,
         ];
 
+        $employeeSelect = [
+            'users.id as user_id',
+            'users.employee_code',
+            'users.name',
+            'users.email',
+            'departments.name as dept',
+            'employee_profiles.designation as desg',
+            'employee_profiles.date_of_joining as doj',
+            'employee_profiles.probation_end_date as dop',
+            'employee_profiles.last_working_date as lwd',
+            'employee_profiles.status',
+            'employee_profiles.employment_type as type',
+            'employee_profiles.work_location',
+            'employee_profiles.confirmation_date',
+            'mgr.name as manager',
+            'employee_profiles.personal_phone as phone',
+            'employee_profiles.cnic_document_path as cnic_document_path',
+            'employee_profiles.cnic_document_name as cnic_document_name',
+            'shifts.id as shift_id',
+            'shifts.code as shift_code',
+            'shifts.name as shift_name',
+            'shifts.start_time',
+            'shifts.end_time',
+            'shifts.grace_minutes',
+            'shifts.working_days',
+        ];
+
+        if ($user->role === 'admin') {
+            $employeeSelect = array_merge($employeeSelect, [
+                'employee_profiles.date_of_birth as dob',
+                'employee_profiles.gender',
+                'employee_profiles.cnic',
+                'employee_profiles.passport_no',
+                'employee_profiles.personal_email',
+                'employee_profiles.address',
+                'employee_profiles.marital_status',
+                'employee_profiles.blood_group as blood',
+                'employee_profiles.next_of_kin_name as kin',
+                'employee_profiles.next_of_kin_relationship as kinRel',
+                'employee_profiles.next_of_kin_phone as kinPhone',
+                'employee_profiles.basic_salary as basic',
+                'employee_profiles.house_allowance as house',
+                'employee_profiles.transport_allowance as transport',
+                'employee_profiles.pay_period',
+                'employee_profiles.salary_start_date',
+                'employee_profiles.contribution_amount as contribution',
+                'employee_profiles.other_deductions',
+                'employee_profiles.tax_deduction as tax',
+                'employee_profiles.bank_name as bank',
+                'employee_profiles.bank_account_no as acct',
+                'employee_profiles.bank_iban as iban',
+            ]);
+        }
+
         $employeesQuery = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->whereIn('users.role', ['employee', 'hr', 'admin'])
-            ->select([
-                'users.id as user_id',
-                'users.employee_code',
-                'users.name',
-                'users.email',
-                'departments.name as dept',
-                'employee_profiles.designation as desg',
-                'employee_profiles.date_of_joining as doj',
-                'employee_profiles.probation_end_date as dop',
-                'employee_profiles.last_working_date as lwd',
-                'employee_profiles.status',
-                'employee_profiles.employment_type as type',
-                'mgr.name as manager',
-                'employee_profiles.personal_phone as phone',
-                'employee_profiles.cnic_document_path as cnic_document_path',
-                'employee_profiles.cnic_document_name as cnic_document_name',
-                'shifts.id as shift_id',
-                'shifts.code as shift_code',
-                'shifts.name as shift_name',
-                'shifts.start_time',
-                'shifts.end_time',
-                'shifts.grace_minutes',
-                'shifts.working_days',
-            ])
+            ->select($employeeSelect)
             ->orderBy('users.employee_code');
 
         if ($user->role === 'employee') {
@@ -115,14 +194,14 @@ class WorkpulseBootstrapController extends Controller
             });
         }
 
-        $employees = $employeesQuery->get()->map(function ($employee) use ($colors) {
+        $employees = $employeesQuery->get()->map(function ($employee) use ($colors, $user) {
             $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
             $fn = $parts[0] ?? $employee->name;
             $ln = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
             $av = strtoupper(mb_substr($fn, 0, 1).mb_substr($ln ?: $fn, 0, 1));
             $color = $colors[crc32((string) $employee->employee_code) % count($colors)];
 
-            return [
+            $mapped = [
                 'id' => $employee->employee_code,
                 'userId' => $employee->user_id,
                 'fname' => $fn,
@@ -135,6 +214,8 @@ class WorkpulseBootstrapController extends Controller
                 'manager' => $employee->manager ?? '-',
                 'phone' => $employee->phone,
                 'email' => $employee->email,
+                'workLocation' => $employee->work_location,
+                'confirmationDate' => $employee->confirmation_date,
                 'shiftId' => $employee->shift_id,
                 'shiftCode' => $employee->shift_code,
                 'shiftName' => $employee->shift_name,
@@ -150,6 +231,35 @@ class WorkpulseBootstrapController extends Controller
                 'status' => $employee->status ?? 'Active',
                 'type' => $employee->type ?? null,
             ];
+
+            if ($user->role === 'admin') {
+                $mapped = array_merge($mapped, [
+                    'personalEmail' => $employee->personal_email,
+                    'dob' => $employee->dob,
+                    'gender' => $employee->gender,
+                    'cnic' => $employee->cnic,
+                    'passportNo' => $employee->passport_no,
+                    'address' => $employee->address,
+                    'maritalStatus' => $employee->marital_status,
+                    'blood' => $employee->blood,
+                    'kin' => $employee->kin,
+                    'kinRel' => $employee->kinRel,
+                    'kinPhone' => $employee->kinPhone,
+                    'basic' => $employee->basic,
+                    'house' => $employee->house,
+                    'transport' => $employee->transport,
+                    'payPeriod' => $employee->pay_period,
+                    'salaryStartDate' => $employee->salary_start_date,
+                    'contribution' => $employee->contribution,
+                    'otherDeductions' => $employee->other_deductions,
+                    'tax' => $employee->tax,
+                    'bank' => $employee->bank,
+                    'acct' => $employee->acct,
+                    'iban' => $employee->iban,
+                ]);
+            }
+
+            return $mapped;
         })->values();
 
         $departments = DB::table('departments')
@@ -285,6 +395,8 @@ class WorkpulseBootstrapController extends Controller
                 'leave_types.name as type',
                 'leave_requests.from_date as from_date',
                 'leave_requests.to_date as to_date',
+                'leave_requests.duration_type',
+                'leave_requests.half_day_slot',
                 'leave_requests.days',
                 'leave_requests.reason',
                 'leave_requests.handover_to as handover',
@@ -304,6 +416,8 @@ class WorkpulseBootstrapController extends Controller
                 'type' => $leave->type,
                 'from' => $leave->from_date,
                 'to' => $leave->to_date,
+                'durationType' => $leave->duration_type ?? 'full_day',
+                'halfDaySlot' => $leave->half_day_slot,
                 'days' => (float) $leave->days,
                 'reason' => $leave->reason,
                 'handover' => $leave->handover,

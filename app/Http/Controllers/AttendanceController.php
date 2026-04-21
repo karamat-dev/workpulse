@@ -367,6 +367,86 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function regulationAttendanceRecords(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'from' => ['required', 'date_format:Y-m-d'],
+            'to' => ['required', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'employee_code' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        $requester = $request->user();
+        $targetEmployeeCode = $validated['employee_code'] ?? ($requester->employee_code ?? (string) $requester->id);
+
+        if ($requester->role === 'employee' && $targetEmployeeCode !== ($requester->employee_code ?? (string) $requester->id)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'You are not allowed to fetch another employee\'s attendance records.',
+            ], 403);
+        }
+
+        $targetUser = DB::table('users')
+            ->where('employee_code', $targetEmployeeCode)
+            ->first(['id', 'employee_code', 'name']);
+
+        if (!$targetUser) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Employee not found.',
+            ], 404);
+        }
+
+        $days = DB::table('attendance_days')
+            ->where('user_id', $targetUser->id)
+            ->whereBetween('date', [$validated['from'], $validated['to']])
+            ->get()
+            ->keyBy('date');
+
+        $punches = DB::table('attendance_punches')
+            ->where('user_id', $targetUser->id)
+            ->whereBetween('date', [$validated['from'], $validated['to']])
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy('date');
+
+        $rows = [];
+        $cursor = now()->parse($validated['from'])->startOfDay();
+        $end = now()->parse($validated['to'])->startOfDay();
+
+        while ($cursor->lte($end)) {
+            $date = $cursor->toDateString();
+            $datePunches = $punches->get($date, collect());
+            $firstClockIn = $datePunches->firstWhere('type', 'clock_in');
+            $lastClockOut = $datePunches->where('type', 'clock_out')->last();
+            $lastBreakOut = $datePunches->where('type', 'break_out')->last();
+            $lastBreakIn = $datePunches->where('type', 'break_in')->last();
+            $day = $days->get($date);
+
+            $rows[] = [
+                'date' => $date,
+                'in' => $firstClockIn?->punched_at ? now()->parse($firstClockIn->punched_at)->format('H:i') : null,
+                'out' => $lastClockOut?->punched_at ? now()->parse($lastClockOut->punched_at)->format('H:i') : null,
+                'breakOut' => $lastBreakOut?->punched_at ? now()->parse($lastBreakOut->punched_at)->format('H:i') : null,
+                'breakIn' => $lastBreakIn?->punched_at ? now()->parse($lastBreakIn->punched_at)->format('H:i') : null,
+                'status' => $day?->status ?? 'Absent',
+                'late' => (bool) ($day?->late ?? false),
+                'workedMinutes' => (int) ($day?->worked_minutes ?? 0),
+                'overtime' => (int) ($day?->overtime_minutes ?? 0),
+            ];
+
+            $cursor->addDay();
+        }
+
+        return response()->json([
+            'ok' => true,
+            'employee' => [
+                'employeeCode' => $targetUser->employee_code,
+                'name' => $targetUser->name,
+            ],
+            'rows' => $rows,
+        ]);
+    }
+
     public function dailyReportCsv(Request $request): StreamedResponse
     {
         $validated = $request->validate([
@@ -535,10 +615,11 @@ class AttendanceController extends Controller
         ]);
 
         $code = 'REG-'.Str::upper(Str::random(8));
+        $requester = $request->user();
 
         DB::table('attendance_regulation_requests')->insert([
             'code' => $code,
-            'user_id' => $request->user()->id,
+            'user_id' => $requester->id,
             'date' => $validated['date'],
             'type' => $validated['type'],
             'original_value' => $validated['original_value'] ?? null,
@@ -548,6 +629,33 @@ class AttendanceController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $reviewerIds = DB::table('users')
+            ->whereIn('role', ['admin', 'hr'])
+            ->where('id', '!=', $requester->id)
+            ->pluck('id');
+
+        foreach ($reviewerIds as $reviewerId) {
+            $this->createEmployeeNotification(
+                (int) $reviewerId,
+                'regulation_request_submitted',
+                'New Attendance Regulation Request',
+                sprintf(
+                    '%s submitted a %s request for %s.',
+                    (string) $requester->name,
+                    (string) $validated['type'],
+                    (string) $validated['date'],
+                ),
+                'attendance_regulation',
+                $code,
+                [
+                    'employee_id' => $requester->id,
+                    'employee_name' => $requester->name,
+                    'date' => $validated['date'],
+                    'type' => $validated['type'],
+                ],
+            );
+        }
 
         return response()->json(['ok' => true, 'code' => $code], 201);
     }

@@ -2,13 +2,27 @@
 
 <!-- Leave Modal -->
 <div class="modal-overlay" id="leaveModal">
-  <div class="modal">
+  <div class="modal" style="width:min(1220px,96vw);">
     <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
     <div class="fg"><label class="fl">Leave Type</label>
       <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select></div>
     <div class="g2">
       <div class="fg"><label class="fl">From Date</label><input type="date" class="fi" id="lv-from"></div>
       <div class="fg"><label class="fl">To Date</label><input type="date" class="fi" id="lv-to"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Duration</label>
+        <select class="fi" id="lv-duration">
+          <option value="full_day">Full Day</option>
+          <option value="half_day">Half Day</option>
+        </select>
+      </div>
+      <div class="fg" id="lv-half-slot-wrap" style="display:none;"><label class="fl">Half Day Slot</label>
+        <select class="fi" id="lv-half-slot">
+          <option value="first_half">First Half</option>
+          <option value="second_half">Second Half</option>
+        </select>
+      </div>
     </div>
     <div class="fg"><label class="fl">Reason</label><textarea class="fi" id="lv-reason" rows="3" placeholder="Brief reason..."></textarea></div>
     <div class="fg"><label class="fl">Handover To</label><input type="text" class="fi" id="lv-handover" placeholder="Colleague name"></div>
@@ -24,19 +38,42 @@
 
 <!-- Regulation Modal -->
 <div class="modal-overlay" id="regulationModal">
-  <div class="modal">
+  <div class="modal" style="width:min(1220px,96vw);">
     <div class="modal-hdr"><div class="modal-title">Attendance Regulation Request</div><button class="modal-close" onclick="window.closeModal('regulationModal')">×</button></div>
-    <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="reg-date"></div>
-    <div class="fg"><label class="fl">Regulation Type</label>
-      <select class="fi" id="reg-type"><option>Missing Clock In</option><option>Missing Clock Out</option><option>Wrong Clock In Time</option><option>Wrong Clock Out Time</option><option>Break Adjustment</option></select></div>
-    <div class="g2">
-      <div class="fg"><label class="fl">Original Time</label><input type="time" class="fi" id="reg-orig"></div>
-      <div class="fg"><label class="fl">Requested Time</label><input type="time" class="fi" id="reg-req"></div>
+    <div class="g3" style="grid-template-columns:1.2fr 1fr 1fr;align-items:end;">
+      <div class="fg"><label class="fl">Employee</label><input type="text" class="fi" id="reg-employee" readonly></div>
+      <div class="fg"><label class="fl">From Date</label><input type="date" class="fi" id="reg-from"></div>
+      <div class="fg"><label class="fl">To Date</label><input type="date" class="fi" id="reg-to"></div>
     </div>
-    <div class="fg"><label class="fl">Reason</label><textarea class="fi" id="reg-reason" rows="3" placeholder="Explain the reason..."></textarea></div>
+    <div class="fg"><label class="fl">Regulation Type</label>
+      <select class="fi" id="reg-type"><option>Attendance Timeslot Adjustment</option><option>Missing Clock In</option><option>Missing Clock Out</option><option>Wrong Clock In Time</option><option>Wrong Clock Out Time</option><option>Break Adjustment</option></select></div>
+    <div class="alert al-info" style="margin-bottom:14px;"><span>ℹ</span><div>Select the checkbox for each day you want to edit, update the time slots, then submit the selected rows.</div></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+      <button class="btn btn-sm" onclick="window.loadRegulationRows()">Fetch Attendance</button>
+    </div>
+    <div class="table-wrap" style="max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:70px;">Edit</th>
+            <th>Date</th>
+            <th>Old Time In - Old Time Out</th>
+            <th>In Date</th>
+            <th>In Time</th>
+            <th>Out Date</th>
+            <th>Out Time</th>
+            <th>Remarks</th>
+            <th style="width:70px;">Remove</th>
+          </tr>
+        </thead>
+        <tbody id="reg-rows">
+          <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Choose a date range and click Fetch Attendance.</td></tr>
+        </tbody>
+      </table>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('regulationModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="window.submitRegulation()"">Submit</button>
+      <button class="btn btn-primary" onclick="window.submitRegulation()">Submit Selected</button>
     </div>
   </div>
 </div>
@@ -74,6 +111,10 @@
     <div class="fg"><label class="fl">CNIC Document</label><input type="file" class="fi" id="ne-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
+      <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
+      <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ne-work-location" placeholder="Main Office"></div>
+    </div>
+    <div class="g2">
       <div class="fg"><label class="fl">Department</label>
         <select class="fi" id="ne-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
       <div class="fg"><label class="fl">Designation</label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
@@ -87,12 +128,37 @@
       <div class="fg"><label class="fl">Probation Date</label><input type="date" class="fi" id="ne-dop"></div>
       <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ne-lwd"></div>
     </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ne-confirmation-date"></div>
+      <div class="fg"><label class="fl">Marital Status</label><select class="fi" id="ne-marital-status"><option value="">Select status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">National ID / CNIC</label><input type="text" class="fi" id="ne-cnic" placeholder="XXXXX-XXXXXXX-X"></div>
+      <div class="fg"><label class="fl">Passport No</label><input type="text" class="fi" id="ne-passport-no" placeholder="Passport number"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Date of Birth</label><input type="date" class="fi" id="ne-dob"></div>
+      <div class="fg"><label class="fl">Gender</label><select class="fi" id="ne-gender"><option value="">Select gender</option><option>Male</option><option>Female</option><option>Other</option></select></div>
+    </div>
+    <div class="fg"><label class="fl">Address</label><input type="text" class="fi" id="ne-address" placeholder="City, country"></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Blood Group</label><select class="fi" id="ne-blood"><option value="">Select blood group</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
+      <div class="fg"><label class="fl">Next of Kin Name</label><input type="text" class="fi" id="ne-kin"></div>
+    </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Kin Relationship</label><input type="text" class="fi" id="ne-kinRel"></div>
+      <div class="fg"><label class="fl">Kin Phone</label><input type="text" class="fi" id="ne-kinPhone"></div>
+    </div>
     <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
     <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ne-shift"></select></div>
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="fg"><label class="fl">Pay Period</label><input type="text" class="fi" id="ne-pay-period" placeholder="Monthly - Payroll"></div>
+      <div class="fg"><label class="fl">Salary Start Date</label><input type="date" class="fi" id="ne-salary-start-date"></div>
       <div class="fg"><label class="fl">Basic Salary (PKR)</label><input type="number" class="fi" id="ne-basic" min="0"></div>
       <div class="fg"><label class="fl">House Allowance (PKR)</label><input type="number" class="fi" id="ne-house" min="0"></div>
       <div class="fg"><label class="fl">Transport Allowance (PKR)</label><input type="number" class="fi" id="ne-transport" min="0"></div>
+      <div class="fg"><label class="fl">Contributions (PKR)</label><input type="number" class="fi" id="ne-contribution" min="0"></div>
+      <div class="fg"><label class="fl">Other Deductions (PKR)</label><input type="number" class="fi" id="ne-other-deductions" min="0"></div>
       <div class="fg"><label class="fl">Tax Deduction (PKR)</label><input type="number" class="fi" id="ne-tax" min="0"></div>
       <div class="fg"><label class="fl">Bank Name</label><input type="text" class="fi" id="ne-bank"></div>
       <div class="fg"><label class="fl">Account No</label><input type="text" class="fi" id="ne-acct"></div>
@@ -170,13 +236,18 @@
         <div class="fg"><label class="fl">Date of Birth</label><input type="date" class="fi" id="ee-dob"></div>
         <div class="fg"><label class="fl">Gender</label><select class="fi" id="ee-gender"><option>Male</option><option>Female</option><option>Other</option></select></div>
       </div>
-      <div class="fg"><label class="fl">CNIC</label><input type="text" class="fi" id="ee-cnic" placeholder="XXXXX-XXXXXXX-X"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">CNIC</label><input type="text" class="fi" id="ee-cnic" placeholder="XXXXX-XXXXXXX-X"></div>
+        <div class="fg"><label class="fl">Passport No</label><input type="text" class="fi" id="ee-passport-no"></div>
+      </div>
       <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ee-phone"></div>
+      <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ee-personal-email"></div>
       <div class="fg"><label class="fl">Address</label><input type="text" class="fi" id="ee-address"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Blood Group</label><select class="fi" id="ee-blood"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
-        <div class="fg"><label class="fl">Next of Kin Name</label><input type="text" class="fi" id="ee-kin"></div>
+        <div class="fg"><label class="fl">Marital Status</label><select class="fi" id="ee-marital-status"><option value="">Select status</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option></select></div>
       </div>
+      <div class="fg"><label class="fl">Next of Kin Name</label><input type="text" class="fi" id="ee-kin"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Kin Relationship</label><input type="text" class="fi" id="ee-kinRel"></div>
         <div class="fg"><label class="fl">Kin Phone</label><input type="text" class="fi" id="ee-kinPhone"></div>
@@ -196,6 +267,10 @@
         <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
         <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ee-confirmation-date"></div>
+        <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ee-work-location"></div>
+      </div>
       <div class="fg"><label class="fl">Replace CNIC Document</label><input type="file" class="fi" id="ee-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
       <div class="fg"><label class="fl">Reset Login Password</label><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -213,7 +288,15 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Transport Allowance (PKR)</label><input type="number" class="fi" id="ee-transport" oninput="window.calcGross()"></div>
+        <div class="fg"><label class="fl">Contributions (PKR)</label><input type="number" class="fi" id="ee-contribution" oninput="window.calcGross()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Other Deductions (PKR)</label><input type="number" class="fi" id="ee-other-deductions" oninput="window.calcGross()"></div>
         <div class="fg"><label class="fl">Tax Deduction (PKR)</label><input type="number" class="fi" id="ee-tax" oninput="window.calcGross()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="fg"><label class="fl">Pay Period</label><input type="text" class="fi" id="ee-pay-period"></div>
+        <div class="fg"><label class="fl">Salary Start Date</label><input type="date" class="fi" id="ee-salary-start-date"></div>
       </div>
       <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
         <div><span style="color:var(--muted);">Gross Salary:</span> <strong id="ee-gross-display">PKR 0</strong></div>

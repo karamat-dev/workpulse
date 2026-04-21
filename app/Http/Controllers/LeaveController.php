@@ -11,6 +11,73 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
+    private function normalizeDurationType(?string $durationType): string
+    {
+        return in_array($durationType, ['full_day', 'half_day'], true) ? $durationType : 'full_day';
+    }
+
+    private function normalizeHalfDaySlot(?string $slot): ?string
+    {
+        return in_array($slot, ['first_half', 'second_half'], true) ? $slot : null;
+    }
+
+    private function calculateRequestedLeaveDays(string $fromDate, string $toDate, string $durationType): float
+    {
+        if ($durationType === 'half_day') {
+            return 0.5;
+        }
+
+        $from = now()->parse($fromDate)->startOfDay();
+        $to = now()->parse($toDate)->startOfDay();
+
+        return (float) max(1, $from->diffInDays($to) + 1);
+    }
+
+    private function leaveRequestsOverlap(
+        int $userId,
+        string $fromDate,
+        string $toDate,
+        string $durationType,
+        ?string $halfDaySlot,
+        ?int $ignoreRequestId = null,
+    ): bool {
+        $existingRequests = DB::table('leave_requests')
+            ->where('user_id', $userId)
+            ->whereNotIn('status', ['Rejected', 'Cancelled'])
+            ->where('from_date', '<=', $toDate)
+            ->where('to_date', '>=', $fromDate)
+            ->when($ignoreRequestId, fn ($query) => $query->where('id', '!=', $ignoreRequestId))
+            ->get(['id', 'from_date', 'to_date', 'duration_type', 'half_day_slot']);
+
+        foreach ($existingRequests as $existing) {
+            if (
+                $durationType === 'half_day'
+                && $existing->duration_type === 'half_day'
+                && $fromDate === $toDate
+                && $existing->from_date === $existing->to_date
+                && $existing->from_date === $fromDate
+                && $halfDaySlot
+                && $existing->half_day_slot
+                && $existing->half_day_slot !== $halfDaySlot
+            ) {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private function formatLeaveDurationLabel(float $days, string $durationType, ?string $halfDaySlot): string
+    {
+        if ($durationType === 'half_day') {
+            return $halfDaySlot === 'second_half' ? 'Second Half (0.5 day)' : 'First Half (0.5 day)';
+        }
+
+        return rtrim(rtrim(number_format($days, 2, '.', ''), '0'), '.').' day(s)';
+    }
+
     private function createEmployeeNotification(
         int $userId,
         string $type,
@@ -35,7 +102,14 @@ class LeaveController extends Controller
         ]);
     }
 
-    private function syncAttendanceWithLeaveStatus(int $userId, string $fromDate, string $toDate, bool $approved): void
+    private function syncAttendanceWithLeaveStatus(
+        int $userId,
+        string $fromDate,
+        string $toDate,
+        bool $approved,
+        string $durationType = 'full_day',
+        ?string $halfDaySlot = null,
+    ): void
     {
         $cursor = now()->parse($fromDate)->startOfDay();
         $end = now()->parse($toDate)->startOfDay();
@@ -47,7 +121,9 @@ class LeaveController extends Controller
                 DB::table('attendance_days')->updateOrInsert(
                     ['user_id' => $userId, 'date' => $date],
                     [
-                        'status' => 'Leave',
+                        'status' => $durationType === 'half_day'
+                            ? ($halfDaySlot === 'second_half' ? 'Half Leave (Second Half)' : 'Half Leave (First Half)')
+                            : 'Leave',
                         'late' => false,
                         'overtime_minutes' => 0,
                         'worked_minutes' => 0,
@@ -473,10 +549,24 @@ class LeaveController extends Controller
             'leave_type_code' => ['required', 'string', 'max:30'],
             'from_date' => ['required', 'date_format:Y-m-d'],
             'to_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:from_date'],
-            'days' => ['nullable', 'numeric', 'min:0.5'],
+            'duration_type' => ['nullable', Rule::in(['full_day', 'half_day'])],
+            'half_day_slot' => ['nullable', Rule::in(['first_half', 'second_half'])],
             'reason' => ['nullable', 'string', 'max:2000'],
             'handover_to' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $durationType = $this->normalizeDurationType($validated['duration_type'] ?? 'full_day');
+        $halfDaySlot = $this->normalizeHalfDaySlot($validated['half_day_slot'] ?? null);
+
+        if ($durationType === 'half_day') {
+            if ($validated['from_date'] !== $validated['to_date']) {
+                return response()->json(['ok' => false, 'message' => 'Half day leave must be for a single date'], 422);
+            }
+
+            if (!$halfDaySlot) {
+                return response()->json(['ok' => false, 'message' => 'Choose first half or second half for half day leave'], 422);
+            }
+        }
 
         $leaveType = DB::table('leave_types')
             ->where('code', $validated['leave_type_code'])
@@ -486,19 +576,24 @@ class LeaveController extends Controller
             return response()->json(['ok' => false, 'message' => 'Invalid leave type'], 422);
         }
 
-        $overlapsExisting = DB::table('leave_requests')
-            ->where('user_id', $request->user()->id)
-            ->whereNotIn('status', ['Rejected', 'Cancelled'])
-            ->where('from_date', '<=', $validated['to_date'])
-            ->where('to_date', '>=', $validated['from_date'])
-            ->exists();
+        $overlapsExisting = $this->leaveRequestsOverlap(
+            $request->user()->id,
+            $validated['from_date'],
+            $validated['to_date'],
+            $durationType,
+            $halfDaySlot,
+        );
 
         if ($overlapsExisting) {
             return response()->json(['ok' => false, 'message' => 'You already have a leave request for the selected dates'], 422);
         }
 
         $year = (int) date('Y', strtotime($validated['from_date']));
-        $requestedDays = (float) ($validated['days'] ?? 1);
+        $requestedDays = $this->calculateRequestedLeaveDays(
+            $validated['from_date'],
+            $validated['to_date'],
+            $durationType
+        );
         $balance = $this->getOrCreateLeaveBalance($request->user()->id, $year, (int) $leaveType->id);
 
         if ((bool) $leaveType->paid && $requestedDays > (float) $balance->remaining_days) {
@@ -513,6 +608,8 @@ class LeaveController extends Controller
             'leave_type_id' => $leaveType->id,
             'from_date' => $validated['from_date'],
             'to_date' => $validated['to_date'],
+            'duration_type' => $durationType,
+            'half_day_slot' => $halfDaySlot,
             'days' => $requestedDays,
             'reason' => $validated['reason'] ?? null,
             'handover_to' => $validated['handover_to'] ?? null,
@@ -557,6 +654,8 @@ class LeaveController extends Controller
                 'leave_types.name as leave_type',
                 'leave_requests.from_date',
                 'leave_requests.to_date',
+                'leave_requests.duration_type',
+                'leave_requests.half_day_slot',
                 'leave_requests.days',
                 'leave_requests.created_at',
             ])
@@ -592,6 +691,8 @@ class LeaveController extends Controller
                 'leave_types.name as leave_type',
                 'leave_requests.from_date',
                 'leave_requests.to_date',
+                'leave_requests.duration_type',
+                'leave_requests.half_day_slot',
                 'leave_requests.days',
                 'mgr.status as manager_status',
                 'hr.status as hr_status',
@@ -708,13 +809,27 @@ class LeaveController extends Controller
             if (!$wasApproved && $finalStatus === 'Approved') {
                 $year = (int) date('Y', strtotime((string) $requestRow->from_date));
                 $this->adjustLeaveBalanceUsage((int) $requestRow->user_id, $year, (int) $requestRow->leave_type_id, (float) $requestRow->days);
-                $this->syncAttendanceWithLeaveStatus((int) $requestRow->user_id, (string) $requestRow->from_date, (string) $requestRow->to_date, true);
+                $this->syncAttendanceWithLeaveStatus(
+                    (int) $requestRow->user_id,
+                    (string) $requestRow->from_date,
+                    (string) $requestRow->to_date,
+                    true,
+                    (string) ($requestRow->duration_type ?? 'full_day'),
+                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                );
             }
 
             if ($wasApproved && $finalStatus !== 'Approved') {
                 $year = (int) date('Y', strtotime((string) $requestRow->from_date));
                 $this->adjustLeaveBalanceUsage((int) $requestRow->user_id, $year, (int) $requestRow->leave_type_id, -1 * (float) $requestRow->days);
-                $this->syncAttendanceWithLeaveStatus((int) $requestRow->user_id, (string) $requestRow->from_date, (string) $requestRow->to_date, false);
+                $this->syncAttendanceWithLeaveStatus(
+                    (int) $requestRow->user_id,
+                    (string) $requestRow->from_date,
+                    (string) $requestRow->to_date,
+                    false,
+                    (string) ($requestRow->duration_type ?? 'full_day'),
+                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                );
             }
 
             $title = match ($validated['step']) {
@@ -724,19 +839,29 @@ class LeaveController extends Controller
             };
 
             $message = sprintf(
-                'Your %s request from %s to %s is now %s.',
+                'Your %s request from %s to %s (%s) is now %s.',
                 $requestRow->leave_type_name ?? 'leave',
                 (string) $requestRow->from_date,
                 (string) $requestRow->to_date,
+                $this->formatLeaveDurationLabel(
+                    (float) $requestRow->days,
+                    (string) ($requestRow->duration_type ?? 'full_day'),
+                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                ),
                 strtolower($finalStatus)
             );
 
             if ($validated['step'] === 'manager' && $validated['status'] === 'Approved') {
                 $message = sprintf(
-                    'Your %s request from %s to %s was approved by your manager and sent to HR for final review.',
+                    'Your %s request from %s to %s (%s) was approved by your manager and sent to HR for final review.',
                     $requestRow->leave_type_name ?? 'leave',
                     (string) $requestRow->from_date,
-                    (string) $requestRow->to_date
+                    (string) $requestRow->to_date,
+                    $this->formatLeaveDurationLabel(
+                        (float) $requestRow->days,
+                        (string) ($requestRow->duration_type ?? 'full_day'),
+                        $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                    )
                 );
             }
 

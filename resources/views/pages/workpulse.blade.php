@@ -77,6 +77,7 @@
                         DB.regulations = data.regulations || [];
                         DB.announcements = data.announcements || [];
                         DB.holidays = data.holidays || [];
+                        DB.events = data.events || [];
                         DB.notifications = data.notifications || [];
                         DB.notificationCount = data.notificationCount || 0;
                     }
@@ -106,11 +107,15 @@
                                 lwd: p.lwd || DB.currentUser.lwd,
                                 manager: p.manager || DB.currentUser.manager,
                                 phone: p.phone || DB.currentUser.phone,
-                            });
+                            }, p);
 
                             const idx = (DB.employees || []).findIndex(e => e.id === DB.currentUser.id);
                             if (idx >= 0) {
-                                DB.employees[idx] = Object.assign(DB.employees[idx], p, { id: p.employee_code || DB.employees[idx].id });
+                                DB.employees[idx] = Object.assign(DB.employees[idx], p, {
+                                    id: p.employee_code || DB.employees[idx].id,
+                                    fname,
+                                    lname,
+                                });
                             }
                         }
                     } catch (_) {

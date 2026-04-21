@@ -49,6 +49,8 @@ const DB = {
     {id:'AN-003',title:'✅ New Attendance Policy — Effective May 1',cat:'Policy',audience:'All Employees',msg:'Starting May 1, the shift starts at 11:00 AM with a 10-minute grace period. Late arrivals after 11:10 AM will be marked "Late". Repeated late arrivals (3+) will trigger an HR review.',author:'Sara Ahmed',role:'HR Manager',date:'2025-04-05'},
   ],
 
+  events: [],
+
   holidays: [
     {date:'2025-01-01',name:"New Year's Day",type:'National'},
     {date:'2025-02-05',name:'Kashmir Solidarity Day',type:'National'},
@@ -123,6 +125,7 @@ const DB = {
     breakOutTime: null,
     breakInTime: null,
     totalBreakMs: 0,
+    currentSessionBreakMs: 0,
     sessionLogs: [],
   },
 
@@ -144,14 +147,9 @@ function startClock(){
     if(ecwEl) ecwEl.textContent = t;
     if(cwEl) cwEl.textContent = t;
 
-    // update working hours if punched in
-    if(DB.punchState.punchedIn && DB.punchState.clockInTime && !DB.punchState.onBreak){
-      const diff = now - DB.punchState.clockInTime - DB.punchState.totalBreakMs;
-      const h = Math.floor(diff/3600000);
-      const m = Math.floor((diff%3600000)/60000);
-      const s = Math.floor((diff%60000)/1000);
-      const wh = document.getElementById('work-hours-live');
-      if(wh) wh.textContent = `${h}h ${m}m ${s}s`;
+    const wh = document.getElementById('work-hours-live');
+    if(wh && typeof getLiveWorkedTimeLabel === 'function'){
+      wh.textContent = getLiveWorkedTimeLabel(now);
     }
   }
   tick();
