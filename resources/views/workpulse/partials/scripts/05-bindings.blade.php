@@ -17,6 +17,7 @@ window.submitAnnouncement = submitAnnouncement;
 window.toggleAnnouncementRecipients = toggleAnnouncementRecipients;
 window.submitAddEmployee = submitAddEmployee;
 window.submitHoliday = submitHoliday;
+window.deleteHoliday = deleteHoliday;
 window.approveLeave = approveLeave;
 window.openApproval = openApproval;
 window.deleteEmployee = deleteEmployee;

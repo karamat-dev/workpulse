@@ -28,5 +28,21 @@ class HolidaysController extends Controller
 
         return response()->json(['ok' => true], 201);
     }
+
+    public function destroy(string $date): JsonResponse
+    {
+        $deleted = DB::table('holidays')
+            ->where('date', $date)
+            ->delete();
+
+        if ($deleted === 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Holiday not found.',
+            ], 404);
+        }
+
+        return response()->json(['ok' => true]);
+    }
 }
 

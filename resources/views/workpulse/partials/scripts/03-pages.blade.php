@@ -893,6 +893,19 @@ function submitHoliday(){
   if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
 }
 
+function deleteHoliday(date){
+  if(!date) return;
+  if(!confirm('Remove this holiday?')) return;
+  wpApi('/api/holidays/'+encodeURIComponent(date), {method:'DELETE'})
+    .then(()=>wpReload())
+    .then(()=>{
+      showToast('Holiday removed','amber');
+      if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+      if(window.__workpulseCurrentPage === 'emp-calendar') showPage('emp-calendar');
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
 let currentApprovalId=null;
 function openApproval(leaveId){
   currentApprovalId=leaveId;
@@ -1026,10 +1039,18 @@ function dashboardUpcomingItems(){
   const holidays = (DB.holidays||[])
     .filter(h=>h.date>=today)
     .map(h=>({title:h.name, sub:`${h.type} holiday`, date:h.date, badge:'bg-amber'}));
+  const events = (Array.isArray(DB.events) ? DB.events : [])
+    .map(event => ({
+      title: event.title || 'Event',
+      sub: event.desc || 'Company event',
+      date: String(event.start || event.date || '').slice(0,10),
+      badge: event.type === 'holiday' ? 'bg-amber' : event.type === 'meeting' ? 'bg-purple' : 'bg-blue',
+    }))
+    .filter(item => item.date && item.date >= today);
   const approvedLeaves = (DB.leaves||[])
     .filter(l=>l.status==='Approved' && l.from>=today)
     .map(l=>({title:`${l.empName} — ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
-  return [...holidays, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+  return [...holidays, ...events, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
 }
 
 function pageAdminDashboard(){
@@ -1399,7 +1420,7 @@ function pageLeave(){
 
   const holidayRows=DB.holidays.map(h=>`
     <tr><td>${formatDate(h.date)}</td><td>${new Date(h.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long'})}</td>
-    <td>${h.name}</td><td>${statusBadge(h.type)}</td><td>Nationwide</td></tr>`).join('');
+    <td>${h.name}</td><td>${statusBadge(h.type)}</td><td>Nationwide</td><td>${canManageLeaveBalances ? `<button class="btn btn-sm btn-danger" onclick="window.deleteHoliday('${h.date}')">Delete</button>` : '-'}</td></tr>`).join('');
 
   const balanceHTML=`
     <div class="g2">
@@ -1462,8 +1483,8 @@ function pageLeave(){
       </div>`},
     {id:'holidays',label:'National Holidays',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">National Holidays 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('holidayModal')">+ Add Holiday</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th>Type</th><th>Region</th></tr></thead>
-      <tbody>${holidayRows}</tbody></table></div></div>`},
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Holiday</th><th>Type</th><th>Region</th><th>Action</th></tr></thead>
+      <tbody>${holidayRows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No holidays added yet</td></tr>'}</tbody></table></div></div>`},
   ],'pending');
 }
 
@@ -2341,6 +2362,7 @@ function pageEmpDashboard(){
     const whoOff = leaves.filter(l=>l.status==='Approved' && l.from<=today && l.to>=today).length;
     const myLogs = attendance.filter(a=>a.empId===u.id).slice(0,5);
     const latestAnnouncements = (Array.isArray(DB.announcements) ? DB.announcements : []).slice(0,3);
+    const upcomingItems = dashboardUpcomingItems();
     const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):(shiftCompleted?'Completed':(todayRec.out?'Clocked Out':'Not Started'));
 
     return `
@@ -2423,6 +2445,18 @@ function pageEmpDashboard(){
             <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatDate(item.date)}</span>
           </div>
         `).join('') || `<div class="emp-pp-empty">No announcements for your audience right now</div>`}
+      </div>
+      <div class="emp-pp-card">
+        <div class="card-hdr"><div class="emp-pp-title">Holidays & Events</div><button class="btn btn-sm" onclick="window.showPage('emp-calendar')">View Calendar</button></div>
+        ${upcomingItems.map(item=>`
+          <div class="irow" style="align-items:flex-start;">
+            <div>
+              <div style="font-size:13px;font-weight:600;">${item.title}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px;">${item.sub}</div>
+            </div>
+            <span class="badge ${item.badge}">${formatDate(item.date)}</span>
+          </div>
+        `).join('') || `<div class="emp-pp-empty">No upcoming holidays or events right now</div>`}
       </div>
     </div>
   </div>`;

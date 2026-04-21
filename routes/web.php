@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
 
         Route::post('/announcements', [AnnouncementsController::class, 'store'])->middleware('perm:announcements.manage');
         Route::post('/holidays', [HolidaysController::class, 'store'])->middleware('perm:leave.manage');
+        Route::delete('/holidays/{date}', [HolidaysController::class, 'destroy'])->middleware('perm:leave.manage');
 
         Route::prefix('shifts')->group(function () {
             Route::get('/', [ShiftsController::class, 'index'])->middleware('perm:employees.manage');
