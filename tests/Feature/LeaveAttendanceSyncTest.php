@@ -314,4 +314,131 @@ class LeaveAttendanceSyncTest extends TestCase
 
         $this->assertDatabaseCount('leave_requests', 2);
     }
+
+    public function test_employee_can_apply_for_multi_day_leave_with_per_day_duration_breakdown(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-303',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        $leaveTypeId = DB::table('leave_types')->insertGetId([
+            'name' => 'Annual Leave',
+            'code' => 'annual',
+            'paid' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_policies')->insert([
+            'year' => (int) now()->format('Y'),
+            'leave_type_id' => $leaveTypeId,
+            'quota_days' => 10,
+            'carry_forward_days' => 0,
+            'pro_rata' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $monday = now()->next('Monday')->toDateString();
+        $tuesday = now()->next('Monday')->addDay()->toDateString();
+        $wednesday = now()->next('Monday')->addDays(2)->toDateString();
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'annual',
+                'from_date' => $monday,
+                'to_date' => $wednesday,
+                'daily_breakdown' => [
+                    ['date' => $monday, 'duration_type' => 'half_day', 'half_day_slot' => 'first_half'],
+                    ['date' => $tuesday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                    ['date' => $wednesday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                ],
+                'reason' => 'Mixed-duration leave plan',
+            ]);
+
+        $response->assertCreated()->assertJson(['ok' => true]);
+
+        $request = DB::table('leave_requests')->where('user_id', $employee->id)->first();
+
+        $this->assertNotNull($request);
+        $this->assertSame(2.5, (float) $request->days);
+        $this->assertSame('full_day', $request->duration_type);
+
+        $dailyBreakdown = json_decode($request->daily_breakdown, true);
+        $this->assertCount(3, $dailyBreakdown);
+        $this->assertSame('half_day', $dailyBreakdown[0]['duration_type']);
+        $this->assertSame('first_half', $dailyBreakdown[0]['half_day_slot']);
+        $this->assertSame('full_day', $dailyBreakdown[1]['duration_type']);
+        $this->assertSame('full_day', $dailyBreakdown[2]['duration_type']);
+    }
+
+    public function test_approving_multi_day_leave_with_daily_breakdown_syncs_each_day_status(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-202',
+        ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $monday = now()->next('Monday')->toDateString();
+        $tuesday = now()->next('Monday')->addDay()->toDateString();
+        $wednesday = now()->next('Monday')->addDays(2)->toDateString();
+
+        $apply = $this
+            ->actingAs($admin)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $monday,
+                'to_date' => $wednesday,
+                'daily_breakdown' => [
+                    ['date' => $monday, 'duration_type' => 'half_day', 'half_day_slot' => 'first_half'],
+                    ['date' => $tuesday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                    ['date' => $wednesday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                ],
+                'reason' => 'Mixed-duration leave plan',
+            ]);
+
+        $apply->assertCreated()->assertJson(['ok' => true]);
+
+        $code = $apply->json('code');
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/leave/{$code}/review", [
+                'step' => 'hr',
+                'status' => 'Approved',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $monday,
+            'status' => 'Half Leave (First Half)',
+        ]);
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $tuesday,
+            'status' => 'Leave',
+        ]);
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $wednesday,
+            'status' => 'Leave',
+        ]);
+    }
 }

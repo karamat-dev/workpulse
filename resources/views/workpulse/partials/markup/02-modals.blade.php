@@ -10,24 +10,32 @@
       <div class="fg"><label class="fl">From Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-from"></div>
       <div class="fg"><label class="fl">To Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-to"></div>
     </div>
-    <div class="g2">
-      <div class="fg"><label class="fl">Duration <span class="req-star">*</span></label>
-        <select class="fi" id="lv-duration">
-          <option value="full_day">Full Day</option>
-          <option value="half_day">Half Day</option>
-        </select>
-      </div>
-      <div class="fg" id="lv-half-slot-wrap" style="display:none;"><label class="fl">Half Day Slot <span class="req-star">*</span></label>
-        <select class="fi" id="lv-half-slot">
-          <option value="first_half">First Half</option>
-          <option value="second_half">Second Half</option>
-        </select>
+    <div id="lv-breakdown-wrap" style="display:none;margin-bottom:12px;">
+      <div class="card" style="padding:14px;">
+        <div class="card-hdr" style="margin-bottom:10px;">
+          <div class="card-title">Leave Plan</div>
+          <div style="font-size:12px;color:var(--muted);">Choose full day or half day for each selected date.</div>
+        </div>
+        <div class="table-wrap" style="border:1px solid var(--border);border-radius:12px;overflow:hidden;">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Day</th>
+                <th>Duration</th>
+              </tr>
+            </thead>
+            <tbody id="lv-breakdown-rows">
+              <tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">Choose leave dates to build the leave plan.</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     <div class="fg"><label class="fl">Reason <span class="req-star">*</span></label><textarea class="fi" id="lv-reason" rows="3" placeholder="Brief reason..."></textarea></div>
     <div class="fg"><label class="fl">Handover To</label><input type="text" class="fi" id="lv-handover" placeholder="Colleague name"></div>
     <div id="lv-calc" style="background:var(--accent-bg);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--accent-dark);margin-bottom:12px;display:none;">
-      📅 <strong id="lv-days">0</strong> working day(s) requested
+      <strong id="lv-days">0</strong> working day(s) requested
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('leaveModal')">Cancel</button>
@@ -160,9 +168,21 @@
     </div>
     <div class="fg">
       <label class="fl">Reporting Manager</label>
-      <input type="text" class="fi" id="ne-manager" list="ne-manager-options" placeholder="Select or search line manager">
-      <datalist id="ne-manager-options"></datalist>
-      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Start typing to search all employees in the built-in dropdown.</div>
+      <div class="manager-field" id="ne-manager-field">
+        <input type="hidden" id="ne-manager">
+        <button type="button" class="manager-trigger" id="ne-manager-trigger" onclick="window.toggleManagerPicker && window.toggleManagerPicker('ne')">
+          <span class="manager-trigger-value manager-placeholder" id="ne-manager-value">Select reporting manager</span>
+          <span class="manager-trigger-arrow" id="ne-manager-arrow">▼</span>
+        </button>
+        <div class="manager-dropdown" id="ne-manager-dropdown">
+          <div class="manager-search-wrap">
+            <input type="text" class="manager-search-input" id="ne-manager-search" placeholder="Search employee..." oninput="window.filterManagerPickerOptions && window.filterManagerPickerOptions('ne')" autocomplete="off">
+          </div>
+          <div class="manager-options-list" id="ne-manager-options"></div>
+          <div class="manager-no-results" id="ne-manager-empty">No results found</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Search and select from all employees in the dropdown.</div>
     </div>
     <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ne-shift"></select></div>
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -294,8 +314,20 @@
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>
       <div class="fg">
         <label class="fl">Reporting Manager</label>
-        <input type="text" class="fi" id="ee-manager" list="ee-manager-options" placeholder="Select or search line manager">
-        <datalist id="ee-manager-options"></datalist>
+        <div class="manager-field" id="ee-manager-field">
+          <input type="hidden" id="ee-manager">
+          <button type="button" class="manager-trigger" id="ee-manager-trigger" onclick="window.toggleManagerPicker && window.toggleManagerPicker('ee')">
+            <span class="manager-trigger-value manager-placeholder" id="ee-manager-value">Select reporting manager</span>
+            <span class="manager-trigger-arrow" id="ee-manager-arrow">▼</span>
+          </button>
+          <div class="manager-dropdown" id="ee-manager-dropdown">
+            <div class="manager-search-wrap">
+              <input type="text" class="manager-search-input" id="ee-manager-search" placeholder="Search employee..." oninput="window.filterManagerPickerOptions && window.filterManagerPickerOptions('ee')" autocomplete="off">
+            </div>
+            <div class="manager-options-list" id="ee-manager-options"></div>
+            <div class="manager-no-results" id="ee-manager-empty">No results found</div>
+          </div>
+        </div>
       </div>
       <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ee-shift"></select></div>
     </div>

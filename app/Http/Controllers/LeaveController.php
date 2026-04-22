@@ -98,6 +98,101 @@ class LeaveController extends Controller
         return in_array($slot, ['first_half', 'second_half'], true) ? $slot : null;
     }
 
+    private function getDateRange(string $fromDate, string $toDate): array
+    {
+        $dates = [];
+        $cursor = now()->parse($fromDate)->startOfDay();
+        $end = now()->parse($toDate)->startOfDay();
+
+        while ($cursor->lte($end)) {
+            $dates[] = $cursor->toDateString();
+            $cursor->addDay();
+        }
+
+        return $dates;
+    }
+
+    private function normalizeDailyBreakdownInput(mixed $value): array
+    {
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+
+        return is_array($value) ? $value : [];
+    }
+
+    private function buildLeavePlan(
+        string $fromDate,
+        string $toDate,
+        string $durationType,
+        ?string $halfDaySlot,
+        array $dailyBreakdown = [],
+    ): array {
+        $dates = $this->getDateRange($fromDate, $toDate);
+
+        if ($dailyBreakdown !== []) {
+            $normalized = [];
+            foreach ($dailyBreakdown as $row) {
+                if (!is_array($row) || empty($row['date']) || !in_array($row['date'], $dates, true)) {
+                    continue;
+                }
+
+                $rowDurationType = $this->normalizeDurationType($row['duration_type'] ?? 'full_day');
+                $rowHalfDaySlot = $this->normalizeHalfDaySlot($row['half_day_slot'] ?? null);
+
+                if ($rowDurationType === 'half_day' && !$rowHalfDaySlot) {
+                    continue;
+                }
+
+                $normalized[$row['date']] = [
+                    'date' => $row['date'],
+                    'duration_type' => $rowDurationType,
+                    'half_day_slot' => $rowDurationType === 'half_day' ? $rowHalfDaySlot : null,
+                    'days' => $rowDurationType === 'half_day' ? 0.5 : 1.0,
+                ];
+            }
+
+            if (count($normalized) !== count($dates)) {
+                throw ValidationException::withMessages([
+                    'daily_breakdown' => 'Choose leave duration for each selected date.',
+                ]);
+            }
+
+            return array_values(array_map(
+                fn (string $date) => $normalized[$date],
+                $dates
+            ));
+        }
+
+        if ($durationType === 'half_day') {
+            return [[
+                'date' => $fromDate,
+                'duration_type' => 'half_day',
+                'half_day_slot' => $halfDaySlot,
+                'days' => 0.5,
+            ]];
+        }
+
+        return array_map(fn (string $date) => [
+            'date' => $date,
+            'duration_type' => 'full_day',
+            'half_day_slot' => null,
+            'days' => 1.0,
+        ], $dates);
+    }
+
+    private function expandStoredLeavePlan(object $leaveRequest): array
+    {
+        return $this->buildLeavePlan(
+            $leaveRequest->from_date,
+            $leaveRequest->to_date,
+            $this->normalizeDurationType($leaveRequest->duration_type ?? 'full_day'),
+            $this->normalizeHalfDaySlot($leaveRequest->half_day_slot ?? null),
+            $this->normalizeDailyBreakdownInput($leaveRequest->daily_breakdown ?? [])
+        );
+    }
+
     private function calculateRequestedLeaveDays(string $fromDate, string $toDate, string $durationType): float
     {
         if ($durationType === 'half_day') {
@@ -110,37 +205,55 @@ class LeaveController extends Controller
         return (float) max(1, $from->diffInDays($to) + 1);
     }
 
+    private function calculateRequestedLeaveDaysFromPlan(array $plan): float
+    {
+        return (float) array_sum(array_map(
+            fn (array $row) => (float) ($row['days'] ?? 0),
+            $plan
+        ));
+    }
+
     private function leaveRequestsOverlap(
         int $userId,
         string $fromDate,
         string $toDate,
         string $durationType,
         ?string $halfDaySlot,
+        array $dailyBreakdown = [],
         ?int $ignoreRequestId = null,
     ): bool {
+        $requestedPlan = $this->buildLeavePlan($fromDate, $toDate, $durationType, $halfDaySlot, $dailyBreakdown);
+        $requestedMap = collect($requestedPlan)->keyBy('date');
+
         $existingRequests = DB::table('leave_requests')
             ->where('user_id', $userId)
             ->whereNotIn('status', ['Rejected', 'Cancelled'])
             ->where('from_date', '<=', $toDate)
             ->where('to_date', '>=', $fromDate)
             ->when($ignoreRequestId, fn ($query) => $query->where('id', '!=', $ignoreRequestId))
-            ->get(['id', 'from_date', 'to_date', 'duration_type', 'half_day_slot']);
+            ->get(['id', 'from_date', 'to_date', 'duration_type', 'half_day_slot', 'daily_breakdown']);
 
         foreach ($existingRequests as $existing) {
-            if (
-                $durationType === 'half_day'
-                && $existing->duration_type === 'half_day'
-                && $fromDate === $toDate
-                && $existing->from_date === $existing->to_date
-                && $existing->from_date === $fromDate
-                && $halfDaySlot
-                && $existing->half_day_slot
-                && $existing->half_day_slot !== $halfDaySlot
-            ) {
-                continue;
-            }
+            $existingPlan = $this->expandStoredLeavePlan($existing);
 
-            return true;
+            foreach ($existingPlan as $existingDay) {
+                $requestedDay = $requestedMap->get($existingDay['date']);
+                if (!$requestedDay) {
+                    continue;
+                }
+
+                if (
+                    $requestedDay['duration_type'] === 'half_day'
+                    && $existingDay['duration_type'] === 'half_day'
+                    && $requestedDay['half_day_slot']
+                    && $existingDay['half_day_slot']
+                    && $requestedDay['half_day_slot'] !== $existingDay['half_day_slot']
+                ) {
+                    continue;
+                }
+
+                return true;
+            }
         }
 
         return false;
@@ -186,20 +299,26 @@ class LeaveController extends Controller
         bool $approved,
         string $durationType = 'full_day',
         ?string $halfDaySlot = null,
+        ?array $dailyBreakdown = null,
     ): void
     {
-        $cursor = now()->parse($fromDate)->startOfDay();
-        $end = now()->parse($toDate)->startOfDay();
+        $plan = $dailyBreakdown !== null
+            ? $this->buildLeavePlan($fromDate, $toDate, $durationType, $halfDaySlot, $dailyBreakdown)
+            : $this->buildLeavePlan($fromDate, $toDate, $durationType, $halfDaySlot);
+        $planMap = collect($plan)->keyBy('date');
 
-        while ($cursor->lte($end)) {
-            $date = $cursor->toDateString();
-
+        foreach ($this->getDateRange($fromDate, $toDate) as $date) {
             if ($approved) {
+                $entry = $planMap->get($date);
+                if (!$entry) {
+                    continue;
+                }
+
                 DB::table('attendance_days')->updateOrInsert(
                     ['user_id' => $userId, 'date' => $date],
                     [
-                        'status' => $durationType === 'half_day'
-                            ? ($halfDaySlot === 'second_half' ? 'Half Leave (Second Half)' : 'Half Leave (First Half)')
+                        'status' => $entry['duration_type'] === 'half_day'
+                            ? ($entry['half_day_slot'] === 'second_half' ? 'Half Leave (Second Half)' : 'Half Leave (First Half)')
                             : 'Leave',
                         'late' => false,
                         'overtime_minutes' => 0,
@@ -236,8 +355,6 @@ class LeaveController extends Controller
                     );
                 }
             }
-
-            $cursor->addDay();
         }
     }
 
@@ -593,6 +710,10 @@ class LeaveController extends Controller
             'to_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:from_date'],
             'duration_type' => ['nullable', Rule::in(['full_day', 'half_day'])],
             'half_day_slot' => ['nullable', Rule::in(['first_half', 'second_half'])],
+            'daily_breakdown' => ['nullable', 'array'],
+            'daily_breakdown.*.date' => ['required_with:daily_breakdown', 'date_format:Y-m-d'],
+            'daily_breakdown.*.duration_type' => ['required_with:daily_breakdown', Rule::in(['full_day', 'half_day'])],
+            'daily_breakdown.*.half_day_slot' => ['nullable', Rule::in(['first_half', 'second_half'])],
             'reason' => ['nullable', 'string', 'max:2000'],
             'handover_to' => ['nullable', 'string', 'max:255'],
         ]);
@@ -621,6 +742,15 @@ class LeaveController extends Controller
             }
         }
 
+        $dailyBreakdown = $this->normalizeDailyBreakdownInput($validated['daily_breakdown'] ?? []);
+        $leavePlan = $this->buildLeavePlan(
+            $validated['from_date'],
+            $validated['to_date'],
+            $durationType,
+            $halfDaySlot,
+            $dailyBreakdown
+        );
+
         $leaveType = DB::table('leave_types')
             ->where('code', $validated['leave_type_code'])
             ->first(['id', 'paid']);
@@ -635,6 +765,7 @@ class LeaveController extends Controller
             $validated['to_date'],
             $durationType,
             $halfDaySlot,
+            $dailyBreakdown,
         );
 
         if ($overlapsExisting) {
@@ -642,11 +773,7 @@ class LeaveController extends Controller
         }
 
         $year = (int) date('Y', strtotime($validated['from_date']));
-        $requestedDays = $this->calculateRequestedLeaveDays(
-            $validated['from_date'],
-            $validated['to_date'],
-            $durationType
-        );
+        $requestedDays = $this->calculateRequestedLeaveDaysFromPlan($leavePlan);
         $balance = $this->getOrCreateLeaveBalance($request->user()->id, $year, (int) $leaveType->id);
 
         if ((bool) $leaveType->paid && $requestedDays > (float) $balance->remaining_days) {
@@ -663,6 +790,7 @@ class LeaveController extends Controller
             'to_date' => $validated['to_date'],
             'duration_type' => $durationType,
             'half_day_slot' => $halfDaySlot,
+            'daily_breakdown' => json_encode($leavePlan),
             'days' => $requestedDays,
             'reason' => $validated['reason'] ?? null,
             'handover_to' => $validated['handover_to'] ?? null,
@@ -709,11 +837,17 @@ class LeaveController extends Controller
                 'leave_requests.to_date',
                 'leave_requests.duration_type',
                 'leave_requests.half_day_slot',
+                'leave_requests.daily_breakdown',
                 'leave_requests.days',
                 'leave_requests.created_at',
             ])
             ->orderByDesc('leave_requests.created_at')
             ->get();
+
+        $rows->transform(function ($row) {
+            $row->daily_breakdown = $this->normalizeDailyBreakdownInput($row->daily_breakdown ?? []);
+            return $row;
+        });
 
         return response()->json(['ok' => true, 'requests' => $rows]);
     }
@@ -868,7 +1002,8 @@ class LeaveController extends Controller
                     (string) $requestRow->to_date,
                     true,
                     (string) ($requestRow->duration_type ?? 'full_day'),
-                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null,
+                    $this->normalizeDailyBreakdownInput($requestRow->daily_breakdown ?? [])
                 );
             }
 
@@ -881,7 +1016,8 @@ class LeaveController extends Controller
                     (string) $requestRow->to_date,
                     false,
                     (string) ($requestRow->duration_type ?? 'full_day'),
-                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
+                    $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null,
+                    $this->normalizeDailyBreakdownInput($requestRow->daily_breakdown ?? [])
                 );
             }
 

@@ -14,19 +14,174 @@ function getManagerDirectoryOptions(excludeEmployeeCode=''){
       return {
         value: name,
         search: `${name} ${employee.id || ''} ${employee.dept || ''} ${employee.desg || ''} ${employee.email || ''}`.toLowerCase(),
-        label: `${name} (${employee.id || '-'}) - ${employee.dept || '-'} - ${employee.desg || 'Employee'}`
+        label: `${name} (${employee.id || '-'}) - ${employee.dept || '-'} - ${employee.desg || 'Employee'}`,
+        meta: `${employee.id || '-'} - ${employee.dept || '-'} - ${employee.desg || 'Employee'}`
       };
     });
 }
 
-function syncEmployeeManagerOptions(targetId, selectedName='', excludeEmployeeCode=''){
-  const input = document.getElementById(targetId);
-  const datalist = document.getElementById(`${targetId}-options`);
-  if(!input || !datalist) return;
+function escapeManagerPickerHtml(value=''){
+  return String(value)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
 
-  const options = getManagerDirectoryOptions(excludeEmployeeCode);
-  datalist.innerHTML = options.map(option => `<option value="${option.value.replace(/"/g,'&quot;')}" label="${option.label.replace(/"/g,'&quot;')}"></option>`).join('');
-  input.value = selectedName || '';
+function getManagerPickerElements(prefix){
+  return {
+    field: document.getElementById(`${prefix}-manager-field`),
+    hidden: document.getElementById(`${prefix}-manager`),
+    trigger: document.getElementById(`${prefix}-manager-trigger`),
+    value: document.getElementById(`${prefix}-manager-value`),
+    arrow: document.getElementById(`${prefix}-manager-arrow`),
+    dropdown: document.getElementById(`${prefix}-manager-dropdown`),
+    search: document.getElementById(`${prefix}-manager-search`),
+    options: document.getElementById(`${prefix}-manager-options`),
+    empty: document.getElementById(`${prefix}-manager-empty`),
+  };
+}
+
+function setManagerPickerValue(prefix, selectedName=''){
+  const els = getManagerPickerElements(prefix);
+  if(!els.hidden || !els.value) return;
+
+  const value = selectedName || '';
+  els.hidden.value = value;
+  els.value.textContent = value || 'Select reporting manager';
+  els.value.classList.toggle('manager-placeholder', !value);
+}
+
+function buildManagerPickerOptions(options, selectedName=''){
+  return options.map(option => `
+    <button
+      type="button"
+      class="manager-option ${option.value === selectedName ? 'selected' : ''}"
+      onclick="window.selectManagerPickerOption && window.selectManagerPickerOption('${escapeManagerPickerHtml(option.prefix)}', '${escapeManagerPickerHtml(option.value)}')"
+    >
+      <span class="manager-option-copy">
+        <span class="manager-option-name">${escapeManagerPickerHtml(option.value || 'Unknown employee')}</span>
+        <span class="manager-option-meta">${escapeManagerPickerHtml(option.meta || option.label || '')}</span>
+      </span>
+      <span class="manager-option-check">&#10003;</span>
+    </button>
+  `).join('');
+}
+
+function renderManagerPickerOptions(prefix, options, selectedName=''){
+  const els = getManagerPickerElements(prefix);
+  if(!els.options || !els.empty) return;
+
+  if(!options.length){
+    els.options.innerHTML = '';
+    els.empty.style.display = 'block';
+    return;
+  }
+
+  els.options.innerHTML = buildManagerPickerOptions(
+    options.map(option => ({...option, prefix})),
+    selectedName
+  );
+  els.empty.style.display = 'none';
+}
+
+function syncManagerPicker(prefix, selectedName='', excludeEmployeeCode=''){
+  const els = getManagerPickerElements(prefix);
+  if(!els.field || !els.hidden) return;
+
+  const currentValue = selectedName || els.hidden.value || '';
+  const excludeCode = excludeEmployeeCode || '';
+  const term = (els.search?.value || '').trim().toLowerCase();
+  const options = getManagerDirectoryOptions(excludeCode);
+  const filtered = term ? options.filter(option => option.search.includes(term)) : options.slice();
+  const selectedExists = currentValue && options.some(option => option.value === currentValue);
+
+  if(currentValue && !selectedExists && (!term || currentValue.toLowerCase().includes(term))){
+    filtered.unshift({
+      value: currentValue,
+      search: currentValue.toLowerCase(),
+      label: currentValue,
+      meta: 'Current selection'
+    });
+  }
+
+  els.field.dataset.excludeEmployeeCode = excludeCode;
+  setManagerPickerValue(prefix, currentValue);
+  renderManagerPickerOptions(prefix, filtered, currentValue);
+}
+
+function syncNewEmployeeManagerOptions(selectedName=''){
+  syncManagerPicker('ne', selectedName, '');
+}
+
+function syncEditEmployeeManagerOptions(selectedName='', excludeEmployeeCode=''){
+  syncManagerPicker('ee', selectedName, excludeEmployeeCode);
+}
+
+function closeManagerPicker(prefix, keepSearchValue=false){
+  const els = getManagerPickerElements(prefix);
+  if(!els.dropdown || !els.trigger || !els.arrow) return;
+
+  els.dropdown.classList.remove('open');
+  els.trigger.classList.remove('open');
+  els.arrow.classList.remove('up');
+
+  if(!keepSearchValue && els.search){
+    els.search.value = '';
+  }
+
+  syncManagerPicker(prefix, els.hidden?.value || '', els.field?.dataset.excludeEmployeeCode || '');
+}
+
+function openManagerPicker(prefix){
+  ['ne','ee'].forEach(key => {
+    if(key !== prefix) closeManagerPicker(key);
+  });
+
+  const els = getManagerPickerElements(prefix);
+  if(!els.dropdown || !els.trigger || !els.arrow) return;
+
+  syncManagerPicker(prefix, els.hidden?.value || '', els.field?.dataset.excludeEmployeeCode || '');
+  els.dropdown.classList.add('open');
+  els.trigger.classList.add('open');
+  els.arrow.classList.add('up');
+
+  window.setTimeout(() => {
+    if(els.search) els.search.focus();
+  }, 10);
+}
+
+function toggleManagerPicker(prefix){
+  const els = getManagerPickerElements(prefix);
+  if(!els.dropdown) return;
+  if(els.dropdown.classList.contains('open')){
+    closeManagerPicker(prefix);
+    return;
+  }
+  openManagerPicker(prefix);
+}
+
+function filterManagerPickerOptions(prefix){
+  const els = getManagerPickerElements(prefix);
+  if(!els.field) return;
+  syncManagerPicker(prefix, els.hidden?.value || '', els.field.dataset.excludeEmployeeCode || '');
+}
+
+function selectManagerPickerOption(prefix, value){
+  setManagerPickerValue(prefix, value || '');
+  closeManagerPicker(prefix);
+}
+
+if(!window.__managerPickerOutsideClickBound){
+  document.addEventListener('click', function(event){
+    ['ne','ee'].forEach(prefix => {
+      const els = getManagerPickerElements(prefix);
+      if(!els.field || els.field.contains(event.target)) return;
+      closeManagerPicker(prefix);
+    });
+  });
+  window.__managerPickerOutsideClickBound = true;
 }
 
 async function openEditEmployee(id){
@@ -64,7 +219,10 @@ async function openEditEmployee(id){
     document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-role').value = e.role||'employee';
     document.getElementById('ee-work-location').value = e.workLocation||'';
-    syncEmployeeManagerOptions('ee-manager', e.manager==='-' ? '' : (e.manager||''), e.id||'');
+    const managerValue = e.manager==='-' ? '' : (e.manager||'');
+    const editManagerSearch = document.getElementById('ee-manager-search');
+    if(editManagerSearch) editManagerSearch.value = '';
+    syncEditEmployeeManagerOptions(managerValue, e.id||'');
     document.getElementById('ee-shift').value = e.shiftId||'';
     document.getElementById('ee-email').value = e.email||'';
     document.getElementById('ee-password').value = '';
@@ -120,6 +278,8 @@ function openCreateDepartment(){
   syncDepartmentHeadOptions('');
   openModal('departmentModal');
 }
+
+syncNewEmployeeManagerOptions();
 
 function openEditDepartment(name){
   const department = (DB.departments||[]).find(item => item.name === name);

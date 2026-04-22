@@ -66,6 +66,7 @@ async function wpReload(){
     syncDepartmentOptions('ee-dept');
     syncShiftOptions('ne-shift');
     syncShiftOptions('ee-shift');
+    if(typeof syncNewEmployeeManagerOptions === 'function') syncNewEmployeeManagerOptions();
     syncAnnouncementAudienceOptions();
     syncAnnouncementRecipientOptions();
   }catch(e){
@@ -667,19 +668,18 @@ function submitLeave(){
   const typeCode=document.getElementById('lv-type').value;
   const from=document.getElementById('lv-from').value;
   const to=document.getElementById('lv-to').value;
-  const durationType=document.getElementById('lv-duration').value || 'full_day';
-  const halfDaySlot=document.getElementById('lv-half-slot').value || 'first_half';
   const reason=document.getElementById('lv-reason').value;
   const handover=document.getElementById('lv-handover').value;
+  const dailyBreakdown = getLeaveDailyBreakdown();
   if(!from||!to||!reason){ showToast('Please fill all required fields','red'); return; }
+  if(!dailyBreakdown.length){ showToast('Choose leave duration for each selected day','red'); return; }
   wpApi('/api/leave/apply', {
     method:'POST',
     body: JSON.stringify({
       leave_type_code: typeCode || 'annual',
       from_date: from,
       to_date: to,
-      duration_type: durationType,
-      half_day_slot: durationType === 'half_day' ? halfDaySlot : null,
+      daily_breakdown: dailyBreakdown,
       reason,
       handover_to: handover,
     })
@@ -695,6 +695,19 @@ function submitLeave(){
 }
 
 function formatLeaveDuration(leave){
+  const dailyBreakdown = Array.isArray(leave?.dailyBreakdown || leave?.daily_breakdown)
+    ? (leave.dailyBreakdown || leave.daily_breakdown)
+    : [];
+  if(dailyBreakdown.length){
+    const fullDays = dailyBreakdown.filter(day => (day.durationType || day.duration_type) === 'full_day').length;
+    const firstHalf = dailyBreakdown.filter(day => (day.halfDaySlot || day.half_day_slot) === 'first_half').length;
+    const secondHalf = dailyBreakdown.filter(day => (day.halfDaySlot || day.half_day_slot) === 'second_half').length;
+    const parts = [];
+    if(fullDays) parts.push(`${fullDays} full day${fullDays===1 ? '' : 's'}`);
+    if(firstHalf) parts.push(`${firstHalf} first half`);
+    if(secondHalf) parts.push(`${secondHalf} second half`);
+    return parts.join(' + ');
+  }
   if((leave?.durationType || leave?.duration_type) === 'half_day'){
     return (leave?.halfDaySlot || leave?.half_day_slot) === 'second_half' ? 'Second Half (0.5)' : 'First Half (0.5)';
   }
@@ -712,39 +725,87 @@ function formatLeaveBalanceValue(value){
   return String(Math.round(num));
 }
 
-function toggleLeaveDurationFields(){
-  const duration = document.getElementById('lv-duration')?.value || 'full_day';
-  const wrap = document.getElementById('lv-half-slot-wrap');
-  const toInput = document.getElementById('lv-to');
-  const fromInput = document.getElementById('lv-from');
-  if(wrap) wrap.style.display = duration === 'half_day' ? 'block' : 'none';
-  if(duration === 'half_day' && fromInput && toInput && fromInput.value){
-    toInput.value = fromInput.value;
+function getLeaveDateRange(){
+  const from = document.getElementById('lv-from')?.value;
+  const to = document.getElementById('lv-to')?.value || from;
+  if(!from || !to) return [];
+  const dates = [];
+  let cursor = new Date(from+'T00:00:00');
+  const end = new Date(to+'T00:00:00');
+  while(cursor <= end){
+    dates.push(cursor.toISOString().split('T')[0]);
+    cursor.setDate(cursor.getDate() + 1);
   }
+  return dates;
+}
+
+function renderLeaveBreakdownRows(){
+  const wrap = document.getElementById('lv-breakdown-wrap');
+  const tbody = document.getElementById('lv-breakdown-rows');
+  const dates = getLeaveDateRange();
+  if(!wrap || !tbody) return;
+
+  if(!dates.length){
+    wrap.style.display = 'none';
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">Choose leave dates to build the leave plan.</td></tr>`;
+    calcLeaveDays();
+    return;
+  }
+
+  wrap.style.display = 'block';
+  const existing = new Map(
+    Array.from(tbody.querySelectorAll('tr[data-leave-date]')).map(row => [
+      row.getAttribute('data-leave-date'),
+      row.querySelector('select[data-leave-day-duration]')?.value || 'full_day'
+    ])
+  );
+
+  tbody.innerHTML = dates.map(date => {
+    const selected = existing.get(date) || 'full_day';
+    const dayLabel = new Date(date+'T00:00:00').toLocaleDateString('en-GB', {weekday:'short'});
+    return `<tr data-leave-date="${date}">
+      <td>${formatDate(date)}</td>
+      <td>${dayLabel}</td>
+      <td>
+        <select class="fi" data-leave-day-duration onchange="window.calcLeaveDays()" style="max-width:220px;">
+          <option value="full_day" ${selected==='full_day' ? 'selected' : ''}>Full Day</option>
+          <option value="first_half" ${selected==='first_half' ? 'selected' : ''}>First Half</option>
+          <option value="second_half" ${selected==='second_half' ? 'selected' : ''}>Second Half</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+
   calcLeaveDays();
 }
 
+function getLeaveDailyBreakdown(){
+  return Array.from(document.querySelectorAll('#lv-breakdown-rows tr[data-leave-date]')).map(row => {
+    const date = row.getAttribute('data-leave-date');
+    const duration = row.querySelector('select[data-leave-day-duration]')?.value || 'full_day';
+    return {
+      date,
+      duration_type: duration === 'full_day' ? 'full_day' : 'half_day',
+      half_day_slot: duration === 'full_day' ? null : duration,
+    };
+  });
+}
+
 function calcLeaveDays(){
-  const from=document.getElementById('lv-from')?.value;
-  const to=document.getElementById('lv-to')?.value;
-  const duration=document.getElementById('lv-duration')?.value || 'full_day';
-  const toInput=document.getElementById('lv-to');
-  if(from&&to){
-    if(duration === 'half_day' && toInput){
-      toInput.value = from;
-    }
-    const days=duration === 'half_day'
-      ? 0.5
-      : Math.max(0,Math.round((new Date(to)-new Date(from))/86400000)+1);
-    const c=document.getElementById('lv-calc');
-    const d=document.getElementById('lv-days');
-    if(c&&d){c.style.display='block';d.textContent=days;}
+  const rows = getLeaveDailyBreakdown();
+  const days = rows.reduce((sum, row) => sum + (row.duration_type === 'half_day' ? 0.5 : 1), 0);
+  const c=document.getElementById('lv-calc');
+  const d=document.getElementById('lv-days');
+  if(c&&d){
+    c.style.display = rows.length ? 'block' : 'none';
+    d.textContent = rows.length ? formatLeaveBalanceValue(days) : '0';
   }
 }
 
 document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
-document.getElementById('lv-duration')?.addEventListener('change',toggleLeaveDurationFields);
-toggleLeaveDurationFields();
+document.getElementById('lv-from')?.addEventListener('change',renderLeaveBreakdownRows);
+document.getElementById('lv-to')?.addEventListener('change',renderLeaveBreakdownRows);
+renderLeaveBreakdownRows();
 syncLeaveTypeOptions();
 syncDepartmentOptions('ne-dept');
 syncDepartmentOptions('ee-dept');
@@ -1023,9 +1084,10 @@ function submitAddEmployee(){
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
-  ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-personal-email','ne-work-location','ne-desg','ne-manager','ne-dop','ne-lwd','ne-confirmation-date','ne-cnic-document','ne-dob','ne-gender','ne-cnic','ne-passport-no','ne-address','ne-marital-status','ne-blood','ne-kin','ne-kinRel','ne-kinPhone','ne-basic','ne-house','ne-transport','ne-pay-period','ne-salary-start-date','ne-contribution','ne-other-deductions','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-personal-email','ne-work-location','ne-desg','ne-manager-search','ne-manager','ne-dop','ne-lwd','ne-confirmation-date','ne-cnic-document','ne-dob','ne-gender','ne-cnic','ne-passport-no','ne-address','ne-marital-status','ne-blood','ne-kin','ne-kinRel','ne-kinPhone','ne-basic','ne-house','ne-transport','ne-pay-period','ne-salary-start-date','ne-contribution','ne-other-deductions','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
   if(document.getElementById('ne-role')) document.getElementById('ne-role').value='employee';
   if(document.getElementById('ne-shift')) document.getElementById('ne-shift').value='';
+  if(typeof syncNewEmployeeManagerOptions === 'function') syncNewEmployeeManagerOptions();
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
 
@@ -1433,26 +1495,48 @@ function pageAttendance(){
     '<div style="color:var(--muted);font-size:13px;">No activity logged yet today.</div>';
 
   return `
-  <div class="g2" style="margin-bottom:18px;">
-    <div class="clock-widget">
-      <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
-      <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-      <div class="cw-status" style="margin:10px 0 6px;">${statusBadgeHtml}</div>
-      <div class="cw-meta">
-        <span class="cw-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
-        <span class="cw-chip">Worked ${getLiveWorkedTimeLabel()}</span>
+  <div class="admin-att-shell" style="margin-bottom:18px;">
+    <div class="admin-att-hero">
+      <div class="admin-att-hero-panel">
+        <div class="admin-att-eyebrow">Live attendance</div>
+        <div class="admin-att-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
+        <div class="admin-att-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+        <div class="admin-att-status">${statusBadgeHtml}</div>
+        <div class="admin-att-meta">
+          <span class="admin-att-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
+          <span class="admin-att-chip">Worked <span data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></span>
+        </div>
+        <div class="admin-att-actions">${punchButtons}</div>
       </div>
-      <div class="punch-stack">${punchButtons}</div>
     </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || 'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? 'â€”' : (punchDisplay.clockOut || 'â€”')}</span></div>
-      <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
-      <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
-      <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
-      <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 â€“ 20:00</span></div>
+    <div class="admin-att-summary card">
+      <div class="card-hdr" style="margin-bottom:10px;">
+        <div class="card-title">Today's Summary</div>
+        <span class="badge bg-blue">Attendance</span>
+      </div>
+      <div class="admin-att-summary-grid">
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Clock In</span>
+          <strong class="admin-att-stat-value">${punchDisplay.clockIn || '-'}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Clock Out</span>
+          <strong class="admin-att-stat-value">${ps.punchedIn ? '-' : (punchDisplay.clockOut || '-')}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Break Time</span>
+          <strong class="admin-att-stat-value">${todayRec.breakOut&&todayRec.breakIn?'30 min':'-'}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Working Hours Today</span>
+          <strong class="admin-att-stat-value" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</strong>
+        </div>
+      </div>
+      <div class="admin-att-details">
+        <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
+        <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
+        <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 - 20:00</span></div>
+      </div>
     </div>
   </div>
   ${buildTabs('att',[
@@ -1807,6 +1891,11 @@ function filterEmpDept(val){
   applyEmployeeDirectoryFilters();
 }
 
+function openDepartmentView(name=''){
+  window.__workpulseSelectedDepartment = name || '';
+  showPage('departments');
+}
+
 function formatUserRole(role){
   const value = String(role || 'employee').toLowerCase();
   const labels = {
@@ -2040,13 +2129,51 @@ function pageEmpProfileDetail(){
 }
 
 function pageDepartments(){
+  const selectedTeam = window.__workpulseSelectedDepartment || '';
+  const focusedDepartment = (DB.departments || []).find(d => d.name === selectedTeam) || null;
+  const focusedEmployees = focusedDepartment
+    ? (DB.employees || []).filter(emp => emp.dept === focusedDepartment.name)
+    : [];
+
   return `
+  ${focusedDepartment ? `
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">${focusedDepartment.name} Team View</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Focused team summary with current attendance and assigned employees.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="window.__workpulseSelectedDepartment=''; window.showPage('departments')">All Teams</button>
+        <button class="btn btn-sm btn-primary" onclick="window.showPage('employees'); setTimeout(() => window.filterEmpDept('${focusedDepartment.name.replace(/'/g,"\\'")}'), 0);">Open Employees</button>
+      </div>
+    </div>
+    <div class="g4" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="stat-label">Head</div><div class="stat-val" style="font-size:22px;">${focusedDepartment.head || '-'}</div><div class="stat-sub">Current team lead</div></div>
+      <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val">${focusedDepartment.count || 0}</div><div class="stat-sub">Assigned to this team</div></div>
+      <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${focusedDepartment.present || 0}</div><div class="stat-sub">Checked in today</div></div>
+      <div class="stat-card"><div class="stat-label">On Leave</div><div class="stat-val" style="color:var(--purple);">${focusedDepartment.leave || 0}</div><div class="stat-sub">Approved leave today</div></div>
+    </div>
+    <div class="soft-table"><div class="table-wrap"><table>
+      <thead><tr><th>Employee</th><th>Designation</th><th>Line Manager</th><th>Status</th></tr></thead>
+      <tbody>
+        ${focusedEmployees.map(emp => `
+          <tr>
+            <td><div class="ucell"><div class="av av-32" style="background:${emp.avatarColor}22;color:${emp.avatarColor};">${emp.avatar}</div><div class="ucell-info"><div class="n">${emp.fname} ${emp.lname}</div><div class="s">${emp.email}</div></div></div></td>
+            <td>${emp.desg || '-'}</td>
+            <td>${emp.manager || '-'}</td>
+            <td>${statusBadge(emp.status)}</td>
+          </tr>
+        `).join('') || `<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">No employees found for this team.</td></tr>`}
+      </tbody>
+    </table></div></div>
+  </div>` : ''}
   <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
     <button class="btn btn-sm btn-primary" onclick="window.openCreateDepartment()">+ Add Team</button>
   </div>
   <div class="g3">
     ${DB.departments.map(d=>`
-    <div class="dept-card">
+    <div class="dept-card" style="${focusedDepartment && focusedDepartment.name===d.name ? 'box-shadow:0 0 0 3px rgba(38,134,147,.12);border-color:rgba(38,134,147,.38);' : ''}">
       <div class="dc-bar" style="background:${d.color};"></div>
       <div class="dc-body">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
@@ -2059,7 +2186,7 @@ function pageDepartments(){
         <div class="prog-bar" style="margin-top:10px;"><div class="prog-fill" style="width:${Math.round(d.present/d.count*100)}%;background:${d.color};"></div></div>
         <div style="font-size:11px;color:var(--muted);margin-top:4px;">${Math.round(d.present/d.count*100)}% attendance rate</div>
         <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="window.showPage('employees')">View Employees</button>
+          <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="window.openDepartmentView('${d.name.replace(/'/g,"\\'")}')">View Team</button>
           <button class="btn btn-sm" onclick="window.openEditDepartment('${d.name.replace(/'/g,"\\'")}')">Edit</button>
           <button class="btn btn-sm btn-danger" onclick="window.deleteDepartment('${d.name.replace(/'/g,"\\'")}')">Delete</button>
         </div>

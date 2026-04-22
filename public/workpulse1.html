@@ -48,6 +48,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);fon
 /* ── SIDEBAR ── */
 .sidebar{width:var(--sidebar);background:var(--text);color:#fff;display:flex;flex-direction:column;height:100vh;overflow-y:auto;flex-shrink:0;}
 .sb-logo{padding:18px 16px 14px;border-bottom:1px solid rgba(255,255,255,.08);}
+.logo-img {
+    height: 70px;
+    width: auto;
+    display: block;
+}
 .sb-logo h1{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;color:#fff;}
 .sb-logo h1 span{color:#6B9DFF;}
 .sb-logo p{font-size:10px;color:rgba(255,255,255,.3);margin-top:2px;}
@@ -319,9 +324,9 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo">
-      <h1>Work<span>Pulse</span></h1>
+      <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo" class="logo-img">
       <p id="sb-version">Attendance Management System</p>
-    </div>
+  </div>
     <div class="sb-user">
       <div class="av av-32" id="sb-avatar" style="background:var(--accent);color:#fff;">AK</div>
       <div class="sb-user-info">
