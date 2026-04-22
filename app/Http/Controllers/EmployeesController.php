@@ -100,7 +100,7 @@ class EmployeesController extends Controller
             $managerUserId = DB::table('users')->where('name', $validated['manager'])->value('id');
         }
 
-        $employeeCode = $this->nextEmployeeCodeForRole($role);
+        $employeeCode = $this->nextEmployeeCodeForTeam($validated['dept']);
         $name = trim($validated['fname'].' '.$validated['lname']);
 
         $createdPassword = null;
@@ -109,11 +109,15 @@ class EmployeesController extends Controller
         $userId = DB::transaction(function () use ($validated, $role, $employeeCode, $name, $departmentId, $managerUserId, &$createdPassword, $cnicDocument) {
             $existing = DB::table('users')->where('email', $validated['email'])->first();
             if ($existing) {
+                $resolvedEmployeeCode = $this->employeeCodeMatchesTeam((string) ($existing->employee_code ?? ''), $validated['dept'])
+                    ? (string) $existing->employee_code
+                    : $this->nextEmployeeCodeForTeam($validated['dept'], (int) $existing->id);
+
                 // Update existing account to become an employee profile if needed
                 DB::table('users')->where('id', $existing->id)->update([
                     'name' => $name,
                     'role' => $existing->role ?: $role,
-                    'employee_code' => $existing->employee_code ?: $employeeCode,
+                    'employee_code' => $resolvedEmployeeCode,
                     'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $existing->password,
                     'updated_at' => now(),
                 ]);
@@ -275,12 +279,27 @@ class EmployeesController extends Controller
             $managerUserId = DB::table('users')->where('name', $validated['manager'])->value('id');
         }
 
+        $currentUser = DB::table('users')->where('id', $userId)->first(['employee_code']);
+        $currentDepartmentName = DB::table('departments')
+            ->where('id', DB::table('employee_profiles')->where('user_id', $userId)->value('department_id'))
+            ->value('name');
         $name = trim($validated['fname'].' '.$validated['lname']);
+        $updatedEmployeeCode = $employeeCode;
 
-        DB::transaction(function () use ($validated, $userId, $name, $departmentId, $managerUserId, $request, $employeeCode) {
+        if ($currentUser) {
+            $shouldRefreshCode = !$this->employeeCodeMatchesTeam((string) $currentUser->employee_code, $validated['dept'])
+                || (($currentDepartmentName ?? '') !== $validated['dept']);
+
+            $updatedEmployeeCode = $shouldRefreshCode
+                ? $this->nextEmployeeCodeForTeam($validated['dept'], $userId)
+                : (string) $currentUser->employee_code;
+        }
+
+        DB::transaction(function () use ($validated, $userId, $name, $departmentId, $managerUserId, $request, $employeeCode, $updatedEmployeeCode) {
             $userUpdate = [
                 'name' => $name,
                 'email' => $validated['email'],
+                'employee_code' => $updatedEmployeeCode,
                 'updated_at' => now(),
             ];
 
@@ -297,7 +316,7 @@ class EmployeesController extends Controller
             $profile = DB::table('employee_profiles')->where('user_id', $userId)->first();
             $cnicDocumentMeta = null;
             if ($request->hasFile('cnic_document')) {
-                $cnicDocumentMeta = $this->storeEmployeeDocument($request->file('cnic_document'), $employeeCode, $userId);
+                $cnicDocumentMeta = $this->storeEmployeeDocument($request->file('cnic_document'), $updatedEmployeeCode, $userId);
             }
 
             DB::table('employee_profiles')->updateOrInsert(
@@ -559,26 +578,67 @@ class EmployeesController extends Controller
         ];
     }
 
-    private function nextEmployeeCodeForRole(string $role): string
+    private function nextEmployeeCodeForTeam(string $teamName, ?int $ignoreUserId = null): string
     {
-        $prefix = match ($role) {
-            'admin' => 'ADM',
-            'manager' => 'MGR',
-            'hr' => 'HR',
-            default => 'EMP',
-        };
+        $prefix = $this->teamPrefix($teamName);
 
-        $existing = DB::table('users')
-            ->where('employee_code', 'like', $prefix.'-%')
-            ->pluck('employee_code');
+        $query = DB::table('users')
+            ->where('employee_code', 'like', $prefix.'-emp%');
+
+        if ($ignoreUserId !== null) {
+            $query->where('id', '!=', $ignoreUserId);
+        }
+
+        $existing = $query->pluck('employee_code');
 
         $max = 0;
         foreach ($existing as $code) {
-            if (preg_match('/^'.preg_quote($prefix, '/').'\-(\d+)$/', (string) $code, $matches)) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'\-emp(\d+)$/i', (string) $code, $matches)) {
                 $max = max($max, (int) $matches[1]);
             }
         }
 
-        return $prefix.'-'.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+        return $prefix.'-emp'.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    private function employeeCodeMatchesTeam(string $employeeCode, string $teamName): bool
+    {
+        return str_starts_with(Str::lower($employeeCode), Str::lower($this->teamPrefix($teamName).'-emp'));
+    }
+
+    private function teamPrefix(string $teamName): string
+    {
+        $normalized = Str::of($teamName)->trim()->lower()->replaceMatches('/[^a-z0-9\s]+/', '')->value();
+
+        $mapped = [
+            'development' => 'Dev',
+            'developer' => 'Dev',
+            'engineering' => 'Eng',
+            'engineer' => 'Eng',
+            'human resources' => 'HR',
+            'hr' => 'HR',
+            'finance' => 'Fin',
+            'marketing' => 'Mkt',
+            'product' => 'Prd',
+            'operations' => 'Ops',
+            'design' => 'Dsg',
+            'support' => 'Sup',
+            'sales' => 'Sal',
+            'quality assurance' => 'QA',
+            'qa' => 'QA',
+        ][$normalized] ?? null;
+
+        if ($mapped) {
+            return $mapped;
+        }
+
+        $words = preg_split('/\s+/', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($words) > 1) {
+            $initials = strtoupper(implode('', array_map(static fn (string $word): string => substr($word, 0, 1), array_slice($words, 0, 3))));
+            return $initials ?: 'Tem';
+        }
+
+        $base = ucfirst(substr($normalized ?: 'team', 0, 3));
+        return strlen($base) >= 2 ? $base : 'Tem';
     }
 }

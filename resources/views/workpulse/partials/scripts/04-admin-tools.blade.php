@@ -4,6 +4,31 @@ let _editEmpId = null;
 let _editTab = 'personal';
 let _editDepartmentName = null;
 
+function getManagerDirectoryOptions(excludeEmployeeCode=''){
+  return (Array.isArray(DB.employees) ? DB.employees : [])
+    .filter(employee => employee && employee.id !== excludeEmployeeCode)
+    .slice()
+    .sort((a,b) => `${a.fname || ''} ${a.lname || ''}`.localeCompare(`${b.fname || ''} ${b.lname || ''}`))
+    .map(employee => {
+      const name = `${employee.fname || ''} ${employee.lname || ''}`.trim();
+      return {
+        value: name,
+        search: `${name} ${employee.id || ''} ${employee.dept || ''} ${employee.desg || ''} ${employee.email || ''}`.toLowerCase(),
+        label: `${name} (${employee.id || '-'}) - ${employee.dept || '-'} - ${employee.desg || 'Employee'}`
+      };
+    });
+}
+
+function syncEmployeeManagerOptions(targetId, selectedName='', excludeEmployeeCode=''){
+  const input = document.getElementById(targetId);
+  const datalist = document.getElementById(`${targetId}-options`);
+  if(!input || !datalist) return;
+
+  const options = getManagerDirectoryOptions(excludeEmployeeCode);
+  datalist.innerHTML = options.map(option => `<option value="${option.value.replace(/"/g,'&quot;')}" label="${option.label.replace(/"/g,'&quot;')}"></option>`).join('');
+  input.value = selectedName || '';
+}
+
 async function openEditEmployee(id){
   _editEmpId = id;
   _editTab = 'personal';
@@ -39,7 +64,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-role').value = e.role||'employee';
     document.getElementById('ee-work-location').value = e.workLocation||'';
-    document.getElementById('ee-manager').value = e.manager==='-' ? '' : (e.manager||'');
+    syncEmployeeManagerOptions('ee-manager', e.manager==='-' ? '' : (e.manager||''), e.id||'');
     document.getElementById('ee-shift').value = e.shiftId||'';
     document.getElementById('ee-email').value = e.email||'';
     document.getElementById('ee-password').value = '';
@@ -88,7 +113,7 @@ function syncDepartmentHeadOptions(selectedCode=''){
 
 function openCreateDepartment(){
   _editDepartmentName = null;
-  document.getElementById('dept-modal-title').textContent = 'Add Department';
+  document.getElementById('dept-modal-title').textContent = 'Add Team';
   document.getElementById('dept-original-name').value = '';
   document.getElementById('dept-name').value = '';
   document.getElementById('dept-color').value = '#2447D0';
@@ -99,12 +124,12 @@ function openCreateDepartment(){
 function openEditDepartment(name){
   const department = (DB.departments||[]).find(item => item.name === name);
   if(!department){
-    showToast('Department not found.','red');
+    showToast('Team not found.','red');
     return;
   }
 
   _editDepartmentName = name;
-  document.getElementById('dept-modal-title').textContent = 'Edit Department';
+  document.getElementById('dept-modal-title').textContent = 'Edit Team';
   document.getElementById('dept-original-name').value = name;
   document.getElementById('dept-name').value = department.name || '';
   document.getElementById('dept-color').value = department.color || '#2447D0';
@@ -122,7 +147,7 @@ async function saveDepartment(){
   };
 
   if(!payload.name){
-    showToast('Department name is required.','red');
+    showToast('Team name is required.','red');
     return;
   }
 
@@ -133,7 +158,7 @@ async function saveDepartment(){
     });
     await wpReload();
     closeModal('departmentModal');
-    showToast(`Department ${originalName ? 'updated' : 'created'} successfully.`,'green');
+    showToast(`Team ${originalName ? 'updated' : 'created'} successfully.`,'green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
@@ -141,11 +166,11 @@ async function saveDepartment(){
 }
 
 function deleteDepartment(name){
-  showConfirm('Delete Department', 'This will remove the department and unassign it from employees currently linked to it.', '⚠️', async function(){
+  showConfirm('Delete Team', 'This will remove the team and unassign it from employees currently linked to it.', '⚠️', async function(){
     try{
       await wpApi(`/api/departments/${encodeURIComponent(name)}`, {method:'DELETE'});
       await wpReload();
-      showToast('Department deleted.','green');
+      showToast('Team deleted.','green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
       showToast('Backend error: '+(e?.message||'Failed'),'red');
@@ -650,7 +675,7 @@ function exportCSV(filename, rows, headers){
 }
 
 function exportAttendanceCSV(){
-  const headers = ['Employee ID','Name','Department','Date','Day','Clock In','Break In','Break Out','Clock Out','Hours','Overtime','Status'];
+  const headers = ['Employee ID','Name','Team','Date','Day','Clock In','Break In','Break Out','Clock Out','Hours','Overtime','Status'];
   const rows = DB.attendance.map(a=>{
     const emp = DB.employees.find(e=>e.id===a.empId)||{fname:'',lname:'',dept:''};
     return [a.empId, emp.fname+' '+emp.lname, emp.dept, a.date,
@@ -662,13 +687,13 @@ function exportAttendanceCSV(){
 }
 
 function exportLeaveCSV(){
-  const headers = ['Leave ID','Employee','Department','Type','From','To','Days','Reason','Applied','Manager Status','HR Status','Final Status'];
+  const headers = ['Leave ID','Employee','Team','Type','From','To','Days','Reason','Applied','Manager Status','HR Status','Final Status'];
   const rows = DB.leaves.map(l=>[l.id,l.empName,l.dept,l.type,l.from,l.to,l.days,l.reason,l.applied,l.managerStatus,l.hrStatus,l.status]);
   exportCSV('leave_report.csv', rows, headers);
 }
 
 function exportEmployeeCSV(){
-  const headers = ['ID','First Name','Last Name','Department','Designation','DOJ','Employment Type','Status','Email','Phone','Manager'];
+  const headers = ['ID','First Name','Last Name','Team','Designation','DOJ','Employment Type','Status','Email','Phone','Manager'];
   const rows = DB.employees.map(e=>[e.id,e.fname,e.lname,e.dept,e.desg,e.doj,e.type,e.status,e.email,e.phone,e.manager]);
   exportCSV('employee_data.csv', rows, headers);
 }

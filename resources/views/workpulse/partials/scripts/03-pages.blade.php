@@ -255,7 +255,7 @@ function syncAnnouncementAudienceOptions(){
     {value:'role:manager', label:'Managers Only'},
     {value:'role:hr', label:'HR Only'},
     {value:'role:admin', label:'Admins Only'},
-    ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Department: ${name}`})),
+        ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Team: ${name}`})),
     {value:'specific', label:'Specific Employees'},
   ];
   select.innerHTML = options.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
@@ -411,7 +411,7 @@ function updateLeaveTodayFilters(){
 
   let options = [{value:'', label:'All Employees'}];
   if(scope === 'department'){
-    options = [{value:'', label:'All Departments'}, ...getDepartmentList().map(name => ({value:name, label:name}))];
+    options = [{value:'', label:'All Teams'}, ...getDepartmentList().map(name => ({value:name, label:name}))];
   } else if(scope === 'team'){
     options = [{value:'', label:'All Teams'}, ...getLeaveTeamManagers().map(name => ({value:name, label:name}))];
   }
@@ -1063,7 +1063,7 @@ function openApproval(leaveId){
   document.getElementById('approval-details').innerHTML=`
     <div class="card" style="background:var(--surface2);">
       <div class="irow"><span class="ikey">Employee</span><span class="ival">${lv.empName}</span></div>
-      <div class="irow"><span class="ikey">Department</span><span class="ival">${lv.dept}</span></div>
+          <div class="irow"><span class="ikey">Team</span><span class="ival">${lv.dept}</span></div>
       <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${lv.type}</span></div>
       <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} â†’ ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
       <div class="irow"><span class="ikey">Reason</span><span class="ival">${lv.reason}</span></div>
@@ -1252,7 +1252,7 @@ function pageAdminDashboard(){
       </div>
     </div>
     <div class="card">
-      <div class="card-hdr"><div class="card-title">Department Attendance</div></div>
+      <div class="card-hdr"><div class="card-title">Team Attendance</div></div>
       ${DB.departments.map(d=>{const pct=d.count?Math.round(d.present/d.count*100):0;return`
       <div style="padding:7px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${pct}%</strong></div>
@@ -1337,7 +1337,7 @@ function pageHrDashboard(){
   <div class="g2" style="margin-bottom:14px;">
     <div class="card">
       <div class="card-hdr"><div class="card-title">Pending Leave Queue</div><button class="btn btn-sm" onclick="window.showPage('leave')">Open Leave</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Type</th><th>Dates</th><th>Status</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Team</th><th>Type</th><th>Dates</th><th>Status</th></tr></thead>
       <tbody>${pendingRequests.map(l=>`
         <tr>
           <td>${l.empName}</td>
@@ -1363,7 +1363,7 @@ function pageHrDashboard(){
 
   <div class="g2">
     <div class="card">
-      <div class="card-hdr"><div class="card-title">Department Snapshot</div><button class="btn btn-sm" onclick="window.showPage('departments')">View Departments</button></div>
+      <div class="card-hdr"><div class="card-title">Team Snapshot</div><button class="btn btn-sm" onclick="window.showPage('departments')">View Teams</button></div>
       ${DB.departments.map(d=>`
       <div style="padding:7px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
@@ -1490,6 +1490,7 @@ function cancelRegulation(id){
 }
 
 function pageRealtime(){
+  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', search:''};
   const inCount=DB.liveAttendance.filter(l=>l.status==='in').length;
   const breakCount=DB.liveAttendance.filter(l=>l.status==='break').length;
   const outCount=DB.liveAttendance.filter(l=>l.status==='out').length;
@@ -1497,7 +1498,7 @@ function pageRealtime(){
   const cards=DB.liveAttendance.map(e=>{
     const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[e.status]||'md-out';
     const lbl={in:'In since '+e.since,break:'On Break â€” '+e.since,out:'Clocked Out '+e.since,leave:'On Leave â€” '+e.since}[e.status];
-    return`<div class="mon-card"><div class="mon-dot ${dot}"></div>
+    return`<div class="mon-card" data-status="${e.status || 'out'}"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
       <div style="font-size:11px;color:var(--muted);">${e.dept} Â· ${lbl}</div></div></div>`;
   }).join('');
@@ -1512,7 +1513,16 @@ function pageRealtime(){
   <div class="card">
     <div class="card-hdr">
       <div class="card-title"><span class="live-dot" style="margin-right:6px;"></span>Live Employee Status</div>
-      <input class="search-input" id="rt-search" placeholder="Search..." oninput="filterMonitor(this.value)" style="width:200px;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <select class="fi" id="rt-status-filter" onchange="filterMonitor()" style="width:180px;">
+          <option value="" ${!realtimeFilters.status ? 'selected' : ''}>All Statuses</option>
+          <option value="in" ${realtimeFilters.status === 'in' ? 'selected' : ''}>Clocked In</option>
+          <option value="break" ${realtimeFilters.status === 'break' ? 'selected' : ''}>On Break</option>
+          <option value="out" ${realtimeFilters.status === 'out' ? 'selected' : ''}>Clocked Out</option>
+          <option value="leave" ${realtimeFilters.status === 'leave' ? 'selected' : ''}>On Leave</option>
+        </select>
+        <input class="search-input" id="rt-search" placeholder="Search..." value="${realtimeFilters.search || ''}" oninput="filterMonitor()" style="width:200px;">
+      </div>
     </div>
     <div class="monitor-grid" id="monitor-grid">${cards}</div>
     <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;">
@@ -1524,10 +1534,14 @@ function pageRealtime(){
   </div>`;
 }
 
-function filterMonitor(val){
-  const v=val.toLowerCase();
+function filterMonitor(){
+  const searchText = (document.getElementById('rt-search')?.value || '').toLowerCase();
+  const statusFilter = document.getElementById('rt-status-filter')?.value || '';
+  window.__realtimeMonitorFilters = {status: statusFilter, search: searchText};
   document.querySelectorAll('#monitor-grid .mon-card').forEach(card=>{
-    card.style.display=card.textContent.toLowerCase().includes(v)?'':'none';
+    const matchesText = card.textContent.toLowerCase().includes(searchText);
+    const matchesStatus = !statusFilter || (card.dataset.status || '') === statusFilter;
+    card.style.display = matchesText && matchesStatus ? '' : 'none';
   });
 }
 
@@ -1580,7 +1594,7 @@ function pageLeave(){
       <div class="card-hdr">
         <div>
           <div class="card-title">Employees On Leave Today</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Filter the company leave view by full company, department, or team manager.</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Filter the company leave view by full company, team, or team manager.</div>
         </div>
         <div class="data-pill-row">
           <span class="data-pill">On leave today <strong id="lv-today-count">${onLeaveToday.length}</strong></span>
@@ -1592,7 +1606,7 @@ function pageLeave(){
             <label class="fl">Scope</label>
             <select class="fi" id="lv-today-scope" onchange="window.updateLeaveTodayFilters(); window.applyLeaveTodayFilters();">
               <option value="company">Full Company</option>
-              <option value="department">Department</option>
+              <option value="department">Team</option>
               <option value="team">Team Manager</option>
             </select>
           </div>
@@ -1611,7 +1625,7 @@ function pageLeave(){
           </div>
         </div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Team Manager</th><th>Leave Type</th><th>From</th><th>To</th><th>Duration</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Team</th><th>Team Manager</th><th>Leave Type</th><th>From</th><th>To</th><th>Duration</th></tr></thead>
       <tbody id="lv-today-tbody">${renderOnLeaveTodayRows(onLeaveToday)}</tbody></table></div>
     </div>`;
 
@@ -1660,15 +1674,15 @@ function pageLeave(){
     </tr>`).join('');
 
   return buildTabs('lv',[
+    {id:'all',label:'All Requests',content:`
+      <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
+      <tbody>${allRows}</tbody></table></div></div>`},
     {id:'today',label:`On Leave Today (${onLeaveToday.length})`,content:onLeaveTodayHTML},
     {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
       <tbody>${pendingRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
-    {id:'all',label:'All Requests',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
-      <tbody>${allRows}</tbody></table></div></div>`},
     {id:'balance',label:'Leave Balances',content:balanceHTML},
     {id:'types',label:'Leave Types',content:`
       <div class="card">
@@ -1714,12 +1728,12 @@ function pageEmployees(){
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
     <div class="hero-title">Team Workspace</div>
-    <div class="hero-sub">A cleaner employee directory inspired by modern HR suites: searchable records, stronger hierarchy context, and quick access to profile details, reporting lines, and employment status.</div>
+    <div class="hero-sub">A cleaner employee directory inspired by modern HR suites: searchable records, stronger hierarchy context, team-linked employee codes, and quick access to profile details, reporting lines, and employment status.</div>
     <div class="hero-chip-row">
       <div class="hero-chip"><div class="k">Total Employees</div><div class="v">${DB.employees.length}</div></div>
       <div class="hero-chip"><div class="k">Active</div><div class="v">${activeCount}</div></div>
       <div class="hero-chip"><div class="k">Probation</div><div class="v">${probationCount}</div></div>
-      <div class="hero-chip"><div class="k">Departments</div><div class="v">${DB.departments.length}</div></div>
+      <div class="hero-chip"><div class="k">Teams</div><div class="v">${DB.departments.length}</div></div>
     </div>
   </div>
 
@@ -1734,23 +1748,23 @@ function pageEmployees(){
     <div class="directory-top">
       <div>
         <div class="panel-title">Employee Directory</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with employee code, department, office location, user role, line manager, and quick profile access.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with team-linked employee codes, office location, user role, line manager, and quick profile access.</div>
       </div>
       <div class="data-pill-row">
         <span class="data-pill">Visible records <strong>${DB.employees.length}</strong></span>
-        <span class="data-pill">Department heads <strong>${DB.departments.filter(d=>d.head&&d.head!=='-').length}</strong></span>
+        <span class="data-pill">Team leads <strong>${DB.departments.filter(d=>d.head&&d.head!=='-').length}</strong></span>
       </div>
     </div>
     <div class="toolbar-card" style="margin-bottom:14px;">
       <div class="toolbar-grid">
         <div>
           <label class="fl">Search Employee</label>
-          <input class="search-input" id="emp-search" placeholder="Search employee, code, manager..." oninput="filterTable('emp-search','emp-table')" style="width:100%;">
+          <input class="search-input" id="emp-search" placeholder="Search employee, code, title, team, manager..." oninput="applyEmployeeDirectoryFilters()" style="width:100%;">
         </div>
         <div>
-          <label class="fl">Department</label>
-          <select class="fi" onchange="filterEmpDept(this.value)">
-            <option value="">All Departments</option>
+          <label class="fl">Team</label>
+          <select class="fi" id="emp-team-filter" onchange="applyEmployeeDirectoryFilters()">
+            <option value="">All Teams</option>
             ${DB.departments.map(d=>`<option>${d.name}</option>`).join('')}
           </select>
         </div>
@@ -1767,16 +1781,30 @@ function pageEmployees(){
       </div>
     </div>
     <div class="soft-table"><div class="table-wrap"><table id="emp-table">
-      <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Department</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+      <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>
   </div>`;
 }
 
-function filterEmpDept(val){
+function applyEmployeeDirectoryFilters(){
+  const searchText = (document.getElementById('emp-search')?.value || '').trim().toLowerCase();
+  const teamFilter = document.getElementById('emp-team-filter')?.value || '';
+
   document.querySelectorAll('#emp-table tbody tr').forEach(row=>{
-    row.style.display=!val||row.textContent.includes(val)?'':'none';
+    const cells = row.querySelectorAll('td');
+    const searchableText = Array.from(cells).map(cell => cell.textContent.toLowerCase()).join(' ');
+    const rowTeam = cells[3]?.textContent?.trim() || '';
+    const matchesSearch = !searchText || searchableText.includes(searchText);
+    const matchesTeam = !teamFilter || rowTeam === teamFilter;
+    row.style.display = matchesSearch && matchesTeam ? '' : 'none';
   });
+}
+
+function filterEmpDept(val){
+  const teamSelect = document.getElementById('emp-team-filter');
+  if(teamSelect) teamSelect.value = val || '';
+  applyEmployeeDirectoryFilters();
 }
 
 function formatUserRole(role){
@@ -1873,7 +1901,7 @@ function pageRoles(){
     <div class="directory-top">
       <div>
         <div class="panel-title">Role Directory</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">Every employee is listed with their current role, department, reporting manager, and direct edit action.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">Every employee is listed with their current role, team, reporting manager, and direct edit action.</div>
       </div>
       <div class="data-pill-row">
         <span class="data-pill">Highest access <strong>${counts.admin}</strong></span>
@@ -1884,7 +1912,7 @@ function pageRoles(){
       <div class="toolbar-grid">
         <div>
           <label class="fl">Search Role Directory</label>
-          <input class="search-input" id="role-search" placeholder="Search name, email, role, department..." oninput="filterTable('role-search','role-table')" style="width:100%;">
+          <input class="search-input" id="role-search" placeholder="Search name, email, role, team..." oninput="filterTable('role-search','role-table')" style="width:100%;">
         </div>
         <div>
           <label class="fl">Open Creation Flow</label>
@@ -1903,7 +1931,7 @@ function pageRoles(){
       </div>
     </div>
     <div class="soft-table"><div class="table-wrap"><table id="role-table">
-      <thead><tr><th>Employee</th><th>Employee Code</th><th>Current Role</th><th>Designation</th><th>Department</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+      <thead><tr><th>Employee</th><th>Employee Code</th><th>Current Role</th><th>Designation</th><th>Team</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No employees found</td></tr>'}</tbody>
     </table></div></div>
   </div>`;
@@ -1965,7 +1993,7 @@ function pageEmpProfileDetail(){
           <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(e.doj)}</span></div>
           <div class="irow"><span class="ikey">Probation Date</span><span class="ival">${formatDate(e.dop)}</span></div>
           <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
-          <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
+          <div class="irow"><span class="ikey">Team</span><span class="ival">${e.dept}</span></div>
           <div class="irow"><span class="ikey">Designation</span><span class="ival">${e.desg}</span></div>
           <div class="irow"><span class="ikey">User Role</span><span class="ival">${roleBadge(e.role)}</span></div>
           <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${e.type}</span></div>
@@ -2014,7 +2042,7 @@ function pageEmpProfileDetail(){
 function pageDepartments(){
   return `
   <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
-    <button class="btn btn-sm btn-primary" onclick="window.openCreateDepartment()">+ Add Department</button>
+    <button class="btn btn-sm btn-primary" onclick="window.openCreateDepartment()">+ Add Team</button>
   </div>
   <div class="g3">
     ${DB.departments.map(d=>`
@@ -2043,7 +2071,7 @@ function pageDepartments(){
 function pageOrgChart(){
   return `
   <div class="card">
-    <div class="card-hdr"><div class="card-title">Organization Chart</div><button class="btn btn-sm">Export PNG</button></div>
+    <div class="card-hdr"><div class="card-title">Team Structure</div><button class="btn btn-sm">Export PNG</button></div>
     <div class="org-wrap">
       <div class="org-tree">
         <div class="org-node root"><div class="oname">Zainab Hussain</div><div class="orole">CEO</div></div>
@@ -2056,7 +2084,7 @@ function pageOrgChart(){
               <div class="org-vline" style="height:24px;"></div>
               <div class="org-node" onclick="window.showPage('employees')" style="border-top:3px solid ${d.color};">
                 <div class="oname" style="font-size:11px;">${d.head}</div>
-                <div class="orole">${d.name}</div>
+                <div class="orole">${d.name} Team</div>
                 <span class="badge bg-gray" style="margin-top:4px;font-size:9px;">${d.count} emp</span>
               </div>
             </div>`).join('')}
@@ -2064,7 +2092,7 @@ function pageOrgChart(){
         </div>
       </div>
     </div>
-    <div class="alert al-info" style="margin-top:14px;"><span>â„¹ï¸</span><div>Click any node to view department employees. The chart supports up to 6 levels of hierarchy.</div></div>
+    <div class="alert al-info" style="margin-top:14px;"><span>â„¹ï¸</span><div>Click any node to view team employees. The chart supports up to 6 levels of hierarchy.</div></div>
   </div>`;
 }
 
@@ -2190,8 +2218,8 @@ function pageReports(){
         <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val" id="rp-m-emps">â€”</div></div>
         <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-val" id="rp-m-att">â€”</div></div>
       </div>
-      <div class="card"><div class="card-hdr"><div class="card-title">By Department</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Department</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
+      <div class="card"><div class="card-hdr"><div class="card-title">By Team</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
+      <div class="table-wrap"><table><thead><tr><th>Team</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
           <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
       </div>`},
     {id:'empdata',label:'Employee Data',content:`
@@ -2379,17 +2407,17 @@ function pageReports(){
       <div class="toolbar-card" style="margin-bottom:14px;">
         <div class="toolbar-grid">
           <div><label class="fl">Date</label><input type="date" class="fi" id="rp-daily-date" value="${today}"></div>
-          <div><label class="fl">Department</label><select class="fi" id="rp-daily-dept"><option value="">All Departments</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Team</label><select class="fi" id="rp-daily-dept"><option value="">All Teams</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
           <div><label class="fl">Metrics</label><div class="data-pill-row"><span class="data-pill">Late <strong id="rp-daily-late">-</strong></span><span class="data-pill">OT mins <strong id="rp-daily-ot">-</strong></span></div></div>
           <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceDailyCSV()">Export CSV</button></div>
         </div>
       </div>
-      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th><th>Clock In</th><th>Break In</th><th>Break Out</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Team</th><th>Designation</th><th>Status</th><th>Clock In</th><th>Break In</th><th>Break Out</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
       <tbody id="rp-daily-tbody"><tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
     {id:'monthly',label:'Monthly Attendance Report',content:`
       <div class="hero-panel" style="margin-bottom:14px;">
         <div class="hero-title">Monthly Attendance Report</div>
-        <div class="hero-sub">Track attendance performance across the selected month with employee-level summaries and department rollups.</div>
+        <div class="hero-sub">Track attendance performance across the selected month with employee-level summaries and team rollups.</div>
         <div class="hero-chip-row">
           <div class="hero-chip"><div class="k">Tracked Month</div><div class="v" style="font-size:17px;">${ym}</div></div>
           <div class="hero-chip"><div class="k">Employees Seen</div><div class="v">${uniqueEmployees}</div></div>
@@ -2400,7 +2428,7 @@ function pageReports(){
       <div class="toolbar-card" style="margin-bottom:14px;">
         <div class="toolbar-grid">
           <div><label class="fl">Month</label><input type="month" class="fi" id="rp-att-month" value="${ym}"></div>
-          <div><label class="fl">Department</label><select class="fi" id="rp-monthly-dept"><option value="">All Departments</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
+          <div><label class="fl">Team</label><select class="fi" id="rp-monthly-dept"><option value="">All Teams</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
           <div><label class="fl">Insight</label><div class="data-pill-row"><span class="data-pill">Present <strong>${presentCount}</strong></span><span class="data-pill">Leave <strong>${approvedLeave}</strong></span></div></div>
           <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadMonthlyAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceMonthlyCSV()">Export CSV</button></div>
         </div>
@@ -2411,7 +2439,7 @@ function pageReports(){
         <div class="metric-box"><div class="eyebrow">Absent Days Total</div><div class="value" id="rp-absent" style="color:var(--red);">-</div><div class="meta">Unavailability pattern</div></div>
         <div class="metric-box"><div class="eyebrow">OT Minutes</div><div class="value" id="rp-ot" style="color:var(--green);">-</div><div class="meta">Extra time logged</div></div>
       </div>
-      <div class="soft-table"><div class="table-wrap" id="rp-monthly-matrix-wrap"><table><thead id="rp-att-head"><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
+      <div class="soft-table"><div class="table-wrap" id="rp-monthly-matrix-wrap"><table><thead id="rp-att-head"><tr><th>Employee</th><th>Team</th><th>Designation</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
       <tbody id="rp-att-tbody"><tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>
       <div style="font-size:12px;color:var(--muted);margin-top:10px;">Codes: <strong>P</strong> Present, <strong>LT</strong> Late, <strong>L</strong> Leave, <strong>A</strong> Absent.</div>`},
     {id:'lv',label:'Leave Overview',content:`
@@ -2440,18 +2468,18 @@ function pageReports(){
         <div class="metric-box"><div class="eyebrow">Month</div><div class="value" id="rp-m-month" style="font-size:20px;">-</div><div class="meta">Current summary period</div></div>
         <div class="metric-box"><div class="eyebrow">Employees</div><div class="value" id="rp-m-emps">-</div><div class="meta">Included in summary</div></div>
         <div class="metric-box"><div class="eyebrow">Attendance %</div><div class="value" id="rp-m-att">-</div><div class="meta">Presence ratio</div></div>
-        <div class="metric-box"><div class="eyebrow">Departments</div><div class="value">${DB.departments.length}</div><div class="meta">Organizational coverage</div></div>
+        <div class="metric-box"><div class="eyebrow">Teams</div><div class="value">${DB.departments.length}</div><div class="meta">Organizational coverage</div></div>
       </div>
       <div class="panel-card" style="margin:0;">
-        <div class="panel-head"><div class="panel-title">Department Summary</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
-        <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Department</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
+        <div class="panel-head"><div class="panel-title">Team Summary</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
+        <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Team</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
         <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>
       </div>`},
     {id:'empdata',label:'Employee Data',content:`
       <div class="panel-card" style="margin:0;">
         <div class="panel-head"><div class="panel-title">Employee Records</div><button class="btn btn-sm btn-primary" onclick="window.exportEmployeeRecordsCSV()">Export CSV</button></div>
-        <div class="data-pill-row" style="margin-bottom:12px;"><span class="data-pill">Directory size <strong>${DB.employees.length}</strong></span><span class="data-pill">Departments <strong>${DB.departments.length}</strong></span><span class="data-pill">Probation <strong>${DB.employees.filter(e=>e.status==='Probation').length}</strong></span></div>
-        <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
+        <div class="data-pill-row" style="margin-bottom:12px;"><span class="data-pill">Directory size <strong>${DB.employees.length}</strong></span><span class="data-pill">Teams <strong>${DB.departments.length}</strong></span><span class="data-pill">Probation <strong>${DB.employees.filter(e=>e.status==='Probation').length}</strong></span></div>
+        <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Team</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
         <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>
       </div>`},
   ],'daily');
@@ -2533,7 +2561,7 @@ async function loadMonthlyAttendanceReport(){
 
     head.innerHTML = `<tr>
       <th>Employee</th>
-      <th>Department</th>
+      <th>Team</th>
       <th>Designation</th>
       ${dates.map(date => `<th>${new Date(date+'T00:00:00').getDate()}</th>`).join('')}
       <th>Present</th>
@@ -2636,7 +2664,7 @@ function pageCompany(){
       <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
       <div class="stat-card"><div class="stat-label">Shifts</div><div class="stat-val">${(DB.shifts||[]).length}</div><div class="stat-sub">Standard schedules available</div></div>
     </div>
-    <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes employees, departments, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
+  <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes employees, teams, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
       <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Employee Profiles JSON</button>
@@ -3013,7 +3041,7 @@ function pageEmpProfile(){
       <div class="card-title" style="margin-bottom:13px;">My Personal Details</div>
       <div class="irow"><span class="ikey">Full Name</span><span class="ival">${u.fname} ${u.lname}</span></div>
       <div class="irow"><span class="ikey">Employee ID</span><span class="ival">${u.id||emp?.id}</span></div>
-      <div class="irow"><span class="ikey">Department</span><span class="ival">${u.dept}</span></div>
+          <div class="irow"><span class="ikey">Team</span><span class="ival">${u.dept}</span></div>
       <div class="irow"><span class="ikey">Designation</span><span class="ival">${u.desg}</span></div>
       <div class="irow"><span class="ikey">Date of Joining</span><span class="ival">${formatDate(u.doj)}</span></div>
       <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
@@ -3234,7 +3262,7 @@ function renderProfileWorkspace(employee, options={}){
           ${profileInfoRow('Confirmation Date', employee.confirmationDate, formatDate)}
           ${profileInfoRow('Work Location', employee.workLocation)}
           ${profileInfoRow('Designation', employee.desg)}
-          ${profileInfoRow('Department', employee.dept)}
+${profileInfoRow('Team', employee.dept)}
           ${profileInfoRow('Line Manager', employee.manager)}
         </div>
       </div>
@@ -3317,8 +3345,8 @@ function pageEmpTeam(){
   ${teamTabs}
   <div class="alert al-info"><span>â„¹ï¸</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
   <div class="card" style="margin-bottom:14px;">
-    <div class="card-hdr"><div class="card-title">My Department â€” ${u.dept}</div></div>
-    <div class="irow"><span class="ikey">Department Head</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'â€”'}</span></div>
+    <div class="card-hdr"><div class="card-title">My Team â€” ${u.dept}</div></div>
+    <div class="irow"><span class="ikey">Team Lead</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'â€”'}</span></div>
     <div class="irow"><span class="ikey">Total Members</span><span class="ival">${DB.employees.filter(e=>e.dept===u.dept).length}</span></div>
     <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'â€”'}</span></div>
   </div>
@@ -3363,6 +3391,7 @@ function setupLiveAttendanceRefresh(pageId){
 }
 
 function pageRealtimeLive(){
+  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', search:''};
   const liveAttendance = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
   const inCount = liveAttendance.filter(l => l.status === 'in').length;
   const breakCount = liveAttendance.filter(l => l.status === 'break').length;
@@ -3378,7 +3407,7 @@ function pageRealtimeLive(){
       not_checked_in:'Not Checked In Today'
     }[e.status] || 'Status unavailable';
 
-    return `<div class="mon-card"><div class="mon-dot ${dot}"></div>
+    return `<div class="mon-card" data-status="${e.status || 'out'}"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
       <div style="font-size:11px;color:var(--muted);">${e.dept} - ${lbl}</div></div></div>`;
   }).join('');
@@ -3394,7 +3423,15 @@ function pageRealtimeLive(){
     <div class="card-hdr">
       <div class="card-title"><span class="live-dot" style="margin-right:6px;"></span>Live Employee Status</div>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input class="search-input" id="rt-search" placeholder="Search..." oninput="filterMonitor(this.value)" style="width:200px;">
+        <select class="fi" id="rt-status-filter" onchange="filterMonitor()" style="width:180px;">
+          <option value="" ${!realtimeFilters.status ? 'selected' : ''}>All Statuses</option>
+          <option value="in" ${realtimeFilters.status === 'in' ? 'selected' : ''}>Clocked In</option>
+          <option value="break" ${realtimeFilters.status === 'break' ? 'selected' : ''}>On Break</option>
+          <option value="out" ${realtimeFilters.status === 'out' ? 'selected' : ''}>Clocked Out</option>
+          <option value="not_checked_in" ${realtimeFilters.status === 'not_checked_in' ? 'selected' : ''}>Not Checked In</option>
+          <option value="leave" ${realtimeFilters.status === 'leave' ? 'selected' : ''}>On Leave</option>
+        </select>
+        <input class="search-input" id="rt-search" placeholder="Search..." value="${realtimeFilters.search || ''}" oninput="filterMonitor()" style="width:200px;">
         <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('realtime'))">Refresh</button>
       </div>
     </div>
@@ -3409,4 +3446,3 @@ function pageRealtimeLive(){
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
