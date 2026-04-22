@@ -98,6 +98,9 @@ function observeMojibakeChanges(){
 
 function openModal(id){
   document.getElementById(id).classList.add('open');
+  if(id === 'addEmpModal' && typeof syncEmployeeManagerOptions === 'function'){
+    syncEmployeeManagerOptions('ne-manager', '');
+  }
   normalizeMojibake(document.getElementById(id));
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -440,11 +443,11 @@ const adminNav = [
     {label:'Attendance',page:'attendance',icon:'clock'},
     {label:'Real-Time Monitor',page:'realtime',icon:'monitor',badge:'live'},
   ]},
-  {sect:'Leave', items:[{label:'Leave Management',page:'leave',icon:'calendar',badge:'3'}]},
+  {sect:'Leave', items:[{label:'Leave Management',page:'leave',icon:'calendar'}]},
   {sect:'People', items:[
     {label:'Employees',page:'employees',icon:'users'},
     {label:'Roles & Permissions',page:'roles',icon:'shield'},
-    {label:'Departments',page:'departments',icon:'chart'},
+    {label:'Teams',page:'departments',icon:'chart'},
     {label:'Org Chart',page:'orgchart',icon:'hierarchy'},
   ]},
   {sect:'Admin', items:[
@@ -459,10 +462,10 @@ const hrNav = [
   {sect:'Overview', items:[{label:'HR Dashboard',page:'hr-dashboard',icon:'grid'}]},
   {sect:'People', items:[
     {label:'Employees',page:'employees',icon:'users'},
-    {label:'Departments',page:'departments',icon:'chart'},
+    {label:'Teams',page:'departments',icon:'chart'},
   ]},
   {sect:'Leave & Reports', items:[
-    {label:'Leave Management',page:'leave',icon:'calendar',badge:'3'},
+    {label:'Leave Management',page:'leave',icon:'calendar'},
     {label:'Reports',page:'reports',icon:'report'},
   ]},
   {sect:'Communication', items:[
@@ -507,6 +510,9 @@ const icons={
 
 function buildNav(){
   const nav = getNavForRole(DB.currentRole);
+  const pendingLeaveCount = Array.isArray(DB.leaves)
+    ? DB.leaves.filter(leave => leave && leave.status === 'Pending').length
+    : 0;
   let html = '';
   nav.forEach(section=>{
     html += `<div class="sb-sect">${section.sect}</div>`;
@@ -515,6 +521,7 @@ function buildNav(){
       let extra = '';
       if(item.badge==='live') extra=`<span class="live-dot"></span>`;
       else if(item.page==='emp-notifications' && getUnreadNotificationCount() > 0) extra=`<span class="nav-badge">${getUnreadNotificationCount()}</span>`;
+      else if(item.page==='leave' && pendingLeaveCount > 0) extra=`<span class="nav-badge">${pendingLeaveCount}</span>`;
       else if(item.badge) extra=`<span class="nav-badge">${item.badge}</span>`;
       html += `<div class="nav-item" id="nav-${item.page}" onclick="window.showPage('${item.page}')">${icons[item.icon]||''}${item.label}${extra}</div>`;
     });
@@ -527,7 +534,7 @@ function buildNav(){
 // ══════════════════════════════════════════════════
 const pageTitles = {
   dashboard:'Dashboard',attendance:'Attendance',realtime:'Real-Time Monitor',
-  leave:'Leave Management',employees:'Employees',roles:'Roles & Permissions',departments:'Departments',
+  leave:'Leave Management',employees:'Employees',roles:'Roles & Permissions',departments:'Teams',
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
   announcements:'Announcements',company:'Company Details',
   notifications:'Notifications',
@@ -561,6 +568,9 @@ function showPage(id){
   }
   normalizeMojibake(main);
   runPageAfterRender(id);
+  if(id==='realtime' && typeof window.filterMonitor === 'function'){
+    window.filterMonitor();
+  }
   if(id==='reports' && typeof window.loadAttendanceReport === 'function'){
     setTimeout(()=>{
       window.loadAttendanceReport();

@@ -115,10 +115,11 @@
       <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ne-work-location" placeholder="Main Office"></div>
     </div>
     <div class="g2">
-      <div class="fg"><label class="fl">Department <span class="req-star">*</span></label>
+      <div class="fg"><label class="fl">Team <span class="req-star">*</span></label>
         <select class="fi" id="ne-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
       <div class="fg"><label class="fl">Designation <span class="req-star">*</span></label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
     </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:-4px;margin-bottom:10px;">Employee code is generated automatically from the selected team, for example <code>Eng-emp001</code> or <code>Dev-emp001</code>.</div>
     <div class="fg"><label class="fl">User Role</label>
       <select class="fi" id="ne-role">
         <option value="employee">Employee</option>
@@ -157,7 +158,12 @@
       <div class="fg"><label class="fl">Kin Relationship</label><input type="text" class="fi" id="ne-kinRel"></div>
       <div class="fg"><label class="fl">Kin Phone</label><input type="text" class="fi" id="ne-kinPhone"></div>
     </div>
-    <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ne-manager" placeholder="Manager name"></div>
+    <div class="fg">
+      <label class="fl">Reporting Manager</label>
+      <input type="text" class="fi" id="ne-manager" list="ne-manager-options" placeholder="Select or search line manager">
+      <datalist id="ne-manager-options"></datalist>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">Start typing to search all employees in the built-in dropdown.</div>
+    </div>
     <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ne-shift"></select></div>
     <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
       <div class="fg"><label class="fl">Pay Period</label><input type="text" class="fi" id="ne-pay-period" placeholder="Monthly - Payroll"></div>
@@ -194,19 +200,19 @@
   </div>
 </div>
 
-<!-- Department Modal -->
+<!-- Team Modal -->
 <div class="modal-overlay" id="departmentModal">
   <div class="modal">
-    <div class="modal-hdr"><div class="modal-title" id="dept-modal-title">Add Department</div><button class="modal-close" onclick="window.closeModal('departmentModal')">×</button></div>
+    <div class="modal-hdr"><div class="modal-title" id="dept-modal-title">Add Team</div><button class="modal-close" onclick="window.closeModal('departmentModal')">×</button></div>
     <input type="hidden" id="dept-original-name">
-    <div class="fg"><label class="fl">Department Name <span class="req-star">*</span></label><input type="text" class="fi" id="dept-name" placeholder="Human Resources"></div>
+    <div class="fg"><label class="fl">Team Name <span class="req-star">*</span></label><input type="text" class="fi" id="dept-name" placeholder="Engineering"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Color</label><input type="color" class="fi" id="dept-color" value="#2447D0" style="height:44px;padding:6px;"></div>
-      <div class="fg"><label class="fl">Department Head</label><select class="fi" id="dept-head"></select></div>
+      <div class="fg"><label class="fl">Team Lead</label><select class="fi" id="dept-head"></select></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('departmentModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="window.saveDepartment()">Save Department</button>
+      <button class="btn btn-primary" onclick="window.saveDepartment()">Save Team</button>
     </div>
   </div>
 </div>
@@ -264,7 +270,7 @@
     <!-- Job Tab -->
     <div id="edit-tab-job" style="display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="fg"><label class="fl">Department <span class="req-star">*</span></label><select class="fi" id="ee-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
+        <div class="fg"><label class="fl">Team <span class="req-star">*</span></label><select class="fi" id="ee-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
         <div class="fg"><label class="fl">Designation <span class="req-star">*</span></label><input type="text" class="fi" id="ee-desg"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
@@ -286,7 +292,11 @@
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>
-      <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ee-manager"></div>
+      <div class="fg">
+        <label class="fl">Reporting Manager</label>
+        <input type="text" class="fi" id="ee-manager" list="ee-manager-options" placeholder="Select or search line manager">
+        <datalist id="ee-manager-options"></datalist>
+      </div>
       <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ee-shift"></select></div>
     </div>
     <!-- Salary Tab -->
@@ -407,7 +417,7 @@
     <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"></div>
     <div id="acc-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-      Employees can update only their own email and password here. Profile, department, type, probation, and other HR details stay managed by admin.
+      Employees can update only their own email and password here. Profile, team, type, probation, and other HR details stay managed by admin.
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('accountSettingsModal')">Cancel</button>
