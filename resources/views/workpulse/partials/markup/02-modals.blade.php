@@ -4,27 +4,27 @@
 <div class="modal-overlay" id="leaveModal">
   <div class="modal" style="width:min(1220px,96vw);">
     <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
-    <div class="fg"><label class="fl">Leave Type</label>
+    <div class="fg"><label class="fl">Leave Type <span class="req-star">*</span></label>
       <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select></div>
     <div class="g2">
-      <div class="fg"><label class="fl">From Date</label><input type="date" class="fi" id="lv-from"></div>
-      <div class="fg"><label class="fl">To Date</label><input type="date" class="fi" id="lv-to"></div>
+      <div class="fg"><label class="fl">From Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-from"></div>
+      <div class="fg"><label class="fl">To Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-to"></div>
     </div>
     <div class="g2">
-      <div class="fg"><label class="fl">Duration</label>
+      <div class="fg"><label class="fl">Duration <span class="req-star">*</span></label>
         <select class="fi" id="lv-duration">
           <option value="full_day">Full Day</option>
           <option value="half_day">Half Day</option>
         </select>
       </div>
-      <div class="fg" id="lv-half-slot-wrap" style="display:none;"><label class="fl">Half Day Slot</label>
+      <div class="fg" id="lv-half-slot-wrap" style="display:none;"><label class="fl">Half Day Slot <span class="req-star">*</span></label>
         <select class="fi" id="lv-half-slot">
           <option value="first_half">First Half</option>
           <option value="second_half">Second Half</option>
         </select>
       </div>
     </div>
-    <div class="fg"><label class="fl">Reason</label><textarea class="fi" id="lv-reason" rows="3" placeholder="Brief reason..."></textarea></div>
+    <div class="fg"><label class="fl">Reason <span class="req-star">*</span></label><textarea class="fi" id="lv-reason" rows="3" placeholder="Brief reason..."></textarea></div>
     <div class="fg"><label class="fl">Handover To</label><input type="text" class="fi" id="lv-handover" placeholder="Colleague name"></div>
     <div id="lv-calc" style="background:var(--accent-bg);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--accent-dark);margin-bottom:12px;display:none;">
       📅 <strong id="lv-days">0</strong> working day(s) requested
@@ -42,10 +42,10 @@
     <div class="modal-hdr"><div class="modal-title">Attendance Regulation Request</div><button class="modal-close" onclick="window.closeModal('regulationModal')">×</button></div>
     <div class="g3" style="grid-template-columns:1.2fr 1fr 1fr;align-items:end;">
       <div class="fg"><label class="fl">Employee</label><input type="text" class="fi" id="reg-employee" readonly></div>
-      <div class="fg"><label class="fl">From Date</label><input type="date" class="fi" id="reg-from"></div>
-      <div class="fg"><label class="fl">To Date</label><input type="date" class="fi" id="reg-to"></div>
+      <div class="fg"><label class="fl">From Date <span class="req-star">*</span></label><input type="date" class="fi" id="reg-from"></div>
+      <div class="fg"><label class="fl">To Date <span class="req-star">*</span></label><input type="date" class="fi" id="reg-to"></div>
     </div>
-    <div class="fg"><label class="fl">Regulation Type</label>
+    <div class="fg"><label class="fl">Regulation Type <span class="req-star">*</span></label>
       <select class="fi" id="reg-type"><option>Attendance Timeslot Adjustment</option><option>Missing Clock In</option><option>Missing Clock Out</option><option>Wrong Clock In Time</option><option>Wrong Clock Out Time</option><option>Break Adjustment</option></select></div>
     <div class="alert al-info" style="margin-bottom:14px;"><span>ℹ</span><div>Select the checkbox for each day you want to edit, update the time slots, then submit the selected rows.</div></div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
@@ -82,7 +82,7 @@
 <div class="modal-overlay" id="announcementModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Post Announcement</div><button class="modal-close" onclick="window.closeModal('announcementModal')">×</button></div>
-    <div class="fg"><label class="fl">Title</label><input type="text" class="fi" id="ann-title" placeholder="Announcement title..."></div>
+    <div class="fg"><label class="fl">Title <span class="req-star">*</span></label><input type="text" class="fi" id="ann-title" placeholder="Announcement title..."></div>
     <div class="g2">
       <div class="fg"><label class="fl">Category</label>
         <select class="fi" id="ann-cat"><option>General</option><option>Policy</option><option>Event</option><option>Important</option><option>Holiday</option></select></div>
@@ -90,7 +90,7 @@
         <select class="fi" id="ann-aud" onchange="window.toggleAnnouncementRecipients()"></select></div>
     </div>
     <div class="fg" id="ann-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ann-targets" multiple size="6"></select></div>
-    <div class="fg"><label class="fl">Message</label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
+    <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitAnnouncement()"">Publish</button>
@@ -103,24 +103,32 @@
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Add New Employee</div><button class="modal-close" onclick="window.closeModal('addEmpModal')">×</button></div>
     <div class="g2">
-      <div class="fg"><label class="fl">First Name</label><input type="text" class="fi" id="ne-fname" placeholder="First name"></div>
-      <div class="fg"><label class="fl">Last Name</label><input type="text" class="fi" id="ne-lname" placeholder="Last name"></div>
+      <div class="fg"><label class="fl">First Name <span class="req-star">*</span></label><input type="text" class="fi" id="ne-fname" placeholder="First name"></div>
+      <div class="fg"><label class="fl">Last Name <span class="req-star">*</span></label><input type="text" class="fi" id="ne-lname" placeholder="Last name"></div>
     </div>
-    <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
+    <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
     <div class="fg"><label class="fl">Login Password</label><input type="password" class="fi" id="ne-password" placeholder="Set employee password"></div>
-    <div class="fg"><label class="fl">CNIC Document</label><input type="file" class="fi" id="ne-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
+    <div class="fg"><label class="fl">CNIC Document <span class="req-star">*</span></label><input type="file" class="fi" id="ne-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
       <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ne-work-location" placeholder="Main Office"></div>
     </div>
     <div class="g2">
-      <div class="fg"><label class="fl">Department</label>
+      <div class="fg"><label class="fl">Department <span class="req-star">*</span></label>
         <select class="fi" id="ne-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
-      <div class="fg"><label class="fl">Designation</label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
+      <div class="fg"><label class="fl">Designation <span class="req-star">*</span></label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
+    </div>
+    <div class="fg"><label class="fl">User Role</label>
+      <select class="fi" id="ne-role">
+        <option value="employee">Employee</option>
+        <option value="manager">Manager</option>
+        <option value="hr">HR</option>
+        <option value="admin">Admin</option>
+      </select>
     </div>
     <div class="g2">
-      <div class="fg"><label class="fl">Date of Joining</label><input type="date" class="fi" id="ne-doj"></div>
+      <div class="fg"><label class="fl">Date of Joining <span class="req-star">*</span></label><input type="date" class="fi" id="ne-doj"></div>
       <div class="fg"><label class="fl">Employment Type</label>
         <select class="fi" id="ne-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
     </div>
@@ -175,8 +183,8 @@
 <div class="modal-overlay" id="holidayModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Add National Holiday</div><button class="modal-close" onclick="window.closeModal('holidayModal')">×</button></div>
-    <div class="fg"><label class="fl">Holiday Name</label><input type="text" class="fi" id="hol-name" placeholder="e.g. Independence Day"></div>
-    <div class="fg"><label class="fl">Date</label><input type="date" class="fi" id="hol-date"></div>
+    <div class="fg"><label class="fl">Holiday Name <span class="req-star">*</span></label><input type="text" class="fi" id="hol-name" placeholder="e.g. Independence Day"></div>
+    <div class="fg"><label class="fl">Date <span class="req-star">*</span></label><input type="date" class="fi" id="hol-date"></div>
     <div class="fg"><label class="fl">Type</label>
       <select class="fi" id="hol-type"><option>National</option><option>Religious</option><option>Optional</option></select></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
@@ -191,7 +199,7 @@
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title" id="dept-modal-title">Add Department</div><button class="modal-close" onclick="window.closeModal('departmentModal')">×</button></div>
     <input type="hidden" id="dept-original-name">
-    <div class="fg"><label class="fl">Department Name</label><input type="text" class="fi" id="dept-name" placeholder="Human Resources"></div>
+    <div class="fg"><label class="fl">Department Name <span class="req-star">*</span></label><input type="text" class="fi" id="dept-name" placeholder="Human Resources"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Color</label><input type="color" class="fi" id="dept-color" value="#2447D0" style="height:44px;padding:6px;"></div>
       <div class="fg"><label class="fl">Department Head</label><select class="fi" id="dept-head"></select></div>
@@ -229,8 +237,8 @@
     <!-- Personal Tab -->
     <div id="edit-tab-personal">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="fg"><label class="fl">First Name</label><input type="text" class="fi" id="ee-fname"></div>
-        <div class="fg"><label class="fl">Last Name</label><input type="text" class="fi" id="ee-lname"></div>
+        <div class="fg"><label class="fl">First Name <span class="req-star">*</span></label><input type="text" class="fi" id="ee-fname"></div>
+        <div class="fg"><label class="fl">Last Name <span class="req-star">*</span></label><input type="text" class="fi" id="ee-lname"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Date of Birth</label><input type="date" class="fi" id="ee-dob"></div>
@@ -256,16 +264,16 @@
     <!-- Job Tab -->
     <div id="edit-tab-job" style="display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="fg"><label class="fl">Department</label><select class="fi" id="ee-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
-        <div class="fg"><label class="fl">Designation</label><input type="text" class="fi" id="ee-desg"></div>
+        <div class="fg"><label class="fl">Department <span class="req-star">*</span></label><select class="fi" id="ee-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
+        <div class="fg"><label class="fl">Designation <span class="req-star">*</span></label><input type="text" class="fi" id="ee-desg"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="fg"><label class="fl">Date of Joining</label><input type="date" class="fi" id="ee-doj"></div>
+        <div class="fg"><label class="fl">Date of Joining <span class="req-star">*</span></label><input type="date" class="fi" id="ee-doj"></div>
         <div class="fg"><label class="fl">Probation Date</label><input type="date" class="fi" id="ee-dop"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
-        <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="ee-email"></div>
+        <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ee-email"></div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ee-confirmation-date"></div>
@@ -277,6 +285,7 @@
         <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
+      <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>
       <div class="fg"><label class="fl">Reporting Manager</label><input type="text" class="fi" id="ee-manager"></div>
       <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ee-shift"></select></div>
     </div>
@@ -320,17 +329,20 @@
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title" id="shift-modal-title">Add Standard Shift</div><button class="modal-close" onclick="window.closeModal('shiftModal')">×</button></div>
     <input type="hidden" id="shift-id">
-    <div class="fg"><label class="fl">Shift Name</label><input type="text" class="fi" id="shift-name" placeholder="Morning Shift"></div>
+    <div class="fg"><label class="fl">Shift Name <span class="req-star">*</span></label><input type="text" class="fi" id="shift-name" placeholder="Morning Shift"></div>
     <div class="fg"><label class="fl">Shift Code</label><input type="text" class="fi" id="shift-code" placeholder="morning_shift"></div>
     <div class="g2">
-      <div class="fg"><label class="fl">Start Time</label><input type="time" class="fi" id="shift-start" value="11:00"></div>
-      <div class="fg"><label class="fl">End Time</label><input type="time" class="fi" id="shift-end" value="20:00"></div>
+      <div class="fg"><label class="fl">Start Time <span class="req-star">*</span></label><input type="time" class="fi" id="shift-start" value="11:00"></div>
+      <div class="fg"><label class="fl">End Time <span class="req-star">*</span></label><input type="time" class="fi" id="shift-end" value="20:00"></div>
     </div>
     <div class="g2">
       <div class="fg"><label class="fl">Grace Minutes</label><input type="number" class="fi" id="shift-grace" min="0" max="240" value="10"></div>
-      <div class="fg"><label class="fl">Working Days</label><input type="text" class="fi" id="shift-days" value="Mon-Fri"></div>
+      <div class="fg"><label class="fl">Break Minutes</label><input type="number" class="fi" id="shift-break" min="0" max="480" value="60"></div>
     </div>
-    <div class="fg"><label class="fl">Status</label><select class="fi" id="shift-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Working Days</label><input type="text" class="fi" id="shift-days" value="Mon-Fri"></div>
+      <div class="fg"><label class="fl">Status</label><select class="fi" id="shift-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
+    </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('shiftModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveShift()">Save Shift</button>
@@ -389,8 +401,8 @@
 <div class="modal-overlay" id="accountSettingsModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Account Settings</div><button class="modal-close" onclick="window.closeModal('accountSettingsModal')">Ã—</button></div>
-    <div class="fg"><label class="fl">Official Email</label><input type="email" class="fi" id="acc-email" placeholder="your@company.com"></div>
-    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="acc-current-password" placeholder="Required to save changes"></div>
+    <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="acc-email" placeholder="your@company.com"></div>
+    <div class="fg"><label class="fl">Current Password <span class="req-star">*</span></label><input type="password" class="fi" id="acc-current-password" placeholder="Required to save changes"></div>
     <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"></div>
     <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"></div>
     <div id="acc-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
@@ -409,7 +421,7 @@
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title" id="lt-modal-title">Add Leave Type</div><button class="modal-close" onclick="window.closeModal('leaveTypeModal')">Ã—</button></div>
     <input type="hidden" id="lt-original-code">
-    <div class="fg"><label class="fl">Leave Type Name</label><input type="text" class="fi" id="lt-name" placeholder="e.g. Study Leave"></div>
+    <div class="fg"><label class="fl">Leave Type Name <span class="req-star">*</span></label><input type="text" class="fi" id="lt-name" placeholder="e.g. Study Leave"></div>
     <div class="fg"><label class="fl">Leave Type Code</label><input type="text" class="fi" id="lt-code" placeholder="study_leave"></div>
     <div class="fg">
       <label class="fl">Paid Leave</label>
@@ -430,9 +442,9 @@
 <div class="modal-overlay" id="changePassModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Change Password</div><button class="modal-close" onclick="window.closeModal('changePassModal')">×</button></div>
-    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="cp-current" placeholder="Enter current password"></div>
-    <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"></div>
-    <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"></div>
+    <div class="fg"><label class="fl">Current Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-current" placeholder="Enter current password"></div>
+    <div class="fg"><label class="fl">New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"></div>
+    <div class="fg"><label class="fl">Confirm New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"></div>
     <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('changePassModal')">Cancel</button>

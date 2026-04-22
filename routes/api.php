@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
     Route::prefix('attendance')->group(function () {
         Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');
+        Route::post('/auto-close-stale', [AttendanceController::class, 'closeStaleOpenSessions'])->middleware('perm:attendance.punch');
         Route::get('/records', [AttendanceController::class, 'regulationAttendanceRecords'])->middleware('perm:attendance.view');
         Route::get('/daily', [AttendanceController::class, 'dailyReport'])->middleware('perm:attendance.view');
         Route::get('/daily.csv', [AttendanceController::class, 'dailyReportCsv'])->middleware('perm:attendance.view');

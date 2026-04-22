@@ -1,11 +1,13 @@
 //  PUNCH SYSTEM (fully functional)
 // ══════════════════════════════════════════════════
 async function wpApi(path, opts={}){
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  const csrf = typeof getCsrfToken === 'function'
+    ? getCsrfToken()
+    : (document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '');
   const isFormData = typeof FormData !== 'undefined' && opts.body instanceof FormData;
   const headers = {
     'Accept':'application/json',
-    ...(csrf ? {'X-CSRF-TOKEN': csrf} : {}),
+    ...(csrf ? {'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': csrf} : {}),
     ...(opts.headers||{})
   };
 
@@ -13,11 +15,14 @@ async function wpApi(path, opts={}){
     headers['Content-Type'] = 'application/json';
   }
 
-  const res = await fetch(path, {
+  const requestOptions = {
     credentials: 'same-origin',
     headers,
     ...opts,
-  });
+  };
+  const res = typeof fetchWithCsrfRetry === 'function'
+    ? await fetchWithCsrfRetry(path, requestOptions)
+    : await fetch(path, requestOptions);
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json().catch(()=>null) : null;
   if(!res.ok) throw new Error((data && (data.message||data.error)) || ('HTTP '+res.status));
@@ -46,6 +51,9 @@ async function wpReload(){
       DB.events = data.events || [];
       DB.notifications = data.notifications || [];
       DB.notificationCount = data.notificationCount || 0;
+    }
+    if(typeof syncPunchStateFromBootstrap === 'function'){
+      syncPunchStateFromBootstrap();
     }
     if(typeof buildNav === 'function'){
       buildNav();
@@ -175,6 +183,55 @@ function getShiftList(){
   return Array.isArray(DB.shifts) ? DB.shifts : [];
 }
 
+function getCurrentShiftPolicy(){
+  const currentUser = DB.currentUser || {};
+  const shiftStart = currentUser.shiftStart || '11:00';
+  const shiftEnd = currentUser.shiftEnd || '20:00';
+  const shiftGrace = Number.isFinite(Number(currentUser.shiftGrace)) ? Number(currentUser.shiftGrace) : 10;
+  const shiftBreak = Number.isFinite(Number(currentUser.shiftBreak)) ? Number(currentUser.shiftBreak) : 60;
+  const breakLabel = shiftBreak === 60 ? '1h break' : `${shiftBreak} min break`;
+  const [startHour, startMinute] = String(shiftStart).split(':').map(Number);
+  const lateAt = new Date();
+  lateAt.setHours(startHour || 0, (startMinute || 0) + shiftGrace, 0, 0);
+  const lateLabel = lateAt.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  return `${shiftStart} - ${shiftEnd} · ${breakLabel} · Late after ${lateLabel}`;
+}
+
+function getEmployeeShiftSummary(employee){
+  const shiftStart = employee?.shiftStart || '11:00';
+  const shiftEnd = employee?.shiftEnd || '20:00';
+  const shiftBreak = Number.isFinite(Number(employee?.shiftBreak)) ? Number(employee.shiftBreak) : 60;
+  const breakLabel = shiftBreak === 60 ? '1h break' : `${shiftBreak} min break`;
+  return `${shiftStart} - ${shiftEnd} · ${breakLabel}`;
+}
+
+function getEmployeeWorkingDays(employee){
+  return employee?.shiftWorkingDays || 'Mon - Fri';
+}
+
+function getBreakMinutesFromAttendanceRecord(record){
+  if(!record?.breakOut || !record?.breakIn) return 0;
+  const [boh,bom] = String(record.breakOut).split(':').map(Number);
+  const [bih,bim] = String(record.breakIn).split(':').map(Number);
+  const start = (boh * 60) + bom;
+  const end = (bih * 60) + bim;
+  return Math.max(0, end - start);
+}
+
+function formatBreakMinutesLabel(minutes){
+  const safeMinutes = Math.max(0, Number(minutes || 0));
+  if(!safeMinutes) return '—';
+  if(safeMinutes % 60 === 0){
+    return `${safeMinutes / 60}h`;
+  }
+  if(safeMinutes > 60){
+    const hours = Math.floor(safeMinutes / 60);
+    const mins = safeMinutes % 60;
+    return `${hours}h ${mins}m`;
+  }
+  return `${safeMinutes} min`;
+}
+
 function syncShiftOptions(targetId, preferredValue=''){
   const select = document.getElementById(targetId);
   if(!select) return;
@@ -195,6 +252,7 @@ function syncAnnouncementAudienceOptions(){
   const options = [
     {value:'all', label:'All Employees'},
     {value:'role:employee', label:'Employees Only'},
+    {value:'role:manager', label:'Managers Only'},
     {value:'role:hr', label:'HR Only'},
     {value:'role:admin', label:'Admins Only'},
     ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Department: ${name}`})),
@@ -301,8 +359,96 @@ function getLeaveBalancesList(){
   return [];
 }
 
+function getEmployeesOnLeaveToday(){
+  const today = getTodayLocalDate();
+  const employeesById = new Map((DB.employees || []).map(employee => [String(employee.id), employee]));
+
+  return (DB.leaves || [])
+    .filter(leave => leave.status === 'Approved' && leave.from <= today && leave.to >= today)
+    .map(leave => {
+      const employee = employeesById.get(String(leave.empId)) || {};
+      return {
+        id: leave.id,
+        empId: leave.empId,
+        empName: leave.empName,
+        dept: leave.dept || employee.dept || '-',
+        manager: employee.manager || '-',
+        type: leave.type,
+        from: leave.from,
+        to: leave.to,
+        duration: formatLeaveDuration(leave),
+        reason: leave.reason || '-',
+      };
+    });
+}
+
+function getLeaveTeamManagers(){
+  return [...new Set((DB.employees || []).map(employee => employee.manager).filter(Boolean).filter(manager => manager !== '-'))].sort();
+}
+
+function renderOnLeaveTodayRows(rows){
+  if(!rows.length){
+    return '<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No employees are on leave for this filter.</td></tr>';
+  }
+
+  return rows.map(row => `
+    <tr>
+      <td>${row.empName}</td>
+      <td>${row.dept || '-'}</td>
+      <td>${row.manager || '-'}</td>
+      <td>${row.type}</td>
+      <td>${formatDate(row.from)}</td>
+      <td>${formatDate(row.to)}</td>
+      <td>${row.duration}</td>
+    </tr>
+  `).join('');
+}
+
+function updateLeaveTodayFilters(){
+  const scope = document.getElementById('lv-today-scope')?.value || 'company';
+  const detailSelect = document.getElementById('lv-today-detail');
+  if(!detailSelect) return;
+
+  let options = [{value:'', label:'All Employees'}];
+  if(scope === 'department'){
+    options = [{value:'', label:'All Departments'}, ...getDepartmentList().map(name => ({value:name, label:name}))];
+  } else if(scope === 'team'){
+    options = [{value:'', label:'All Teams'}, ...getLeaveTeamManagers().map(name => ({value:name, label:name}))];
+  }
+
+  detailSelect.innerHTML = options.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
+}
+
+function applyLeaveTodayFilters(){
+  const scope = document.getElementById('lv-today-scope')?.value || 'company';
+  const detail = document.getElementById('lv-today-detail')?.value || '';
+  let rows = getEmployeesOnLeaveToday();
+
+  if(scope === 'department' && detail){
+    rows = rows.filter(row => (row.dept || '') === detail);
+  } else if(scope === 'team' && detail){
+    rows = rows.filter(row => (row.manager || '') === detail);
+  }
+
+  const tbody = document.getElementById('lv-today-tbody');
+  if(tbody){
+    tbody.innerHTML = renderOnLeaveTodayRows(rows);
+  }
+
+  const countEl = document.getElementById('lv-today-count');
+  if(countEl){
+    countEl.textContent = String(rows.length);
+  }
+}
+
 async function wpPunch(type){
-  return wpApi('/api/attendance/punch', {method:'POST', body: JSON.stringify({type, punched_at: new Date().toISOString()})});
+  const now = new Date();
+  const localTimestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  return wpApi('/api/attendance/punch', {method:'POST', body: JSON.stringify({type, punched_at: localTimestamp})});
+}
+
+async function wpAutoCloseStaleAttendance(){
+  return wpApi('/api/attendance/auto-close-stale', {method:'POST', body: JSON.stringify({})});
 }
 
 function getTodayLocalDate(){
@@ -428,7 +574,7 @@ async function breakOut(){
   const actionLabel = actionTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   ps.onBreak = true;
   ps.breakOutTime = actionTime;
-  ps.sessionLogs.push({event:'Break Out',time:actionLabel});
+  ps.sessionLogs.push({event:'Break In',time:actionLabel});
 
   const today = getTodayLocalDate();
   const empId = DB.currentUser.id;
@@ -438,7 +584,7 @@ async function breakOut(){
     await wpReload();
     savePunchState(empId);
     refreshPunchUI();
-    showToast('Break started at '+actionLabel,'amber');
+    showToast('Break in started at '+actionLabel,'amber');
   }catch(e){
     restorePunchState(snapshot);
     await wpReload();
@@ -459,7 +605,7 @@ async function breakIn(){
   ps.currentSessionBreakMs += diff;
   ps.breakOutTime = null;
   ps.breakInTime = actionTime;
-  ps.sessionLogs.push({event:'Break In',time:actionLabel});
+  ps.sessionLogs.push({event:'Break Out',time:actionLabel});
 
   const today = getTodayLocalDate();
   const empId = DB.currentUser.id;
@@ -469,7 +615,7 @@ async function breakIn(){
     await wpReload();
     savePunchState(empId);
     refreshPunchUI();
-    showToast('Break ended at '+actionLabel,'green');
+    showToast('Break out ended at '+actionLabel,'green');
   }catch(e){
     restorePunchState(snapshot);
     await wpReload();
@@ -802,6 +948,7 @@ function submitAddEmployee(){
   const lwd=document.getElementById('ne-lwd').value;
   const confirmationDate=document.getElementById('ne-confirmation-date').value;
   const type=document.getElementById('ne-type').value;
+  const role=document.getElementById('ne-role').value;
   const workLocation=document.getElementById('ne-work-location').value;
   const manager=document.getElementById('ne-manager').value;
   const dob=document.getElementById('ne-dob').value;
@@ -842,6 +989,7 @@ function submitAddEmployee(){
   if(lwd) formData.append('lwd', lwd);
   if(confirmationDate) formData.append('confirmation_date', confirmationDate);
   if(type) formData.append('type', type);
+  if(role) formData.append('role', role);
   if(workLocation) formData.append('work_location', workLocation);
   if(manager) formData.append('manager', manager);
   formData.append('shift_id', shiftId || '');
@@ -876,6 +1024,7 @@ function submitAddEmployee(){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
   ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-personal-email','ne-work-location','ne-desg','ne-manager','ne-dop','ne-lwd','ne-confirmation-date','ne-cnic-document','ne-dob','ne-gender','ne-cnic','ne-passport-no','ne-address','ne-marital-status','ne-blood','ne-kin','ne-kinRel','ne-kinPhone','ne-basic','ne-house','ne-transport','ne-pay-period','ne-salary-start-date','ne-contribution','ne-other-deductions','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
+  if(document.getElementById('ne-role')) document.getElementById('ne-role').value='employee';
   if(document.getElementById('ne-shift')) document.getElementById('ne-shift').value='';
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
@@ -1238,8 +1387,10 @@ function pageHrDashboard(){
 function pageAttendance(){
   const ps=DB.punchState;
   const u=DB.currentUser;
-  const today=new Date().toISOString().split('T')[0];
-  const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Clocked In',late:false};
+  const today=getTodayLocalDate();
+  const todayRec=getTodayAttendanceRecord()||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Clocked In',late:false};
+  const punchDisplay = getTodayPunchDisplay();
+  const workedBreakdown = getTodayWorkedBreakdown();
   const shiftCompleted = isShiftCompletedForDate(today);
 
   const statusLabel = ps.punchedIn ? (ps.onBreak?'On Break':'In Office') : (shiftCompleted ? 'Shift Completed' : (todayRec.out?'Clocked Out':'Not Started'));
@@ -1252,8 +1403,8 @@ function pageAttendance(){
     punchButtons = `
       <button class="punch-btn pb-out" onclick="punchOut()">Clock Out</button>
       ${ps.onBreak
-        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break In — End Break</button>`
-        : `<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">Break Out</button>`
+        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break Out — End Break</button>`
+        : `<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">Break In</button>`
       }`;
   } else {
     punchButtons = `<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>Shift Completed</button>`;
@@ -1264,8 +1415,8 @@ function pageAttendance(){
       <td>${formatDate(a.date)}</td>
       <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
       <td>${a.in||'—'}</td>
-      <td>${a.breakOut||'—'}</td>
       <td>${a.breakIn||'—'}</td>
+      <td>${a.breakOut||'—'}</td>
       <td>${a.out||'—'}</td>
       <td>${calcWorkHours(a)}</td>
       <td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
@@ -1287,14 +1438,19 @@ function pageAttendance(){
       <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
       <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
       <div class="cw-status" style="margin:10px 0 6px;">${statusBadgeHtml}</div>
-      ${punchButtons}
+      <div class="cw-meta">
+        <span class="cw-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
+        <span class="cw-chip">Worked ${getLiveWorkedTimeLabel()}</span>
+      </div>
+      <div class="punch-stack">${punchButtons}</div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || '—'}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? '—' : (punchDisplay.clockOut || '—')}</span></div>
       <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" id="work-hours-live">${getLiveWorkedTimeLabel()}</span></div>
+      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
+      <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
       <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 – 20:00</span></div>
     </div>
@@ -1303,7 +1459,7 @@ function pageAttendance(){
     {id:'log',label:'Daily Log',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
       <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Hours</th><th>OT</th><th>Status</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Clock In</th><th>Break In</th><th>Break Out</th><th>Clock Out</th><th>Hours</th><th>OT</th><th>Status</th></tr></thead>
       <tbody>${logRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div></div>`},
     {id:'today',label:"Today's Log",content:`
       <div class="card"><div class="card-title" style="margin-bottom:14px;">Session Activity</div>
@@ -1378,6 +1534,7 @@ function filterMonitor(val){
 function pageLeave(){
   const pending=DB.leaves.filter(l=>l.status==='Pending');
   const all=DB.leaves;
+  const onLeaveToday = getEmployeesOnLeaveToday();
   const leaveBalanceList = getLeaveBalancesList();
   const leaveBalances = leaveBalanceList.length
     ? leaveBalanceList.map(balance => [balance.name, balance.remaining, balance.allocated || balance.remaining || 1, 'var(--accent)'])
@@ -1417,6 +1574,46 @@ function pageLeave(){
       <td>${formatLeaveDuration(l)}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td>
       <td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
     </tr>`).join('');
+
+  const onLeaveTodayHTML = `
+    <div class="card">
+      <div class="card-hdr">
+        <div>
+          <div class="card-title">Employees On Leave Today</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">Filter the company leave view by full company, department, or team manager.</div>
+        </div>
+        <div class="data-pill-row">
+          <span class="data-pill">On leave today <strong id="lv-today-count">${onLeaveToday.length}</strong></span>
+        </div>
+      </div>
+      <div class="toolbar-card" style="margin-bottom:14px;">
+        <div class="toolbar-grid">
+          <div>
+            <label class="fl">Scope</label>
+            <select class="fi" id="lv-today-scope" onchange="window.updateLeaveTodayFilters(); window.applyLeaveTodayFilters();">
+              <option value="company">Full Company</option>
+              <option value="department">Department</option>
+              <option value="team">Team Manager</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Filter</label>
+            <select class="fi" id="lv-today-detail" onchange="window.applyLeaveTodayFilters();">
+              <option value="">All Employees</option>
+            </select>
+          </div>
+          <div>
+            <label class="fl">Date</label>
+            <div class="data-pill-row"><span class="data-pill">${formatDate(getTodayLocalDate())}</span></div>
+          </div>
+          <div style="display:flex;align-items:end;justify-content:flex-end;">
+            <button class="btn btn-sm" onclick="window.updateLeaveTodayFilters(); window.applyLeaveTodayFilters();">Refresh View</button>
+          </div>
+        </div>
+      </div>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Team Manager</th><th>Leave Type</th><th>From</th><th>To</th><th>Duration</th></tr></thead>
+      <tbody id="lv-today-tbody">${renderOnLeaveTodayRows(onLeaveToday)}</tbody></table></div>
+    </div>`;
 
   const holidayRows=DB.holidays.map(h=>`
     <tr><td>${formatDate(h.date)}</td><td>${new Date(h.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long'})}</td>
@@ -1463,6 +1660,7 @@ function pageLeave(){
     </tr>`).join('');
 
   return buildTabs('lv',[
+    {id:'today',label:`On Leave Today (${onLeaveToday.length})`,content:onLeaveTodayHTML},
     {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
@@ -1497,7 +1695,12 @@ function pageEmployees(){
       <td>${e.id}</td>
       <td><div class="ucell"><div class="av av-32" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
       <div class="ucell-info"><div class="n">${e.fname} ${e.lname}</div><div class="s">${e.email}</div></div></div></td>
-      <td>${e.desg}</td>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span>${e.desg}</span>
+          ${roleBadge(e.role)}
+        </div>
+      </td>
       <td>${e.dept}</td>
       <td>${e.dept==='Human Resources'?'HQ - People Ops':e.dept+' Hub'}</td>
       <td>${e.manager||'-'}</td>
@@ -1531,7 +1734,7 @@ function pageEmployees(){
     <div class="directory-top">
       <div>
         <div class="panel-title">Employee Directory</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with employee code, department, office location, line manager, and quick profile access.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with employee code, department, office location, user role, line manager, and quick profile access.</div>
       </div>
       <div class="data-pill-row">
         <span class="data-pill">Visible records <strong>${DB.employees.length}</strong></span>
@@ -1564,7 +1767,7 @@ function pageEmployees(){
       </div>
     </div>
     <div class="soft-table"><div class="table-wrap"><table id="emp-table">
-      <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title</th><th>Department</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+      <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Department</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div></div>
   </div>`;
@@ -1574,6 +1777,136 @@ function filterEmpDept(val){
   document.querySelectorAll('#emp-table tbody tr').forEach(row=>{
     row.style.display=!val||row.textContent.includes(val)?'':'none';
   });
+}
+
+function formatUserRole(role){
+  const value = String(role || 'employee').toLowerCase();
+  const labels = {
+    employee: 'Employee',
+    manager: 'Manager',
+    hr: 'HR',
+    admin: 'Admin',
+  };
+  return labels[value] || 'Employee';
+}
+
+function roleBadge(role){
+  const value = String(role || 'employee').toLowerCase();
+  const cls = {
+    employee: 'bg-blue',
+    manager: 'bg-amber',
+    hr: 'bg-purple',
+    admin: 'bg-red',
+  }[value] || 'bg-blue';
+  return `<span class="badge ${cls}">${formatUserRole(value)}</span>`;
+}
+
+function getRoleCounts(){
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  return {
+    employee: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'employee').length,
+    manager: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'manager').length,
+    hr: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'hr').length,
+    admin: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'admin').length,
+  };
+}
+
+function pageRoles(){
+  const counts = getRoleCounts();
+  const employees = (Array.isArray(DB.employees) ? DB.employees : []).slice().sort((a,b)=>{
+    const roleOrder = {admin: 1, hr: 2, manager: 3, employee: 4};
+    const roleDiff = (roleOrder[String(a.role || 'employee').toLowerCase()] || 99) - (roleOrder[String(b.role || 'employee').toLowerCase()] || 99);
+    if(roleDiff !== 0) return roleDiff;
+    return `${a.fname || ''} ${a.lname || ''}`.localeCompare(`${b.fname || ''} ${b.lname || ''}`);
+  });
+
+  const rows = employees.map(e => `
+    <tr>
+      <td><div class="ucell"><div class="av av-32" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
+        <div class="ucell-info"><div class="n">${e.fname} ${e.lname}</div><div class="s">${e.email}</div></div></div>
+      </td>
+      <td>${e.id}</td>
+      <td>${roleBadge(e.role)}</td>
+      <td>${e.desg || '-'}</td>
+      <td>${e.dept || '-'}</td>
+      <td>${e.manager || '-'}</td>
+      <td>${statusBadge(e.status)}</td>
+      <td><div style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Role</button>
+        <button class="btn btn-sm btn-ghost" onclick="window.viewEmpProfile('${e.id}')">Profile</button>
+      </div></td>
+    </tr>
+  `).join('');
+
+  return `
+  <div class="hero-panel" style="margin-bottom:14px;">
+    <div class="hero-title">Roles & Permissions</div>
+    <div class="hero-sub">Manage who is an Admin, HR, Manager, or Employee from one place. Use this page to create higher-access accounts quickly and update role ownership without hunting through the full employee directory.</div>
+    <div class="hero-chip-row">
+      <div class="hero-chip"><div class="k">Admins</div><div class="v">${counts.admin}</div></div>
+      <div class="hero-chip"><div class="k">HR</div><div class="v">${counts.hr}</div></div>
+      <div class="hero-chip"><div class="k">Managers</div><div class="v">${counts.manager}</div></div>
+      <div class="hero-chip"><div class="k">Employees</div><div class="v">${counts.employee}</div></div>
+    </div>
+  </div>
+
+  <div class="directory-stats">
+    <div class="directory-stat"><div class="label">Admin Access</div><div class="num">${counts.admin}</div><div class="hint">Full company control and elevated settings</div></div>
+    <div class="directory-stat"><div class="label">Manager Seats</div><div class="num">${counts.manager}</div><div class="hint">Supervisors for reporting lines and approvals</div></div>
+    <div class="directory-stat"><div class="label">HR Operators</div><div class="num">${counts.hr}</div><div class="hint">People operations and leave management users</div></div>
+    <div class="directory-stat"><div class="label">Total Assigned</div><div class="num">${employees.length}</div><div class="hint">Employees with visible role assignments</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hdr">
+      <div class="card-title">Quick Role Actions</div>
+      <div style="font-size:12px;color:var(--muted);">Create a new elevated account or jump into an existing profile to update access.</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn btn-primary" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='manager'; }, 0);">+ New Manager</button>
+      <button class="btn" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='admin'; }, 0);">+ New Admin</button>
+      <button class="btn btn-ghost" onclick="window.showPage('employees')">Open Employee Directory</button>
+    </div>
+  </div>
+
+  <div class="directory-card">
+    <div class="directory-top">
+      <div>
+        <div class="panel-title">Role Directory</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">Every employee is listed with their current role, department, reporting manager, and direct edit action.</div>
+      </div>
+      <div class="data-pill-row">
+        <span class="data-pill">Highest access <strong>${counts.admin}</strong></span>
+        <span class="data-pill">Approvers <strong>${counts.manager + counts.hr + counts.admin}</strong></span>
+      </div>
+    </div>
+    <div class="toolbar-card" style="margin-bottom:14px;">
+      <div class="toolbar-grid">
+        <div>
+          <label class="fl">Search Role Directory</label>
+          <input class="search-input" id="role-search" placeholder="Search name, email, role, department..." oninput="filterTable('role-search','role-table')" style="width:100%;">
+        </div>
+        <div>
+          <label class="fl">Open Creation Flow</label>
+          <div class="data-pill-row">
+            <span class="data-pill">Manager <strong>${counts.manager}</strong></span>
+            <span class="data-pill">Admin <strong>${counts.admin}</strong></span>
+          </div>
+        </div>
+        <div>
+          <label class="fl">Need Team Leads?</label>
+          <div style="font-size:12px;color:var(--muted);padding-top:10px;">Create managers here, then assign them as reporting managers in employee profiles.</div>
+        </div>
+        <div style="display:flex;align-items:end;justify-content:flex-end;">
+          <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
+        </div>
+      </div>
+    </div>
+    <div class="soft-table"><div class="table-wrap"><table id="role-table">
+      <thead><tr><th>Employee</th><th>Employee Code</th><th>Current Role</th><th>Designation</th><th>Department</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No employees found</td></tr>'}</tbody>
+    </table></div></div>
+  </div>`;
 }
 
 async function viewEmpProfile(id){
@@ -1634,6 +1967,7 @@ function pageEmpProfileDetail(){
           <div class="irow"><span class="ikey">Last Working Date</span><span class="ival">${formatDate(e.lwd)}</span></div>
           <div class="irow"><span class="ikey">Department</span><span class="ival">${e.dept}</span></div>
           <div class="irow"><span class="ikey">Designation</span><span class="ival">${e.desg}</span></div>
+          <div class="irow"><span class="ikey">User Role</span><span class="ival">${roleBadge(e.role)}</span></div>
           <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${e.type}</span></div>
           <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(e.status)}</span></div>
           <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${e.manager}</span></div>
@@ -2050,7 +2384,7 @@ function pageReports(){
           <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceDailyCSV()">Export CSV</button></div>
         </div>
       </div>
-      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th><th>Clock In</th><th>Break Out</th><th>Break In</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Employee</th><th>Department</th><th>Designation</th><th>Status</th><th>Clock In</th><th>Break In</th><th>Break Out</th><th>Clock Out</th><th>Worked</th><th>OT</th><th>Late</th></tr></thead>
       <tbody id="rp-daily-tbody"><tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px;">Loading...</td></tr></tbody></table></div></div>`},
     {id:'monthly',label:'Monthly Attendance Report',content:`
       <div class="hero-panel" style="margin-bottom:14px;">
@@ -2141,11 +2475,11 @@ async function loadAttendanceReport(){
         <td>${r.designation || '-'}</td>
         <td>${statusBadge(r.status || '-')}</td>
         <td>${r.punches?.clock_in || '-'}</td>
-        <td>${r.punches?.break_out || '-'}</td>
         <td>${r.punches?.break_in || '-'}</td>
+        <td>${r.punches?.break_out || '-'}</td>
         <td>${r.punches?.clock_out || '-'}</td>
-        <td>${r.worked_minutes || 0}</td>
-        <td>${r.overtime_minutes || 0}</td>
+        <td>${formatWorkedMinutesLabel(r.worked_minutes || 0, false)}</td>
+        <td>${formatWorkedMinutesLabel(r.overtime_minutes || 0, false)}</td>
         <td>${r.late ? 'Yes' : 'No'}</td>
       </tr>
     `).join('') || `<tr><td colspan="11" style="text-align:center;color:var(--muted);padding:20px;">No data</td></tr>`;
@@ -2314,7 +2648,7 @@ function pageCompany(){
     <div class="panel-card" style="margin-top:14px;">
       <div class="panel-head"><div class="panel-title">Standard Shifts</div><button class="btn btn-sm btn-primary" onclick="window.openCreateShift()">+ Add Shift</button></div>
       <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Code</th><th>Time</th><th>Grace</th><th>Working Days</th><th>Status</th><th>Actions</th></tr></thead>
-      <tbody>${(DB.shifts||[]).map(shift => `<tr><td>${shift.name}</td><td>${shift.code}</td><td>${shift.start} - ${shift.end}</td><td>${shift.grace} min</td><td>${shift.workingDays||'-'}</td><td>${shift.active ? statusBadge('Active') : statusBadge('Inactive')}</td><td><div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openEditShift(${shift.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteShift(${shift.id})">Delete</button></div></td></tr>`).join('') || `<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No shifts configured.</td></tr>`}</tbody></table></div></div>
+      <tbody>${(DB.shifts||[]).map(shift => `<tr><td>${shift.name}</td><td>${shift.code}</td><td>${shift.start} - ${shift.end}</td><td>${shift.grace} min</td><td>${shift.break || 60} min</td><td>${shift.workingDays||'-'}</td><td>${shift.active ? statusBadge('Active') : statusBadge('Inactive')}</td><td><div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openEditShift(${shift.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteShift(${shift.id})">Delete</button></div></td></tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No shifts configured.</td></tr>`}</tbody></table></div></div>
     </div>
   </div>`;
 }
@@ -2343,8 +2677,20 @@ function pageEmpDashboard(){
     const attendance = Array.isArray(DB.attendance) ? DB.attendance : [];
     const leaves = Array.isArray(DB.leaves) ? DB.leaves : [];
     const employees = Array.isArray(DB.employees) ? DB.employees : [];
-    const today=new Date().toISOString().split('T')[0];
-    const todayRec=attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,status:'Not Started',late:false};
+    const today=getTodayLocalDate();
+    const todayRec=getTodayAttendanceRecord()||{in:null,out:null,status:'Not Started',late:false};
+    const punchDisplay = getTodayPunchDisplay();
+    const workedBreakdown = getTodayWorkedBreakdown();
+    const clockInLabel = formatPunchMoment(
+      punchDisplay.clockIn,
+      today,
+      '--:--',
+      true
+    );
+    const clockOutLabel = ps.punchedIn
+      ? '--:--'
+      : formatPunchMoment(punchDisplay.clockOut, today, '--:--', false);
+    const workedHeroLabel = formatWorkedHoursClockLabel(workedBreakdown.totalMinutes);
     const shiftCompleted = isShiftCompletedForDate(today);
     const myLeaves=leaves.filter(l=>l.empId===u.id);
     const myPending=myLeaves.filter(l=>l.status==='Pending').length;
@@ -2371,28 +2717,47 @@ function pageEmpDashboard(){
   <div class="emp-pp-layout">
     <div class="emp-pp-left">
       <div class="emp-pp-card emp-pp-clock">
-        <div>
-          <div class="emp-pp-title">Welcome ${u.fname}</div>
-          <div class="emp-pp-sub">Today's worked hours</div>
+        <div class="emp-pp-clock-main">
+          <div class="emp-pp-title">Welcome To ${u.fname}</div>
+          <div class="emp-pp-kicker">CLOCK IN / Clock Out</div>
           <div class="emp-pp-clock-lines">
-            <div><strong>Clock In:</strong> ${todayRec.in||'--:--'}</div>
-            <div><strong>Clock Out:</strong> ${todayRec.out||'--:--'}</div>
-            <div><strong>Status:</strong> ${statusLabel}</div>
+            <div class="emp-pp-clock-line">
+              <span class="emp-pp-line-dot dot-in"></span>
+              <span class="emp-pp-line-label">CLOCK IN</span>
+              <span class="emp-pp-line-value">${clockInLabel}</span>
+            </div>
+            <div class="emp-pp-clock-line">
+              <span class="emp-pp-line-dot dot-out"></span>
+              <span class="emp-pp-line-label">Clock Out</span>
+              <span class="emp-pp-line-value">${clockOutLabel}</span>
+            </div>
           </div>
-          <div class="emp-pp-hours" id="work-hours-live">${getLiveWorkedTimeLabel()}</div>
+          <div class="emp-pp-hours-wrap">
+            <div class="emp-pp-hours" data-work-hours-live data-work-hours-format="compact">${workedHeroLabel}</div>
+            <div class="emp-pp-hours-note">Today's Hours</div>
+          </div>
           <div class="emp-pp-actions">
             ${!ps.punchedIn && !shiftCompleted
-              ? `<button class="btn btn-sm btn-primary" onclick="punchIn()">Clock In</button>`
+              ? `<button class="punch-btn punch-btn-inline pb-in" onclick="punchIn()">Clock In</button>`
               : ps.punchedIn
-                ? `<button class="btn btn-sm btn-red" onclick="punchOut()">Clock Out</button>
+                ? `<button class="punch-btn punch-btn-inline pb-out" onclick="punchOut()">Clock Out</button>
                    ${ps.onBreak
-                     ? `<button class="btn btn-sm" onclick="breakIn()">Break In</button>`
-                     : `<button class="btn btn-sm" onclick="breakOut()">Break Out</button>`}`
-                : `<button class="btn btn-sm" disabled>Shift Completed</button>`
+                     ? `<button class="punch-btn punch-btn-inline pb-break-in" onclick="breakIn()">Break Out</button>`
+                     : `<button class="punch-btn punch-btn-inline pb-break" onclick="breakOut()">Break In</button>`}`
+                : `<button class="punch-btn punch-btn-inline punch-btn-muted" disabled>Shift Completed</button>`
             }
           </div>
+          <div class="emp-pp-break">Break: ${punchDisplay.breakDuration}</div>
+          <div class="emp-pp-policy">${getCurrentShiftPolicy()}</div>
         </div>
-        <div class="emp-pp-illus">⏱️</div>
+        <div class="emp-pp-illus-card">
+          <div class="emp-pp-illus-blob blob-a"></div>
+          <div class="emp-pp-illus-blob blob-b"></div>
+          <div class="emp-pp-illus-blob blob-c"></div>
+          <div class="emp-pp-illus-board"></div>
+          <div class="emp-pp-illus-clock"></div>
+          <div class="emp-pp-illus">⏱</div>
+        </div>
       </div>
 
       <div class="emp-pp-card">
@@ -2469,8 +2834,10 @@ function pageEmpDashboard(){
 function pageEmpAttendance(){
   const u=DB.currentUser;
   const ps=DB.punchState;
-  const today=new Date().toISOString().split('T')[0];
-  const todayRec=DB.attendance.find(a=>a.empId===u.id&&a.date===today)||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Started',late:false};
+  const today=getTodayLocalDate();
+  const todayRec=getTodayAttendanceRecord()||{in:null,out:null,breakOut:null,breakIn:null,status:'Not Started',late:false};
+  const punchDisplay = getTodayPunchDisplay();
+  const workedBreakdown = getTodayWorkedBreakdown();
   const shiftCompleted = isShiftCompletedForDate(today);
 
   const statusBadgeHtml=ps.punchedIn?(ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`):(shiftCompleted?`<span class="badge bg-gray">Completed</span>`:`<span class="badge bg-gray">Not Clocked In</span>`);
@@ -2478,7 +2845,7 @@ function pageEmpAttendance(){
   const logRows=DB.attendance.filter(a=>a.empId===u.id).map(a=>`
     <tr><td>${formatDate(a.date)}</td>
     <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
-    <td>${a.in||'—'}</td><td>${a.breakOut||'—'}</td><td>${a.breakIn||'—'}</td><td>${a.out||'—'}</td>
+    <td>${a.in||'—'}</td><td>${a.breakIn||'—'}</td><td>${a.breakOut||'—'}</td><td>${a.out||'—'}</td>
     <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
     <td>${statusBadge(a.late?'Late':a.status)}</td>
     <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'—'}</td>
@@ -2494,20 +2861,24 @@ function pageEmpAttendance(){
       <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
       <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
       <div class="cw-status">${statusBadgeHtml}</div>
+      <div class="cw-meta">
+        <span class="cw-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
+        <span class="cw-chip">Worked ${getLiveWorkedTimeLabel()}</span>
+      </div>
       ${!ps.punchedIn&&!shiftCompleted
         ?`<button class="punch-btn pb-in" onclick="punchIn()">▶ Clock In</button>`
         :ps.punchedIn
           ?`<button class="punch-btn pb-out" onclick="punchOut()">■ Clock Out</button>
-            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">↩ Break In</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">☕ Break Out</button>`}`
+            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">↩ Break Out</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">☕ Break In</button>`}`
           :`<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>✓ Shift Completed</button>`}
-      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.35);">Policy: 11:00–20:00 · Late after 11:10 AM</div>
+      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.35);">Policy: ${getCurrentShiftPolicy()}</div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${ps.clockInTime?ps.clockInTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.in||'—')}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.clockOutTime?ps.clockOutTime.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):(todayRec.out||'—')}</span></div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || '—'}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? '—' : (punchDisplay.clockOut || '—')}</span></div>
       <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" id="work-hours-live">${getLiveWorkedTimeLabel()}</span></div>
+      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
     </div>
   </div>
@@ -2516,7 +2887,7 @@ function pageEmpAttendance(){
       <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
         <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button></div>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Break Out</th><th>Break In</th><th>Out</th><th>Hours</th><th>OT</th><th>Status</th><th>Action</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Break In</th><th>Break Out</th><th>Out</th><th>Hours</th><th>OT</th><th>Status</th><th>Action</th></tr></thead>
       <tbody>${logRows||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div>
     </div>`},
     {id:'reg',label:'Regulation Requests',content:`

@@ -6,7 +6,7 @@ const DB = {
   currentRole: null,
 
   users: [
-    {id:'EMP-001',fname:'Ahmed',lname:'Karim',email:'employee@workpulse.com',pass:'emp123',role:'employee',dept:'Engineering',desg:'Senior Engineer',doj:'2022-01-15',dop:'2022-04-15',manager:'Hassan Ali',phone:'+92 300 1234567',avatar:'AK',avatarColor:'#2447D0',status:'Active',type:'Permanent'},
+    {id:'EMP-001',fname:'Ali',lname:'Raza',email:'employee1@workpulse.com',pass:'emp123',role:'employee',dept:'Engineering',desg:'Software Engineer',doj:'2024-01-15',dop:'2024-04-15',manager:'Zainab Hussain',phone:'+92 300 1234567',avatar:'AR',avatarColor:'#2447D0',status:'Active',type:'Permanent'},
     {id:'EMP-002',fname:'Sara',lname:'Ahmed',email:'hr@workpulse.com',pass:'hr123',role:'hr',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent'},
     {id:'ADM-001',fname:'Zainab',lname:'Hussain',email:'admin@workpulse.com',pass:'admin123',role:'admin',dept:'Management',desg:'CEO',doj:'2018-01-01',manager:'—',phone:'+92 321 9876543',avatar:'ZH',avatarColor:'#6B3FA0',status:'Active',type:'Permanent'},
   ],
@@ -147,10 +147,17 @@ function startClock(){
     if(ecwEl) ecwEl.textContent = t;
     if(cwEl) cwEl.textContent = t;
 
-    const wh = document.getElementById('work-hours-live');
-    if(wh && typeof getLiveWorkedTimeLabel === 'function'){
-      wh.textContent = getLiveWorkedTimeLabel(now);
-    }
+    const workHourNodes = Array.from(document.querySelectorAll('[data-work-hours-live]'));
+    workHourNodes.forEach((node) => {
+      const format = node.getAttribute('data-work-hours-format') || 'standard';
+      if(format === 'compact' && typeof getTodayWorkedBreakdown === 'function' && typeof formatWorkedHoursClockLabel === 'function'){
+        node.textContent = formatWorkedHoursClockLabel(getTodayWorkedBreakdown(now).totalMinutes);
+        return;
+      }
+      if(typeof getLiveWorkedTimeLabel === 'function'){
+        node.textContent = getLiveWorkedTimeLabel(now);
+      }
+    });
   }
   tick();
   if(clockInterval) clearInterval(clockInterval);

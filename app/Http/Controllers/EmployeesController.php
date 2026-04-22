@@ -48,7 +48,7 @@ class EmployeesController extends Controller
             'work_location' => ['nullable', 'string', 'max:255'],
             'confirmation_date' => ['nullable', 'date_format:Y-m-d'],
             'manager' => ['nullable', 'string', 'max:255'],
-            'role' => ['nullable', 'string', 'max:20'], // default employee
+            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])], // default employee
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'cnic_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
@@ -74,9 +74,15 @@ class EmployeesController extends Controller
             'iban' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $role = in_array(($validated['role'] ?? 'employee'), ['employee', 'hr', 'admin'], true)
-            ? ($validated['role'] ?? 'employee')
+        $requestedRole = $validated['role'] ?? 'employee';
+        $role = in_array($requestedRole, ['employee', 'manager', 'hr', 'admin'], true)
+            ? $requestedRole
             : 'employee';
+
+        // Only admins can create elevated roles.
+        if ($request->user()->role !== 'admin' && in_array($role, ['manager', 'admin'], true)) {
+            $role = 'employee';
+        }
 
         $departmentId = DB::table('departments')->where('name', $validated['dept'])->value('id');
         if (!$departmentId) {
@@ -94,7 +100,7 @@ class EmployeesController extends Controller
             $managerUserId = DB::table('users')->where('name', $validated['manager'])->value('id');
         }
 
-        $employeeCode = 'EMP-'.str_pad((string) (DB::table('users')->whereNotNull('employee_code')->count() + 1), 3, '0', STR_PAD_LEFT);
+        $employeeCode = $this->nextEmployeeCodeForRole($role);
         $name = trim($validated['fname'].' '.$validated['lname']);
 
         $createdPassword = null;
@@ -222,6 +228,7 @@ class EmployeesController extends Controller
             'work_location' => ['nullable', 'string', 'max:255'],
             'confirmation_date' => ['nullable', 'date_format:Y-m-d'],
             'manager' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])],
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
@@ -279,6 +286,10 @@ class EmployeesController extends Controller
 
             if (!empty($validated['password'])) {
                 $userUpdate['password'] = Hash::make($validated['password']);
+            }
+
+            if ($request->user()->role === 'admin' && !empty($validated['role'])) {
+                $userUpdate['role'] = $validated['role'];
             }
 
             DB::table('users')->where('id', $userId)->update($userUpdate);
@@ -546,5 +557,28 @@ class EmployeesController extends Controller
             'path' => 'uploads/employee-documents/'.$filename,
             'name' => $file->getClientOriginalName(),
         ];
+    }
+
+    private function nextEmployeeCodeForRole(string $role): string
+    {
+        $prefix = match ($role) {
+            'admin' => 'ADM',
+            'manager' => 'MGR',
+            'hr' => 'HR',
+            default => 'EMP',
+        };
+
+        $existing = DB::table('users')
+            ->where('employee_code', 'like', $prefix.'-%')
+            ->pluck('employee_code');
+
+        $max = 0;
+        foreach ($existing as $code) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'\-(\d+)$/', (string) $code, $matches)) {
+                $max = max($max, (int) $matches[1]);
+            }
+        }
+
+        return $prefix.'-'.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
     }
 }

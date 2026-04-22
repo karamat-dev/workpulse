@@ -13,6 +13,7 @@ use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\ShiftsController;
 use App\Http\Controllers\TransferController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -25,6 +26,12 @@ Route::get('/dashboard', function () {
 
 Route::get('/workpulse', WorkpulseAppController::class)
     ->name('workpulse');
+
+Route::get('/csrf-token', function (Request $request) {
+    return response()->json([
+        'token' => csrf_token(),
+    ]);
+})->name('csrf.token');
 
 Route::middleware('auth')->group(function () {
     Route::prefix('api')->group(function () {
@@ -67,6 +74,7 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('attendance')->group(function () {
             Route::post('/punch', [AttendanceController::class, 'punch'])->middleware('perm:attendance.punch');
+            Route::post('/auto-close-stale', [AttendanceController::class, 'closeStaleOpenSessions'])->middleware('perm:attendance.punch');
             Route::get('/live', [AttendanceController::class, 'liveStatus'])->middleware('perm:attendance.view');
             Route::get('/records', [AttendanceController::class, 'regulationAttendanceRecords'])->middleware('perm:attendance.view');
             Route::get('/daily', [AttendanceController::class, 'dailyReport'])->middleware('perm:attendance.view');

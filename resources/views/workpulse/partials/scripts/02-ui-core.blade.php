@@ -6,6 +6,74 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
 });
 
+function getCookieValue(name){
+  const match = document.cookie.split('; ').find(row => row.startsWith(name+'='));
+  return match ? match.substring(name.length + 1) : null;
+}
+
+function syncCsrfTokenFromCookie(){
+  const cookieToken = getCookieValue('XSRF-TOKEN');
+  if(!cookieToken) return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  const decodedToken = decodeURIComponent(cookieToken);
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if(meta){
+    meta.setAttribute('content', decodedToken);
+  }
+  return decodedToken;
+}
+
+function getCsrfToken(){
+  return syncCsrfTokenFromCookie() || document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+}
+
+async function refreshCsrfToken(){
+  const res = await fetch('/csrf-token', {
+    method: 'GET',
+    credentials: 'same-origin',
+    headers: {
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest'
+    }
+  });
+  const data = await res.json().catch(() => null);
+  const token = data?.token || syncCsrfTokenFromCookie() || '';
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if(meta && token){
+    meta.setAttribute('content', token);
+  }
+  return token;
+}
+
+async function fetchWithCsrfRetry(url, options = {}){
+  let response = await fetch(url, options);
+  if(response.status !== 419){
+    return response;
+  }
+
+  const freshToken = await refreshCsrfToken();
+  const nextHeaders = {
+    ...(options.headers || {}),
+    ...(freshToken ? {'X-CSRF-TOKEN': freshToken, 'X-XSRF-TOKEN': freshToken} : {}),
+  };
+  let nextBody = options.body;
+
+  if(typeof nextBody === 'string' && (nextHeaders['Content-Type'] || '').includes('application/x-www-form-urlencoded')){
+    const params = new URLSearchParams(nextBody);
+    if(freshToken){
+      params.set('_token', freshToken);
+    }
+    nextBody = params.toString();
+  }
+
+  response = await fetch(url, {
+    ...options,
+    headers: nextHeaders,
+    body: nextBody,
+  });
+
+  return response;
+}
+
 // ══════════════════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════════════════
@@ -18,7 +86,7 @@ function selectLoginRole(r){
     document.getElementById('l-email').value='admin@workpulse.com';
     document.getElementById('l-pass').value='admin123';
   } else {
-    document.getElementById('l-email').value='employee@workpulse.com';
+    document.getElementById('l-email').value='employee1@workpulse.com';
     document.getElementById('l-pass').value='emp123';
   }
 }
@@ -27,18 +95,19 @@ function doLogin(){
   const email = document.getElementById('l-email').value.trim();
   const pass = document.getElementById('l-pass').value.trim();
   const err = document.getElementById('l-err');
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  fetch('/login', {
+  const csrf = getCsrfToken();
+  fetchWithCsrfRetry('/login', {
     method:'POST',
     credentials:'same-origin',
     headers:{
       'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8',
       'Accept':'application/json',
-      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {})
+      ...(csrf ? {'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': csrf} : {})
     },
     body: new URLSearchParams({
       email,
       password: pass,
+      _token: csrf,
     }).toString(),
   })
     .then(async (res)=>{
@@ -63,13 +132,13 @@ function doLogin(){
 
 function doLogout(){
   // Save punch state before logout — do NOT reset it
-  const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  fetch('/logout', {
+  const csrf = getCsrfToken();
+  fetchWithCsrfRetry('/logout', {
     method:'POST',
     credentials:'same-origin',
     headers:{
       'Accept':'application/json',
-      ...(csrf ? {'X-CSRF-TOKEN': csrf} : {})
+      ...(csrf ? {'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': csrf} : {})
     }
   }).finally(()=>{
     DB.currentUser=null; DB.currentRole=null;
@@ -95,7 +164,7 @@ function savePunchState(empId){
       totalBreakMs: ps.totalBreakMs,
       currentSessionBreakMs: ps.currentSessionBreakMs || 0,
       sessionLogs: ps.sessionLogs,
-      savedDate: new Date().toISOString().split('T')[0],
+      savedDate: `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`,
     };
     localStorage.setItem('punchState_'+empId, JSON.stringify(snapshot));
   } catch(e){}
@@ -106,8 +175,8 @@ function loadPunchState(empId){
     const raw = localStorage.getItem('punchState_'+empId);
     if(!raw) return false;
     const snap = JSON.parse(raw);
-    const today = new Date().toISOString().split('T')[0];
     const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 
     // Reset if saved date is not today OR if current time is past midnight (00:00) of next day
     // Policy: punch state resets at 00:00 (midnight) — not at logout
@@ -136,7 +205,11 @@ function loadPunchState(empId){
 function initApp(){
   const u = DB.currentUser;
   document.getElementById('sb-name').textContent = u.fname+' '+u.lname;
-  document.getElementById('sb-role').textContent = DB.currentRole==='admin'?'Administrator':DB.currentRole==='hr'?'HR Manager':'Employee';
+  document.getElementById('sb-role').textContent =
+    DB.currentRole==='admin' ? 'Administrator'
+    : DB.currentRole==='hr' ? 'HR Manager'
+    : DB.currentRole==='manager' ? 'Manager'
+    : 'Employee';
   document.getElementById('sb-avatar').textContent = u.avatar;
   document.getElementById('sb-avatar').style.background = u.avatarColor;
 
@@ -144,6 +217,7 @@ function initApp(){
   DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,currentSessionBreakMs:0,sessionLogs:[]};
 
   loadPunchState(u.id);
+  syncPunchStateFromBootstrap();
 
   buildNav();
   updateNotificationUI();
@@ -156,13 +230,13 @@ function initApp(){
 
 function getDefaultPageForRole(role){
   if(role==='employee') return 'emp-dashboard';
-  if(role==='hr') return 'hr-dashboard';
+  if(role==='hr' || role==='manager') return 'hr-dashboard';
   return 'dashboard';
 }
 
 function getNavForRole(role){
   if(role==='employee') return empNav;
-  if(role==='hr') return hrNav;
+  if(role==='hr' || role==='manager') return hrNav;
   return adminNav;
 }
 
@@ -202,6 +276,19 @@ function canAccessPage(pageId){
   return nav.some(section => section.items.some(item => item.page === pageId));
 }
 
+function runPageAfterRender(pageId){
+  if(pageId === 'leave'){
+    setTimeout(() => {
+      if(typeof updateLeaveTodayFilters === 'function'){
+        updateLeaveTodayFilters();
+      }
+      if(typeof applyLeaveTodayFilters === 'function'){
+        applyLeaveTodayFilters();
+      }
+    }, 0);
+  }
+}
+
 // Auto-reset punch state at midnight (00:00) each day
 function scheduleMidnightReset(){
   const now = new Date();
@@ -209,10 +296,18 @@ function scheduleMidnightReset(){
   midnight.setDate(midnight.getDate()+1);
   midnight.setHours(0,0,5,0); // 00:00:05 next day
   const msUntilMidnight = midnight - now;
-  setTimeout(function(){
+  setTimeout(async function(){
     if(DB.currentUser){
+      try{
+        if(typeof wpAutoCloseStaleAttendance === 'function'){
+          await wpAutoCloseStaleAttendance();
+        }
+      } catch(e){}
       DB.punchState={punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,currentSessionBreakMs:0,sessionLogs:[]};
       try{ localStorage.removeItem('punchState_'+DB.currentUser.id); } catch(e){}
+      if(typeof wpReload === 'function'){
+        try{ await wpReload(); } catch(e){}
+      }
       refreshPunchUI();
       showToast('New shift started — Clock In when ready','green');
     }
@@ -225,6 +320,9 @@ function buildTopbarActions(){
   if(DB.currentRole==='employee'){
     el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
     <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
+  } else if(DB.currentRole==='manager'){
+    el.innerHTML=`<button class="btn btn-sm" onclick="window.showPage('leave')">Review Leaves</button>
+    <button class="btn btn-sm btn-ghost" onclick="window.showPage('reports')">Team Reports</button>`;
   } else {
     el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ Announce</button>
     <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
@@ -243,6 +341,7 @@ const adminNav = [
   {sect:'Leave', items:[{label:'Leave Management',page:'leave',icon:'calendar',badge:'3'}]},
   {sect:'People', items:[
     {label:'Employees',page:'employees',icon:'users'},
+    {label:'Roles & Permissions',page:'roles',icon:'shield'},
     {label:'Departments',page:'departments',icon:'chart'},
     {label:'Org Chart',page:'orgchart',icon:'hierarchy'},
   ]},
@@ -301,6 +400,7 @@ const icons={
   bell:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1a4.5 4.5 0 014.5 4.5c0 2.2.6 3.5 1.3 4.7H2.2c.7-1.2 1.3-2.5 1.3-4.7A4.5 4.5 0 018 1z"/><path d="M6.5 12.2a1.6 1.6 0 003 0"/></svg>`,
   building:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 9h6M5 12h4"/><circle cx="8" cy="6" r="1.5"/></svg>`,
   user:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>`,
+  shield:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1l5 2v4c0 3.3-2.1 6.2-5 7.3C5.1 13.2 3 10.3 3 7V3l5-2z"/><path d="M6.2 8l1.2 1.2L10 6.5"/></svg>`,
 };
 
 function buildNav(){
@@ -325,7 +425,7 @@ function buildNav(){
 // ══════════════════════════════════════════════════
 const pageTitles = {
   dashboard:'Dashboard',attendance:'Attendance',realtime:'Real-Time Monitor',
-  leave:'Leave Management',employees:'Employees',departments:'Departments',
+  leave:'Leave Management',employees:'Employees',roles:'Roles & Permissions',departments:'Departments',
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
   announcements:'Announcements',company:'Company Details',
   notifications:'Notifications',
@@ -357,6 +457,7 @@ function showPage(id){
   if(typeof window.setupLiveAttendanceRefresh === 'function'){
     window.setupLiveAttendanceRefresh(id);
   }
+  runPageAfterRender(id);
   if(id==='reports' && typeof window.loadAttendanceReport === 'function'){
     setTimeout(()=>{
       window.loadAttendanceReport();
@@ -379,6 +480,7 @@ function renderPage(id){
       case 'realtime': return typeof pageRealtimeLive === 'function' ? pageRealtimeLive() : pageRealtime();
       case 'leave': return pageLeave();
       case 'employees': return pageEmployees();
+      case 'roles': return pageRoles();
       case 'departments': return pageDepartments();
       case 'orgchart': return pageOrgChart();
       case 'calendar': return pageCalendar();
@@ -447,6 +549,57 @@ function calcWorkMinutes(attRecord){
   return Math.max(0, mins);
 }
 
+function parseAttendanceTimeForDate(timeStr, dateStr){
+  if(!timeStr || !dateStr) return null;
+  const parsed = new Date(`${dateStr}T${timeStr}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function syncPunchStateFromBootstrap(){
+  const currentUser = DB.currentUser;
+  if(!currentUser) return;
+
+  const today = getTodayLocalDate();
+  const todayRecord = Array.isArray(DB.attendance)
+    ? DB.attendance.find(a => a.empId === currentUser.id && a.date === today)
+    : null;
+  const liveEntry = Array.isArray(DB.liveAttendance)
+    ? DB.liveAttendance.find(item => String(item.empId) === String(currentUser.id))
+    : null;
+
+  if(!todayRecord && !liveEntry) return;
+
+  const ps = DB.punchState || {};
+  const liveStatus = liveEntry?.status || '';
+  const punchedIn = liveStatus === 'in' || liveStatus === 'break';
+  const onBreak = liveStatus === 'break';
+  const activeClockTime = punchedIn ? parseAttendanceTimeForDate(liveEntry?.since, today) : null;
+  const recordClockInTime = parseAttendanceTimeForDate(todayRecord?.in, today);
+  const breakOutTime = onBreak
+    ? (parseAttendanceTimeForDate(todayRecord?.breakOut, today) || ps.breakOutTime || null)
+    : null;
+  const breakInTime = !onBreak ? (parseAttendanceTimeForDate(todayRecord?.breakIn, today) || null) : null;
+  const clockOutTime = !punchedIn ? (parseAttendanceTimeForDate(todayRecord?.out, today) || null) : null;
+
+  DB.punchState = {
+    ...ps,
+    punchedIn,
+    onBreak,
+    clockInTime: punchedIn
+      // Prefer today's persisted attendance clock-in over live "since" value.
+      ? (recordClockInTime || activeClockTime || ps.clockInTime)
+      : null,
+    clockOutTime,
+    breakOutTime,
+    breakInTime,
+    currentSessionBreakMs: Math.max(
+      0,
+      Number(todayRecord?.currentSessionBreakMinutes || 0) * 60000,
+      onBreak ? Number(ps.currentSessionBreakMs || 0) : 0
+    ),
+  };
+}
+
 function formatWorkedMinutesLabel(totalMinutes, includeSeconds=false){
   const safeMinutes = Math.max(0, Number(totalMinutes || 0));
   const totalSeconds = Math.max(0, Math.floor(safeMinutes * 60));
@@ -468,6 +621,9 @@ function getTodayAttendanceRecord(){
 
 function getCompletedWorkedMinutesToday(){
   const record = getTodayAttendanceRecord();
+  if(typeof record?.completedWorkedMinutes === 'number'){
+    return Math.max(0, Number(record.completedWorkedMinutes || 0));
+  }
   return Math.max(0, Number(record?.workedMinutes || 0));
 }
 
@@ -514,3 +670,128 @@ function nowTime(){ return new Date().toLocaleTimeString('en-GB',{hour:'2-digit'
 
 // ══════════════════════════════════════════════════
 //  PUNCH SYSTEM (fully functional)
+
+function formatPunchTimeValue(value, fallback = '—'){
+  if(value instanceof Date && !Number.isNaN(value.getTime())){
+    return value.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  }
+  if(typeof value === 'string' && value.trim() !== ''){
+    return value;
+  }
+  if(typeof fallback === 'string' && fallback.trim() !== ''){
+    return fallback;
+  }
+  return '—';
+}
+
+function getBreakDurationMinutes(asOf = new Date()){
+  const record = getTodayAttendanceRecord() || {};
+  const ps = DB.punchState || {};
+  let totalMinutes = 0;
+
+  if(record.breakOut && record.breakIn){
+    const [startHour, startMinute] = String(record.breakOut).split(':').map(Number);
+    const [endHour, endMinute] = String(record.breakIn).split(':').map(Number);
+    const startTotal = (startHour * 60) + startMinute;
+    const endTotal = (endHour * 60) + endMinute;
+    totalMinutes += Math.max(0, endTotal - startTotal);
+  }
+
+  if(ps.onBreak && ps.breakOutTime instanceof Date && !Number.isNaN(ps.breakOutTime.getTime())){
+    totalMinutes += Math.max(0, Math.floor((asOf - ps.breakOutTime) / 60000));
+  }
+
+  return totalMinutes;
+}
+
+function formatBreakDurationLabel(asOf = new Date()){
+  const totalMinutes = getBreakDurationMinutes(asOf);
+  if(!totalMinutes) return '—';
+  if(totalMinutes % 60 === 0){
+    return `${totalMinutes / 60}h`;
+  }
+  if(totalMinutes > 60){
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return `${hours}h ${mins}m`;
+  }
+  return `${totalMinutes} min`;
+}
+
+function getTodayPunchDisplay(asOf = new Date()){
+  const record = getTodayAttendanceRecord() || {};
+  const ps = DB.punchState || {};
+  const isActiveSession = !!ps.punchedIn;
+
+  return {
+    clockIn: isActiveSession
+      ? formatPunchTimeValue(ps.clockInTime, '—')
+      : formatPunchTimeValue(ps.clockInTime, record.in || '—'),
+    clockOut: isActiveSession
+      ? formatPunchTimeValue(ps.clockOutTime, '—')
+      : formatPunchTimeValue(ps.clockOutTime, record.out || '—'),
+    breakIn: formatPunchTimeValue(ps.onBreak ? ps.breakOutTime : null, record.breakOut || '—'),
+    breakOut: formatPunchTimeValue(ps.breakInTime, record.breakIn || '—'),
+    breakDuration: formatBreakDurationLabel(asOf),
+  };
+}
+
+function getTodayWorkedBreakdown(asOf = new Date()){
+  const completedMinutes = getCompletedWorkedMinutesToday();
+  const currentSessionMinutes = getCurrentSessionWorkedMinutes(asOf);
+  const totalMinutes = completedMinutes + currentSessionMinutes;
+
+  return {
+    completedMinutes,
+    currentSessionMinutes,
+    totalMinutes,
+    completedLabel: formatWorkedMinutesLabel(completedMinutes, false),
+    currentSessionLabel: formatWorkedMinutesLabel(currentSessionMinutes, false),
+    totalLabel: formatWorkedMinutesLabel(totalMinutes, false),
+  };
+}
+
+function getTodaySessionWorkedBreakdown(asOf = new Date()){
+  const record = getTodayAttendanceRecord() || {};
+  const ps = DB.punchState || {};
+  const currentSessionMinutes = getCurrentSessionWorkedMinutes(asOf);
+  const closedSessionMinutes = Math.max(0, Number(record?.sessionWorkedMinutes || 0));
+  const totalMinutes = ps.punchedIn ? currentSessionMinutes : closedSessionMinutes;
+
+  return {
+    totalMinutes,
+    totalLabel: formatWorkedMinutesLabel(totalMinutes, !!ps.punchedIn),
+    compactLabel: formatWorkedHoursClockLabel(totalMinutes),
+    sessionClockIn: record?.sessionClockIn || record?.in || null,
+    sessionClockOut: record?.sessionClockOut || record?.out || null,
+  };
+}
+
+function formatWorkedHoursClockLabel(totalMinutes){
+  const safeMinutes = Math.max(0, Number(totalMinutes || 0));
+  const totalSeconds = Math.max(0, Math.floor(safeMinutes * 60));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} hrs`;
+}
+
+function formatPunchMoment(value, dateStr = null, fallback = '--:--', includeDate = false){
+  if(value instanceof Date && !Number.isNaN(value.getTime())){
+    return value.toLocaleString('en-GB', includeDate
+      ? {day:'2-digit', month:'short', hour:'numeric', minute:'2-digit', hour12:true}
+      : {hour:'numeric', minute:'2-digit', hour12:true}
+    );
+  }
+
+  if(typeof value === 'string' && value.trim() !== ''){
+    if(includeDate && dateStr){
+      const parsed = new Date(`${dateStr}T${value}:00`);
+      if(!Number.isNaN(parsed.getTime())){
+        return parsed.toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'numeric', minute:'2-digit', hour12:true});
+      }
+    }
+    return value;
+  }
+
+  return fallback;
+}

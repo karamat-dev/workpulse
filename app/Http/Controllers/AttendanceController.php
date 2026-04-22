@@ -12,6 +12,16 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class AttendanceController extends Controller
 {
+    public function closeStaleOpenSessions(Request $request): JsonResponse
+    {
+        $closedDates = $this->closeOpenAttendanceBeforeDate($request->user()->id, now()->toDateString());
+
+        return response()->json([
+            'ok' => true,
+            'closedDates' => $closedDates,
+        ]);
+    }
+
     private function createEmployeeNotification(
         int $userId,
         string $type,
@@ -46,6 +56,8 @@ class AttendanceController extends Controller
         $user = $request->user();
         $punchedAt = isset($validated['punched_at']) ? now()->parse($validated['punched_at']) : now();
         $date = $punchedAt->toDateString();
+
+        $this->closeOpenAttendanceBeforeDate($user->id, $date);
 
         $hasApprovedLeave = DB::table('leave_requests')
             ->where('user_id', $user->id)
@@ -110,6 +122,82 @@ class AttendanceController extends Controller
         ]);
     }
 
+    public function closeOpenAttendanceBeforeDate(int $userId, string $currentDate): array
+    {
+        $punchesByDate = DB::table('attendance_punches')
+            ->where('user_id', $userId)
+            ->where('date', '<', $currentDate)
+            ->orderBy('date')
+            ->orderBy('punched_at')
+            ->get()
+            ->groupBy('date');
+
+        if ($punchesByDate->isEmpty()) {
+            return [];
+        }
+
+        $shift = $this->shiftForUser($userId);
+        $closedDates = [];
+
+        foreach ($punchesByDate as $date => $punches) {
+            $state = $this->punchSessionState($punches);
+
+            if (!$state['activeClockIn']) {
+                continue;
+            }
+
+            $closeAt = now()->parse($date.' 23:59:59');
+            $insertRows = [];
+
+            if ($state['onBreak']) {
+                $insertRows[] = [
+                    'user_id' => $userId,
+                    'date' => $date,
+                    'type' => 'break_in',
+                    'punched_at' => $closeAt->toDateTimeString(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+
+            $insertRows[] = [
+                'user_id' => $userId,
+                'date' => $date,
+                'type' => 'clock_out',
+                'punched_at' => $closeAt->toDateTimeString(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            DB::table('attendance_punches')->insert($insertRows);
+
+            $allPunches = DB::table('attendance_punches')
+                ->where('user_id', $userId)
+                ->where('date', $date)
+                ->orderBy('punched_at')
+                ->get();
+
+            $summary = $this->buildAttendanceDaySummary($allPunches, $shift);
+            $day = DB::table('attendance_days')->where('user_id', $userId)->where('date', $date)->first();
+
+            DB::table('attendance_days')->updateOrInsert(
+                ['user_id' => $userId, 'date' => $date],
+                [
+                    'status' => $summary['status'],
+                    'late' => $summary['late'],
+                    'overtime_minutes' => $summary['overtime_minutes'],
+                    'worked_minutes' => $summary['worked_minutes'],
+                    'created_at' => $day?->created_at ?? now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            $closedDates[] = $date;
+        }
+
+        return $closedDates;
+    }
+
     private function shiftEndAt(string $date, ?object $shift = null)
     {
         $shiftStart = $shift?->start_time ? now()->parse($date.' '.(string) $shift->start_time) : now()->parse($date.' 11:00:00');
@@ -156,11 +244,11 @@ class AttendanceController extends Controller
         }
 
         if ($type === 'break_out' && (!$state['activeClockIn'] || $state['onBreak'])) {
-            throw ValidationException::withMessages(['type' => 'Break out is only allowed while you are clocked in and not already on break.']);
+            throw ValidationException::withMessages(['type' => 'Break in is only allowed while you are clocked in and not already on break.']);
         }
 
         if ($type === 'break_in' && (!$state['activeClockIn'] || !$state['onBreak'])) {
-            throw ValidationException::withMessages(['type' => 'Break in is only allowed after an open break.']);
+            throw ValidationException::withMessages(['type' => 'Break out is only allowed after an open break.']);
         }
     }
 
@@ -271,7 +359,7 @@ class AttendanceController extends Controller
         $users = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
-            ->whereIn('users.role', ['employee', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
             ->select([
                 'users.id',
                 'users.employee_code',
@@ -461,7 +549,7 @@ class AttendanceController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
-            fputcsv($out, ['Date', 'Employee ID', 'Name', 'Department', 'Designation', 'Status', 'Clock In', 'Break Out', 'Break In', 'Clock Out', 'Worked Minutes', 'Overtime Minutes', 'Late']);
+            fputcsv($out, ['Date', 'Employee ID', 'Name', 'Department', 'Designation', 'Status', 'Clock In', 'Break In', 'Break Out', 'Clock Out', 'Worked Minutes', 'Overtime Minutes', 'Late']);
 
             foreach ($rows as $row) {
                 fputcsv($out, [
@@ -472,8 +560,8 @@ class AttendanceController extends Controller
                     $row['designation'] ?? '',
                     $row['status'] ?? '',
                     $row['punches']['clock_in'] ?? '',
-                    $row['punches']['break_out'] ?? '',
                     $row['punches']['break_in'] ?? '',
+                    $row['punches']['break_out'] ?? '',
                     $row['punches']['clock_out'] ?? '',
                     $row['worked_minutes'] ?? 0,
                     $row['overtime_minutes'] ?? 0,
@@ -495,7 +583,7 @@ class AttendanceController extends Controller
         $employeesQuery = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
-            ->whereIn('users.role', ['employee', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
             ->select([
                 'users.id as user_id',
                 'users.employee_code',

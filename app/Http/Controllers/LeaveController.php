@@ -11,6 +11,83 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
+    private function summarizeAttendancePunches($punches): array
+    {
+        $clockIn = $punches->firstWhere('type', 'clock_in');
+
+        if (!$clockIn) {
+            return [
+                'status' => 'Absent',
+                'late' => false,
+                'worked_minutes' => 0,
+                'overtime_minutes' => 0,
+            ];
+        }
+
+        $clockInAt = now()->parse($clockIn->punched_at);
+        $lastClockOutAt = null;
+        $activeClockInAt = null;
+        $openBreakAt = null;
+        $workedMinutes = 0;
+
+        foreach ($punches as $punch) {
+            $punchedAt = now()->parse($punch->punched_at);
+
+            if ($punch->type === 'clock_in') {
+                if (!$activeClockInAt) {
+                    $activeClockInAt = $punchedAt;
+                }
+                $openBreakAt = null;
+                continue;
+            }
+
+            if ($punch->type === 'break_out' && $activeClockInAt && !$openBreakAt) {
+                $openBreakAt = $punchedAt;
+                continue;
+            }
+
+            if ($punch->type === 'break_in' && $activeClockInAt && $openBreakAt) {
+                $workedMinutes -= $openBreakAt->diffInMinutes($punchedAt);
+                $openBreakAt = null;
+                continue;
+            }
+
+            if ($punch->type !== 'clock_out' || !$activeClockInAt) {
+                continue;
+            }
+
+            if ($openBreakAt) {
+                $workedMinutes -= $openBreakAt->diffInMinutes($punchedAt);
+                $openBreakAt = null;
+            }
+
+            if ($punchedAt->greaterThan($activeClockInAt)) {
+                $workedMinutes += $activeClockInAt->diffInMinutes($punchedAt);
+            }
+
+            $activeClockInAt = null;
+            $lastClockOutAt = $punchedAt;
+        }
+
+        $workedMinutes = max(0, $workedMinutes);
+        $late = $clockInAt->copy()->greaterThan($clockInAt->copy()->setTime(11, 10));
+        $overtimeMinutes = 0;
+
+        if ($lastClockOutAt) {
+            $shiftEnd = $lastClockOutAt->copy()->setTime(20, 0);
+            if ($lastClockOutAt->greaterThan($shiftEnd)) {
+                $overtimeMinutes = $shiftEnd->diffInMinutes($lastClockOutAt);
+            }
+        }
+
+        return [
+            'status' => 'Present',
+            'late' => $late,
+            'worked_minutes' => $workedMinutes,
+            'overtime_minutes' => $overtimeMinutes,
+        ];
+    }
+
     private function normalizeDurationType(?string $durationType): string
     {
         return in_array($durationType, ['full_day', 'half_day'], true) ? $durationType : 'full_day';
@@ -144,50 +221,15 @@ class LeaveController extends Controller
                         ->where('date', $date)
                         ->delete();
                 } else {
-                    $clockIn = $punches->firstWhere('type', 'clock_in');
-                    $clockOut = $punches->firstWhere('type', 'clock_out');
-                    $workedMinutes = 0;
-
-                    if ($clockIn && $clockOut) {
-                        $clockInAt = now()->parse($clockIn->punched_at);
-                        $clockOutAt = now()->parse($clockOut->punched_at);
-                        if ($clockOutAt->greaterThan($clockInAt)) {
-                            $workedMinutes = $clockInAt->diffInMinutes($clockOutAt);
-                        }
-                    }
-
-                    $openBreakAt = null;
-                    foreach ($punches as $punch) {
-                        if ($punch->type === 'break_out') {
-                            $openBreakAt = now()->parse($punch->punched_at);
-                        }
-
-                        if ($punch->type === 'break_in' && $openBreakAt) {
-                            $workedMinutes -= $openBreakAt->diffInMinutes(now()->parse($punch->punched_at));
-                            $openBreakAt = null;
-                        }
-                    }
-
-                    $workedMinutes = max(0, $workedMinutes);
-                    $clockInAt = $clockIn ? now()->parse($clockIn->punched_at) : null;
-                    $clockOutAt = $clockOut ? now()->parse($clockOut->punched_at) : null;
-                    $late = $clockInAt ? $clockInAt->copy()->greaterThan($clockInAt->copy()->setTime(11, 10)) : false;
-                    $overtimeMinutes = 0;
-
-                    if ($clockOutAt) {
-                        $shiftEnd = $clockOutAt->copy()->setTime(20, 0);
-                        if ($clockOutAt->greaterThan($shiftEnd)) {
-                            $overtimeMinutes = $shiftEnd->diffInMinutes($clockOutAt);
-                        }
-                    }
+                    $summary = $this->summarizeAttendancePunches($punches);
 
                     DB::table('attendance_days')->updateOrInsert(
                         ['user_id' => $userId, 'date' => $date],
                         [
-                            'status' => $clockIn ? 'Present' : 'Absent',
-                            'late' => $late,
-                            'overtime_minutes' => $overtimeMinutes,
-                            'worked_minutes' => $workedMinutes,
+                            'status' => $summary['status'],
+                            'late' => $summary['late'],
+                            'overtime_minutes' => $summary['overtime_minutes'],
+                            'worked_minutes' => $summary['worked_minutes'],
                             'updated_at' => now(),
                             'created_at' => now(),
                         ]
@@ -309,7 +351,7 @@ class LeaveController extends Controller
     private function syncBalancesForPolicyYear(int $year, array $leaveTypeIds = []): void
     {
         $users = DB::table('users')
-            ->whereIn('role', ['employee', 'hr', 'admin'])
+            ->whereIn('role', ['employee', 'manager', 'hr', 'admin'])
             ->pluck('id');
 
         $policiesQuery = DB::table('leave_policies')->where('year', $year);
@@ -554,6 +596,17 @@ class LeaveController extends Controller
             'reason' => ['nullable', 'string', 'max:2000'],
             'handover_to' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $employmentType = DB::table('employee_profiles')
+            ->where('user_id', $request->user()->id)
+            ->value('employment_type');
+
+        if ($employmentType !== null && strcasecmp((string) $employmentType, 'Permanent') !== 0) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Only permanent employees can apply for leave.',
+            ], 422);
+        }
 
         $durationType = $this->normalizeDurationType($validated['duration_type'] ?? 'full_day');
         $halfDaySlot = $this->normalizeHalfDaySlot($validated['half_day_slot'] ?? null);

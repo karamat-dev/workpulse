@@ -105,6 +105,7 @@ class MeController extends Controller
             'shifts.start_time as shiftStart',
             'shifts.end_time as shiftEnd',
             'shifts.grace_minutes as shiftGrace',
+            'shifts.break_minutes as shiftBreak',
             'shifts.working_days as shiftWorkingDays',
         ];
 

@@ -11,12 +11,44 @@ class LeaveAttendanceSyncTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function createEmployeeProfile(int $userId, string $employmentType = 'Permanent'): void
+    {
+        DB::table('employee_profiles')->insert([
+            'user_id' => $userId,
+            'designation' => 'QA Engineer',
+            'date_of_joining' => now()->subMonth()->toDateString(),
+            'employment_type' => $employmentType,
+            'status' => 'Active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function grantEmployeeLeaveApplyPermission(): void
+    {
+        $permissionId = DB::table('permissions')->insertGetId([
+            'key' => 'leave.apply',
+            'label' => 'Apply for leave',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('role_permissions')->insert([
+            'role' => 'employee',
+            'permission_id' => $permissionId,
+            'allowed' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
     public function test_approved_leave_creates_attendance_leave_day_and_rejected_leave_removes_it(): void
     {
         $admin = User::factory()->create([
             'role' => 'admin',
             'employee_code' => 'ADM-200',
         ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
 
         DB::table('leave_types')->insert([
             'name' => 'Unpaid Leave',
@@ -80,6 +112,7 @@ class LeaveAttendanceSyncTest extends TestCase
             'role' => 'admin',
             'employee_code' => 'ADM-201',
         ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
 
         DB::table('leave_types')->insert([
             'name' => 'Unpaid Leave',
@@ -128,5 +161,76 @@ class LeaveAttendanceSyncTest extends TestCase
             'date' => $date,
             'type' => 'clock_in',
         ]);
+    }
+
+    public function test_intern_employee_cannot_apply_for_leave(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-300',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Intern');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $date = now()->addDay()->toDateString();
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $date,
+                'to_date' => $date,
+            ]);
+
+        $response->assertStatus(422)->assertJson([
+            'ok' => false,
+            'message' => 'Only permanent employees can apply for leave.',
+        ]);
+
+        $this->assertDatabaseCount('leave_requests', 0);
+    }
+
+    public function test_permanent_employee_can_apply_for_leave(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-301',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $date = now()->addDay()->toDateString();
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $date,
+                'to_date' => $date,
+            ]);
+
+        $response->assertCreated()->assertJson([
+            'ok' => true,
+        ]);
+
+        $this->assertDatabaseCount('leave_requests', 1);
     }
 }

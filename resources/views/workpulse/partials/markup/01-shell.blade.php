@@ -8,11 +8,11 @@
       <div class="login-tab" id="lt-emp" onclick="window.selectLoginRole('employee')">Employee</div>
     </div>
     <div class="lf-group">
-      <label class="lf-label">Email Address</label>
+      <label class="lf-label">Email Address <span class="req-star">*</span></label>
       <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">
     </div>
     <div class="lf-group">
-      <label class="lf-label">Password</label>
+      <label class="lf-label">Password <span class="req-star">*</span></label>
       <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
     </div>
     <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
@@ -66,4 +66,3 @@
     <div class="content" id="main-content"></div>
   </div>
 </div>
-

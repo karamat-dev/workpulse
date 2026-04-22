@@ -8,9 +8,94 @@ use Illuminate\Support\Facades\DB;
 
 class WorkpulseBootstrapController extends Controller
 {
+    private function calculateWorkedMinutesFromPunches($punches): array
+    {
+        $workedMinutes = 0;
+        $activeClockInAt = null;
+        $openBreakAt = null;
+        $lastClockOutAt = null;
+        $lastClockInAt = null;
+        $lastBreakOutAt = null;
+        $lastBreakInAt = null;
+        $currentSessionBreakMinutes = 0;
+        $currentSessionClockInAt = null;
+        $lastSessionWorkedMinutes = 0;
+        $lastSessionClockInAt = null;
+        $lastSessionClockOutAt = null;
+
+        foreach ($punches as $punch) {
+            $punchedAt = now()->parse($punch->punched_at);
+
+            if ($punch->type === 'clock_in') {
+                if (!$activeClockInAt) {
+                    $activeClockInAt = $punchedAt;
+                    $currentSessionClockInAt = $punchedAt;
+                    $currentSessionBreakMinutes = 0;
+                }
+                $lastClockInAt = $punchedAt;
+                $openBreakAt = null;
+                continue;
+            }
+
+            if ($punch->type === 'break_out' && $activeClockInAt && !$openBreakAt) {
+                $openBreakAt = $punchedAt;
+                $lastBreakOutAt = $punchedAt;
+                continue;
+            }
+
+            if ($punch->type === 'break_in' && $activeClockInAt && $openBreakAt) {
+                $breakMinutes = $openBreakAt->diffInMinutes($punchedAt);
+                $workedMinutes -= $breakMinutes;
+                $currentSessionBreakMinutes += $breakMinutes;
+                $openBreakAt = null;
+                $lastBreakInAt = $punchedAt;
+                continue;
+            }
+
+            if ($punch->type !== 'clock_out' || !$activeClockInAt) {
+                continue;
+            }
+
+            if ($openBreakAt) {
+                $breakMinutes = $openBreakAt->diffInMinutes($punchedAt);
+                $workedMinutes -= $breakMinutes;
+                $currentSessionBreakMinutes += $breakMinutes;
+                $openBreakAt = null;
+            }
+
+            if ($punchedAt->greaterThan($activeClockInAt)) {
+                $workedMinutes += $activeClockInAt->diffInMinutes($punchedAt);
+            }
+
+            $lastClockOutAt = $punchedAt;
+            $lastSessionClockInAt = $currentSessionClockInAt;
+            $lastSessionClockOutAt = $punchedAt;
+            $lastSessionWorkedMinutes = max(0, $activeClockInAt->diffInMinutes($punchedAt) - $currentSessionBreakMinutes);
+            $activeClockInAt = null;
+            $currentSessionClockInAt = null;
+            $currentSessionBreakMinutes = 0;
+        }
+
+        return [
+            'workedMinutes' => max(0, $workedMinutes),
+            'activeClockInAt' => $activeClockInAt,
+            'lastClockInAt' => $lastClockInAt,
+            'lastClockOutAt' => $lastClockOutAt,
+            'lastBreakOutAt' => $lastBreakOutAt,
+            'lastBreakInAt' => $lastBreakInAt,
+            'onBreak' => $activeClockInAt !== null && $openBreakAt !== null,
+            'openBreakAt' => $openBreakAt,
+            'currentSessionBreakMinutes' => $currentSessionBreakMinutes,
+            'sessionClockInAt' => $activeClockInAt ? $currentSessionClockInAt : $lastSessionClockInAt,
+            'sessionClockOutAt' => $activeClockInAt ? null : $lastSessionClockOutAt,
+            'sessionWorkedMinutes' => $activeClockInAt ? 0 : $lastSessionWorkedMinutes,
+        ];
+    }
+
     public function __invoke(Request $request): JsonResponse
     {
         $user = $request->user();
+        app(AttendanceController::class)->closeOpenAttendanceBeforeDate($user->id, now()->toDateString());
 
         $profile = DB::table('employee_profiles')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
@@ -59,6 +144,7 @@ class WorkpulseBootstrapController extends Controller
                 'shifts.start_time',
                 'shifts.end_time',
                 'shifts.grace_minutes',
+                'shifts.break_minutes',
                 'shifts.working_days',
             ])
             ->first();
@@ -78,7 +164,12 @@ class WorkpulseBootstrapController extends Controller
             'pass' => null,
             'role' => $user->role,
             'dept' => $profile?->dept_name ?? '-',
-            'desg' => $profile?->designation ?? ($user->role === 'admin' ? 'Administrator' : 'Employee'),
+            'desg' => $profile?->designation ?? match ($user->role) {
+                'admin' => 'Administrator',
+                'hr' => 'HR Manager',
+                'manager' => 'Manager',
+                default => 'Employee',
+            },
             'doj' => $profile?->date_of_joining,
             'dop' => $profile?->probation_end_date,
             'lwd' => $profile?->last_working_date,
@@ -91,6 +182,7 @@ class WorkpulseBootstrapController extends Controller
             'shiftStart' => $profile?->start_time ? substr((string) $profile->start_time, 0, 5) : null,
             'shiftEnd' => $profile?->end_time ? substr((string) $profile->end_time, 0, 5) : null,
             'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : null,
+            'shiftBreak' => $profile?->break_minutes !== null ? (int) $profile->break_minutes : 60,
             'shiftWorkingDays' => $profile?->working_days,
             'phone' => $profile?->personal_phone,
             'personalEmail' => $profile?->personal_email,
@@ -148,6 +240,7 @@ class WorkpulseBootstrapController extends Controller
             'shifts.start_time',
             'shifts.end_time',
             'shifts.grace_minutes',
+            'shifts.break_minutes',
             'shifts.working_days',
         ];
 
@@ -183,7 +276,7 @@ class WorkpulseBootstrapController extends Controller
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
-            ->whereIn('users.role', ['employee', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
             ->select($employeeSelect)
             ->orderBy('users.employee_code');
 
@@ -222,6 +315,7 @@ class WorkpulseBootstrapController extends Controller
                 'shiftStart' => $employee->start_time ? substr((string) $employee->start_time, 0, 5) : null,
                 'shiftEnd' => $employee->end_time ? substr((string) $employee->end_time, 0, 5) : null,
                 'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : null,
+                'shiftBreak' => $employee->break_minutes !== null ? (int) $employee->break_minutes : 60,
                 'shiftWorkingDays' => $employee->working_days,
                 'cnicDocumentPath' => $employee->cnic_document_path,
                 'cnicDocumentName' => $employee->cnic_document_name,
@@ -291,6 +385,7 @@ class WorkpulseBootstrapController extends Controller
                 'start' => substr((string) $shift->start_time, 0, 5),
                 'end' => substr((string) $shift->end_time, 0, 5),
                 'grace' => (int) $shift->grace_minutes,
+                'break' => (int) ($shift->break_minutes ?? 60),
                 'workingDays' => $shift->working_days,
                 'active' => (bool) $shift->is_active,
             ])
@@ -328,20 +423,23 @@ class WorkpulseBootstrapController extends Controller
             ->map(function ($day) use ($attendancePunches) {
                 $punches = $attendancePunches->get($day->emp_id.'|'.$day->date, collect());
                 $firstClockIn = $punches->firstWhere('type', 'clock_in');
-                $lastClockOut = $punches->where('type', 'clock_out')->last();
-                $lastBreakOut = $punches->where('type', 'break_out')->last();
-                $lastBreakIn = $punches->where('type', 'break_in')->last();
+                $metrics = $this->calculateWorkedMinutesFromPunches($punches);
 
                 return [
                     'empId' => $day->emp_id,
                     'date' => $day->date,
                     'in' => $firstClockIn?->punched_at ? now()->parse($firstClockIn->punched_at)->format('H:i') : null,
-                    'out' => $lastClockOut?->punched_at ? now()->parse($lastClockOut->punched_at)->format('H:i') : null,
-                    'breakOut' => $lastBreakOut?->punched_at ? now()->parse($lastBreakOut->punched_at)->format('H:i') : null,
-                    'breakIn' => $lastBreakIn?->punched_at ? now()->parse($lastBreakIn->punched_at)->format('H:i') : null,
+                    'out' => $metrics['lastClockOutAt'] ? $metrics['lastClockOutAt']->format('H:i') : null,
+                    'breakOut' => $metrics['lastBreakOutAt'] ? $metrics['lastBreakOutAt']->format('H:i') : null,
+                    'breakIn' => $metrics['lastBreakInAt'] ? $metrics['lastBreakInAt']->format('H:i') : null,
+                    'sessionClockIn' => $metrics['sessionClockInAt'] ? $metrics['sessionClockInAt']->format('H:i') : null,
+                    'sessionClockOut' => $metrics['sessionClockOutAt'] ? $metrics['sessionClockOutAt']->format('H:i') : null,
                     'status' => $day->status,
                     'late' => (bool) $day->late,
-                    'workedMinutes' => (int) $day->worked_minutes,
+                    'workedMinutes' => (int) $metrics['workedMinutes'],
+                    'completedWorkedMinutes' => (int) $metrics['workedMinutes'],
+                    'sessionWorkedMinutes' => (int) $metrics['sessionWorkedMinutes'],
+                    'currentSessionBreakMinutes' => (int) $metrics['currentSessionBreakMinutes'],
                     'overtime' => (int) $day->overtime_minutes,
                 ];
             })

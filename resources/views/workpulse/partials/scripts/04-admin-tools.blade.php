@@ -37,6 +37,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-confirmation-date').value = e.confirmationDate||'';
     document.getElementById('ee-type').value = e.type||'Permanent';
     document.getElementById('ee-status').value = e.status||'Active';
+    document.getElementById('ee-role').value = e.role||'employee';
     document.getElementById('ee-work-location').value = e.workLocation||'';
     document.getElementById('ee-manager').value = e.manager==='-' ? '' : (e.manager||'');
     document.getElementById('ee-shift').value = e.shiftId||'';
@@ -192,6 +193,7 @@ async function saveEditEmployee(){
   if(document.getElementById('ee-confirmation-date').value) formData.append('confirmation_date', document.getElementById('ee-confirmation-date').value);
   formData.append('type', document.getElementById('ee-type').value);
   formData.append('status', document.getElementById('ee-status').value);
+  formData.append('role', document.getElementById('ee-role').value);
   if(document.getElementById('ee-work-location').value.trim()) formData.append('work_location', document.getElementById('ee-work-location').value.trim());
   if(document.getElementById('ee-manager').value.trim()) formData.append('manager', document.getElementById('ee-manager').value.trim());
   formData.append('shift_id', document.getElementById('ee-shift').value || '');
@@ -648,12 +650,12 @@ function exportCSV(filename, rows, headers){
 }
 
 function exportAttendanceCSV(){
-  const headers = ['Employee ID','Name','Department','Date','Day','Clock In','Break Out','Break In','Clock Out','Hours','Overtime','Status'];
+  const headers = ['Employee ID','Name','Department','Date','Day','Clock In','Break In','Break Out','Clock Out','Hours','Overtime','Status'];
   const rows = DB.attendance.map(a=>{
     const emp = DB.employees.find(e=>e.id===a.empId)||{fname:'',lname:'',dept:''};
     return [a.empId, emp.fname+' '+emp.lname, emp.dept, a.date,
       new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}),
-      a.in||'', a.breakOut||'', a.breakIn||'', a.out||'',
+      a.in||'', a.breakIn||'', a.breakOut||'', a.out||'',
       calcWorkHours(a), a.overtime?'+'+a.overtime+'m':'', a.status];
   });
   exportCSV('attendance_report.csv', rows, headers);
@@ -710,6 +712,7 @@ function openCreateShift(){
   document.getElementById('shift-start').value = '11:00';
   document.getElementById('shift-end').value = '20:00';
   document.getElementById('shift-grace').value = '10';
+  document.getElementById('shift-break').value = '60';
   document.getElementById('shift-days').value = 'Mon-Fri';
   document.getElementById('shift-active').value = '1';
   openModal('shiftModal');
@@ -729,6 +732,7 @@ function openEditShift(shiftId){
   document.getElementById('shift-start').value = shift.start || '11:00';
   document.getElementById('shift-end').value = shift.end || '20:00';
   document.getElementById('shift-grace').value = shift.grace ?? 10;
+  document.getElementById('shift-break').value = shift.break ?? 60;
   document.getElementById('shift-days').value = shift.workingDays || 'Mon-Fri';
   document.getElementById('shift-active').value = shift.active ? '1' : '0';
   openModal('shiftModal');
@@ -742,6 +746,7 @@ async function saveShift(){
     start: document.getElementById('shift-start').value,
     end: document.getElementById('shift-end').value,
     grace: parseInt(document.getElementById('shift-grace').value, 10) || 0,
+    break: parseInt(document.getElementById('shift-break').value, 10) || 0,
     workingDays: document.getElementById('shift-days').value.trim(),
     active: document.getElementById('shift-active').value === '1',
   };
