@@ -1227,16 +1227,16 @@ function pageAdminDashboard(){
 
   return `
   <div class="g2" style="margin-bottom:12px;">
-    <div class="alert al-info" style="margin-bottom:0;"><span>ðŸ“Š</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
-    <div class="alert al-warn" style="margin-bottom:0;"><span>â³</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
+    <div class="alert al-info" style="margin-bottom:0;"><span>Info</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
+    <div class="alert al-warn" style="margin-bottom:0;"><span>Alert</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
   </div>
-  <div class="alert al-danger"><span>ðŸ”´</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
+  <div class="alert al-danger"><span>Alert</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
 
   <div class="g4" style="margin-bottom:14px;">
-    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">â†‘ ${newJoiners} new today</div></div>
+    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">+ ${newJoiners} new today</div></div>
     <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
     <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
-    <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests â†’</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests -></div></div>
   </div>
 
   <div class="g2" style="margin-bottom:14px;">

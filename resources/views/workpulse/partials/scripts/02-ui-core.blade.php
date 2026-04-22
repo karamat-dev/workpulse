@@ -20,6 +20,8 @@ const __workpulseMojibakeMap = [
   ['\u00E2\u0087\u201E', 'Transfer'],
   ['\u00E2\u0161\u2122\u00EF\u00B8\u008F', 'Settings'],
   ['\u00F0\u0178\u201C\u00A6', 'Days:'],
+  ['\u00F0\u0178\u201C\u0160', 'Info'],
+  ['\u00F0\u0178\u201D\u00B4', 'Alert'],
   ['\u00F0\u0178\u008F\u2013\u00EF\u00B8\u008F', 'Holiday'],
   ['\u00C3\u2014', 'x'],
   ['\u00E2\u20AC\u00A6', '...'],
