@@ -1,5 +1,5 @@
 //  PUNCH SYSTEM (fully functional)
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 async function wpApi(path, opts={}){
   const csrf = typeof getCsrfToken === 'function'
     ? getCsrfToken()
@@ -194,7 +194,7 @@ function getCurrentShiftPolicy(){
   const lateAt = new Date();
   lateAt.setHours(startHour || 0, (startMinute || 0) + shiftGrace, 0, 0);
   const lateLabel = lateAt.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-  return `${shiftStart} - ${shiftEnd} · ${breakLabel} · Late after ${lateLabel}`;
+  return `${shiftStart} - ${shiftEnd} Â· ${breakLabel} Â· Late after ${lateLabel}`;
 }
 
 function getEmployeeShiftSummary(employee){
@@ -202,7 +202,7 @@ function getEmployeeShiftSummary(employee){
   const shiftEnd = employee?.shiftEnd || '20:00';
   const shiftBreak = Number.isFinite(Number(employee?.shiftBreak)) ? Number(employee.shiftBreak) : 60;
   const breakLabel = shiftBreak === 60 ? '1h break' : `${shiftBreak} min break`;
-  return `${shiftStart} - ${shiftEnd} · ${breakLabel}`;
+  return `${shiftStart} - ${shiftEnd} Â· ${breakLabel}`;
 }
 
 function getEmployeeWorkingDays(employee){
@@ -220,7 +220,7 @@ function getBreakMinutesFromAttendanceRecord(record){
 
 function formatBreakMinutesLabel(minutes){
   const safeMinutes = Math.max(0, Number(minutes || 0));
-  if(!safeMinutes) return '—';
+  if(!safeMinutes) return 'â€”';
   if(safeMinutes % 60 === 0){
     return `${safeMinutes / 60}h`;
   }
@@ -648,9 +648,9 @@ function refreshPunchUI(){
   }
 }
 
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  TOAST
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function showToast(msg, type='green'){
   const colors={green:'var(--green)',red:'var(--red)',amber:'var(--amber)'};
   const t=document.createElement('div');
@@ -660,9 +660,9 @@ function showToast(msg, type='green'){
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2500);
 }
 
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  SUBMIT ACTIONS
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function submitLeave(){
   const typeCode=document.getElementById('lv-type').value;
   const from=document.getElementById('lv-from').value;
@@ -760,7 +760,7 @@ function submitRegulation(){
   const req=document.getElementById('reg-req').value;
   const reason=document.getElementById('reg-reason').value;
   if(!date||!req||!reason){ showToast('Please fill all required fields','red'); return; }
-  wpApi('/api/attendance/regulations', {method:'POST', body: JSON.stringify({date,type,original_value:orig||'—',requested_value:req,reason})})
+  wpApi('/api/attendance/regulations', {method:'POST', body: JSON.stringify({date,type,original_value:orig||'â€”',requested_value:req,reason})})
     .then(()=>wpReload())
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('regulationModal');
@@ -1065,9 +1065,9 @@ function openApproval(leaveId){
       <div class="irow"><span class="ikey">Employee</span><span class="ival">${lv.empName}</span></div>
       <div class="irow"><span class="ikey">Department</span><span class="ival">${lv.dept}</span></div>
       <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${lv.type}</span></div>
-      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} → ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
+      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} â†’ ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
       <div class="irow"><span class="ikey">Reason</span><span class="ival">${lv.reason}</span></div>
-      <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'—'}</span></div>
+      <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'â€”'}</span></div>
     </div>`;
   openModal('approvalModal');
 }
@@ -1107,9 +1107,9 @@ function filterTable(inputId, tableId){
   });
 }
 
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  TAB SWITCHER
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function switchTab(group, tab){
   document.querySelectorAll(`[id^="${group}-tc-"]`).forEach(el=>el.classList.remove('active'));
   document.querySelectorAll(`[data-tab-group="${group}"]`).forEach(el=>el.classList.remove('active'));
@@ -1124,9 +1124,9 @@ function buildTabs(group, tabs, activeTab){
   return `<div class="tabs">${tabHtml}</div>${contentHtml}`;
 }
 
-// ══════════════════════════════════════════════════
-//  ██████ ADMIN PAGES ██████
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ ADMIN PAGES â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 function dashboardWeekDays(){
   const now = new Date();
@@ -1154,17 +1154,17 @@ function dashboardRecentActivity(){
     .map(a=>{
       const emp = DB.employees.find(e=>e.id===a.empId);
       const name = emp ? `${emp.fname} ${emp.lname}` : a.empId;
-      const dept = emp?.dept || '—';
+      const dept = emp?.dept || 'â€”';
       const label = a.out ? `${name} clocked out` : `${name} clocked in`;
-      const time = a.out || a.in || '—';
-      return {label, meta:`${time} · ${dept}`, color:'var(--green)', sortKey:`${a.date} ${time}`};
+      const time = a.out || a.in || 'â€”';
+      return {label, meta:`${time} Â· ${dept}`, color:'var(--green)', sortKey:`${a.date} ${time}`};
     });
 
   const leaveEvents = DB.leaves
     .filter(l=>l.status==='Pending')
     .map(l=>({
       label:`Leave request: ${l.empName}`,
-      meta:`${l.type} · Awaiting approval`,
+      meta:`${l.type} Â· Awaiting approval`,
       color:'var(--amber)',
       sortKey:`${l.applied||l.from} 00:00`
     }));
@@ -1173,7 +1173,7 @@ function dashboardRecentActivity(){
     .filter(r=>r.status==='Pending')
     .map(r=>({
       label:`Regulation request: ${r.empId}`,
-      meta:`${r.type} · ${formatDate(r.date)}`,
+      meta:`${r.type} Â· ${formatDate(r.date)}`,
       color:'var(--purple)',
       sortKey:`${r.date} 00:00`
     }));
@@ -1198,7 +1198,7 @@ function dashboardUpcomingItems(){
     .filter(item => item.date && item.date >= today);
   const approvedLeaves = (DB.leaves||[])
     .filter(l=>l.status==='Approved' && l.from>=today)
-    .map(l=>({title:`${l.empName} — ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
+    .map(l=>({title:`${l.empName} â€” ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
   return [...holidays, ...events, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
 }
 
@@ -1227,16 +1227,16 @@ function pageAdminDashboard(){
 
   return `
   <div class="g2" style="margin-bottom:12px;">
-    <div class="alert al-info" style="margin-bottom:0;"><span>📊</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
-    <div class="alert al-warn" style="margin-bottom:0;"><span>⏳</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
+    <div class="alert al-info" style="margin-bottom:0;"><span>ðŸ“Š</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
+    <div class="alert al-warn" style="margin-bottom:0;"><span>â³</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
   </div>
-  <div class="alert al-danger"><span>🔴</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
+  <div class="alert al-danger"><span>ðŸ”´</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
 
   <div class="g4" style="margin-bottom:14px;">
-    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">↑ ${newJoiners} new today</div></div>
+    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">â†‘ ${newJoiners} new today</div></div>
     <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
     <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
-    <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests →</div></div>
+    <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests â†’</div></div>
   </div>
 
   <div class="g2" style="margin-bottom:14px;">
@@ -1325,7 +1325,7 @@ function pageHrDashboard(){
     .slice(0,5);
 
   return `
-  <div class="alert al-info"><span>ℹ️</span><div><strong>HR Focus:</strong> ${pendingLeaves} pending leave request(s), ${probationEmployees} employee(s) on probation, and ${newJoiners} new joiner(s) this month.</div></div>
+  <div class="alert al-info"><span>â„¹ï¸</span><div><strong>HR Focus:</strong> ${pendingLeaves} pending leave request(s), ${probationEmployees} employee(s) on probation, and ${newJoiners} new joiner(s) this month.</div></div>
 
   <div class="g4" style="margin-bottom:14px;">
     <div class="stat-card"><div class="stat-label">Active Employees</div><div class="stat-val">${activeEmployees}</div><div class="stat-sub" onclick="window.showPage('employees')" style="cursor:pointer;color:var(--accent);">Open directory</div></div>
@@ -1403,7 +1403,7 @@ function pageAttendance(){
     punchButtons = `
       <button class="punch-btn pb-out" onclick="punchOut()">Clock Out</button>
       ${ps.onBreak
-        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break Out — End Break</button>`
+        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break Out â€” End Break</button>`
         : `<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">Break In</button>`
       }`;
   } else {
@@ -1414,18 +1414,18 @@ function pageAttendance(){
     <tr>
       <td>${formatDate(a.date)}</td>
       <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
-      <td>${a.in||'—'}</td>
-      <td>${a.breakIn||'—'}</td>
-      <td>${a.breakOut||'—'}</td>
-      <td>${a.out||'—'}</td>
+      <td>${a.in||'-'}</td>
+      <td>${a.breakOut||'-'}</td>
+      <td>${a.breakIn||'-'}</td>
+      <td>${a.out||'-'}</td>
       <td>${calcWorkHours(a)}</td>
-      <td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
+      <td>${a.overtime?'+'+a.overtime+'m':'â€”'}</td>
       <td>${statusBadge(a.late?'Late':a.status)}</td>
     </tr>`).join('');
 
   const regRows = DB.regulations.filter(r=>r.empId===u.id).map(r=>`
     <tr><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.orig}</td><td>${r.req}</td><td>${r.reason}</td><td>${statusBadge(r.status)}</td>
-    <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'—'}</td></tr>`).join('');
+    <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'â€”'}</td></tr>`).join('');
 
   const logTimeline = ps.sessionLogs.map(l=>`
     <div class="tl-item"><div class="tl-dot" style="background:var(--accent);"></div><div class="tl-line"></div>
@@ -1446,13 +1446,13 @@ function pageAttendance(){
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || '—'}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? '—' : (punchDisplay.clockOut || '—')}</span></div>
-      <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || 'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? 'â€”' : (punchDisplay.clockOut || 'â€”')}</span></div>
+      <div class="irow"><span class="ikey">Break Time</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'â€”'}</span></div>
       <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
       <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
-      <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 – 20:00</span></div>
+      <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 â€“ 20:00</span></div>
     </div>
   </div>
   ${buildTabs('att',[
@@ -1496,10 +1496,10 @@ function pageRealtime(){
   const leaveCount=DB.liveAttendance.filter(l=>l.status==='leave').length;
   const cards=DB.liveAttendance.map(e=>{
     const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[e.status]||'md-out';
-    const lbl={in:'In since '+e.since,break:'On Break — '+e.since,out:'Clocked Out '+e.since,leave:'On Leave — '+e.since}[e.status];
+    const lbl={in:'In since '+e.since,break:'On Break â€” '+e.since,out:'Clocked Out '+e.since,leave:'On Leave â€” '+e.since}[e.status];
     return`<div class="mon-card"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
-      <div style="font-size:11px;color:var(--muted);">${e.dept} · ${lbl}</div></div></div>`;
+      <div style="font-size:11px;color:var(--muted);">${e.dept} Â· ${lbl}</div></div></div>`;
   }).join('');
 
   return `
@@ -1622,7 +1622,7 @@ function pageLeave(){
   const balanceHTML=`
     <div class="g2">
       <div class="card">
-        <div class="card-hdr"><div class="card-title">Leave Balances — 2025</div>${leaveBalanceActions}</div>
+        <div class="card-hdr"><div class="card-title">Leave Balances â€” 2025</div>${leaveBalanceActions}</div>
         ${leaveBalances.map(([n,r,t,c]) => {
           const safeRemaining = Number.isFinite(Number(r)) ? Number(r) : 0;
           const safeTotal = Math.max(1, Number.isFinite(Number(t)) ? Number(t) : 1);
@@ -1642,10 +1642,10 @@ function pageLeave(){
         ${leavePolicies.map(policy => `
           <div class="irow"><span class="ikey">${policy.name} Quota</span><span class="ival">${policy.quota_days} days/year</span></div>
         `).join('')}
-        <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">Jan–Dec (Annual)</span></div>
+        <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">Janâ€“Dec (Annual)</span></div>
         <div class="irow"><span class="ikey">Pro-Rata Calculation</span><span class="ival"><span class="badge ${leavePolicies.some(policy => policy.pro_rata) ? 'bg-green' : 'bg-red'}">${leavePolicies.some(policy => policy.pro_rata) ? 'Enabled' : 'Disabled'}</span></span></div>
         <div class="irow"><span class="ikey">Carry Forward</span><span class="ival">Configured per leave type</span></div>
-        <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee → Manager → HR</span></div>
+        <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee â†’ Manager â†’ HR</span></div>
       </div>
     </div>`;
 
@@ -1934,10 +1934,10 @@ function pageEmpProfileDetail(){
     <div class="av av-64" style="background:${e.avatarColor}33;color:${e.avatarColor};border:3px solid ${e.avatarColor}44;">${e.avatar}</div>
     <div style="flex:1;">
       <div class="ph-name">${e.fname} ${e.lname}</div>
-      <div class="ph-role">${e.desg} · ${e.id}</div>
+      <div class="ph-role">${e.desg} Â· ${e.id}</div>
       <div class="ph-tags">${statusBadge(e.status)}<span class="badge bg-blue">${e.dept}</span></div>
     </div>
-    <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);" onclick="window.showPage('employees')">← Back</button>
+    <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);" onclick="window.showPage('employees')">â† Back</button>
   </div>
   ${buildTabs('epd',[
     {id:'personal',label:'Personal',content:`
@@ -1945,17 +1945,17 @@ function pageEmpProfileDetail(){
         <div class="card"><div class="card-title" style="margin-bottom:13px;">Personal Details</div>
           <div class="irow"><span class="ikey">Full Name</span><span class="ival">${e.fname} ${e.lname}</span></div>
           <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(e.dob)}</span></div>
-          <div class="irow"><span class="ikey">Gender</span><span class="ival">${e.gender||'—'}</span></div>
-          <div class="irow"><span class="ikey">CNIC</span><span class="ival">${e.cnic||'—'}</span></div>
+          <div class="irow"><span class="ikey">Gender</span><span class="ival">${e.gender||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">CNIC</span><span class="ival">${e.cnic||'â€”'}</span></div>
           <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${e.phone}</span></div>
           <div class="irow"><span class="ikey">Personal Email</span><span class="ival">${e.email}</span></div>
-          <div class="irow"><span class="ikey">Address</span><span class="ival">${e.address||'—'}</span></div>
-          <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${e.blood||'—'}</span></div>
+          <div class="irow"><span class="ikey">Address</span><span class="ival">${e.address||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${e.blood||'â€”'}</span></div>
         </div>
         <div class="card"><div class="card-title" style="margin-bottom:13px;">Next of Kin</div>
-          <div class="irow"><span class="ikey">Name</span><span class="ival">${e.kin||'—'}</span></div>
-          <div class="irow"><span class="ikey">Relationship</span><span class="ival">${e.kinRel||'—'}</span></div>
-          <div class="irow"><span class="ikey">Contact</span><span class="ival">${e.kinPhone||'—'}</span></div>
+          <div class="irow"><span class="ikey">Name</span><span class="ival">${e.kin||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Relationship</span><span class="ival">${e.kinRel||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Contact</span><span class="ival">${e.kinPhone||'â€”'}</span></div>
         </div>
       </div>`},
     {id:'job',label:'Job & HR',content:`
@@ -1976,8 +1976,8 @@ function pageEmpProfileDetail(){
         </div>
         <div class="card"><div class="card-title" style="margin-bottom:13px;">HR Details</div>
           <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
-          <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 – 20:00</span></div>
-          <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon – Fri</span></div>
+          <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 â€“ 20:00</span></div>
+          <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon â€“ Fri</span></div>
           <div class="irow"><span class="ikey">Weekly Hours</span><span class="ival">45 hrs</span></div>
           <div class="irow"><span class="ikey">Contract Type</span><span class="ival">${e.type}</span></div>
         </div>
@@ -1993,9 +1993,9 @@ function pageEmpProfileDetail(){
           <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);font-weight:700;">PKR ${net.toLocaleString()}</span></div>
         </div>
         <div class="card"><div class="card-hdr"><div class="card-title">Bank Details <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
-          <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'—'}</span></div>
-          <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'—'}</span></div>
-          <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'—'}</span></div>
+          <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'â€”'}</span></div>
           <div class="irow"><span class="ikey">Payment Method</span><span class="ival">Bank Transfer</span></div>
         </div>
       </div>`},
@@ -2005,7 +2005,7 @@ function pageEmpProfileDetail(){
           <tr><td>CNIC Copy</td><td>Identity</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
           <tr><td>Degree Certificate</td><td>Education</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
           <tr><td>Offer Letter</td><td>Employment</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
-          <tr><td>Medical Certificate</td><td>Medical</td><td>—</td><td><span class="badge bg-amber">Pending</span></td></tr>
+          <tr><td>Medical Certificate</td><td>Medical</td><td>â€”</td><td><span class="badge bg-amber">Pending</span></td></tr>
         </tbody></table></div>
       </div>`},
   ],'personal')}`;
@@ -2064,7 +2064,7 @@ function pageOrgChart(){
         </div>
       </div>
     </div>
-    <div class="alert al-info" style="margin-top:14px;"><span>ℹ️</span><div>Click any node to view department employees. The chart supports up to 6 levels of hierarchy.</div></div>
+    <div class="alert al-info" style="margin-top:14px;"><span>â„¹ï¸</span><div>Click any node to view department employees. The chart supports up to 6 levels of hierarchy.</div></div>
   </div>`;
 }
 
@@ -2116,11 +2116,11 @@ function pageCalendar(empView=false){
   }
 
   const legacyEvents=[
-    {date:'Today',label:'🎂 Sara Ahmed Birthday',badge:'bg-amber'},
-    {date:'Apr 20–22',label:'🏖️ Eid-ul-Fitr Holiday',badge:'bg-amber'},
-    {date:'Apr 22',label:'📋 Q2 Town Hall',badge:'bg-purple'},
-    {date:'Apr 25',label:'⚙️ Zara Khan Probation',badge:'bg-blue'},
-    {date:'May 1',label:'🌍 Labour Day',badge:'bg-green'},
+    {date:'Today',label:'ðŸŽ‚ Sara Ahmed Birthday',badge:'bg-amber'},
+    {date:'Apr 20â€“22',label:'ðŸ–ï¸ Eid-ul-Fitr Holiday',badge:'bg-amber'},
+    {date:'Apr 22',label:'ðŸ“‹ Q2 Town Hall',badge:'bg-purple'},
+    {date:'Apr 25',label:'âš™ï¸ Zara Khan Probation',badge:'bg-blue'},
+    {date:'May 1',label:'ðŸŒ Labour Day',badge:'bg-green'},
   ];
 
   return `
@@ -2129,7 +2129,7 @@ function pageCalendar(empView=false){
     <div class="card">
       <div class="card-hdr">
         <div class="card-title">${today.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
-        <div style="display:flex;gap:5px;"><button class="btn btn-sm">‹</button><button class="btn btn-sm">›</button></div>
+        <div style="display:flex;gap:5px;"><button class="btn btn-sm">â€¹</button><button class="btn btn-sm">â€º</button></div>
       </div>
       <div class="cal-grid">
         ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dh">${d}</div>`).join('')}
@@ -2170,13 +2170,13 @@ function pageReports(){
           </div>
         </div>
         <div class="g4" style="margin-bottom:14px;">
-          <div class="stat-card"><div class="stat-label">Present Days (Total)</div><div class="stat-val" id="rp-present">—</div></div>
-          <div class="stat-card"><div class="stat-label">Late Days (Total)</div><div class="stat-val" id="rp-late" style="color:var(--amber);">—</div></div>
-          <div class="stat-card"><div class="stat-label">Absent Days (Total)</div><div class="stat-val" id="rp-absent" style="color:var(--red);">—</div></div>
-          <div class="stat-card"><div class="stat-label">Overtime (Minutes)</div><div class="stat-val" id="rp-ot" style="color:var(--green);">—</div></div>
+          <div class="stat-card"><div class="stat-label">Present Days (Total)</div><div class="stat-val" id="rp-present">â€”</div></div>
+          <div class="stat-card"><div class="stat-label">Late Days (Total)</div><div class="stat-val" id="rp-late" style="color:var(--amber);">â€”</div></div>
+          <div class="stat-card"><div class="stat-label">Absent Days (Total)</div><div class="stat-val" id="rp-absent" style="color:var(--red);">â€”</div></div>
+          <div class="stat-card"><div class="stat-label">Overtime (Minutes)</div><div class="stat-val" id="rp-ot" style="color:var(--green);">â€”</div></div>
         </div>
         <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Dept</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
-        <tbody id="rp-att-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading…</td></tr></tbody></table></div>
+        <tbody id="rp-att-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
       </div>`},
     {id:'lv',label:'Leave',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Leave Report</div><button class="btn btn-sm btn-primary" onclick="window.exportLeaveCSV()">Export</button></div>
@@ -2186,13 +2186,13 @@ function pageReports(){
       </div>`},
     {id:'monthly',label:'Monthly Summary',content:`
       <div class="g3" style="margin-bottom:14px;">
-        <div class="stat-card"><div class="stat-label">Month</div><div class="stat-val" id="rp-m-month" style="font-size:18px;">—</div></div>
-        <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val" id="rp-m-emps">—</div></div>
-        <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-val" id="rp-m-att">—</div></div>
+        <div class="stat-card"><div class="stat-label">Month</div><div class="stat-val" id="rp-m-month" style="font-size:18px;">â€”</div></div>
+        <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val" id="rp-m-emps">â€”</div></div>
+        <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-val" id="rp-m-att">â€”</div></div>
       </div>
       <div class="card"><div class="card-hdr"><div class="card-title">By Department</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
         <div class="table-wrap"><table><thead><tr><th>Department</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
-          <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading…</td></tr></tbody></table></div>
+          <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
       </div>`},
     {id:'empdata',label:'Employee Data',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Employee Records</div>
@@ -2201,7 +2201,7 @@ function pageReports(){
         </div>
       </div>
         <div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
-        <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loading…</td></tr></tbody></table></div>
+        <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
       </div>`},
   ],'att');
 }
@@ -2221,7 +2221,7 @@ async function loadAttendanceReport(){
     tb.innerHTML = rows.map(r=>`
       <tr>
         <td>${r.name}</td>
-        <td>${r.department||'—'}</td>
+        <td>${r.department||'â€”'}</td>
         <td>${r.present_days}</td>
         <td>${r.absent_days}</td>
         <td>${r.leave_days}</td>
@@ -2475,8 +2475,8 @@ async function loadAttendanceReport(){
         <td>${r.designation || '-'}</td>
         <td>${statusBadge(r.status || '-')}</td>
         <td>${r.punches?.clock_in || '-'}</td>
-        <td>${r.punches?.break_in || '-'}</td>
         <td>${r.punches?.break_out || '-'}</td>
+        <td>${r.punches?.break_in || '-'}</td>
         <td>${r.punches?.clock_out || '-'}</td>
         <td>${formatWorkedMinutesLabel(r.worked_minutes || 0, false)}</td>
         <td>${formatWorkedMinutesLabel(r.overtime_minutes || 0, false)}</td>
@@ -2609,7 +2609,7 @@ function pageCompany(){
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:14px;">Backup & Disaster Recovery</div>
-      <div class="alert al-success"><span>✅</span><div><strong>Last Backup:</strong> Today 03:00 AM — Successful</div></div>
+      <div class="alert al-success"><span>âœ…</span><div><strong>Last Backup:</strong> Today 03:00 AM â€” Successful</div></div>
       <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 3:00 AM</span></div>
       <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full + Incremental</span></div>
       <div class="irow"><span class="ikey">Retention</span><span class="ival">90 days</span></div>
@@ -2636,7 +2636,7 @@ function pageCompany(){
       <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
       <div class="stat-card"><div class="stat-label">Shifts</div><div class="stat-val">${(DB.shifts||[]).length}</div><div class="stat-sub">Standard schedules available</div></div>
     </div>
-    <div class="alert al-info"><span>⇄</span><div><strong>Transfer package:</strong> includes employees, departments, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
+    <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes employees, departments, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
       <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Employee Profiles JSON</button>
@@ -2653,9 +2653,9 @@ function pageCompany(){
   </div>`;
 }
 
-// ══════════════════════════════════════════════════
-//  ██████ EMPLOYEE PAGES ██████
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ EMPLOYEE PAGES â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function renderEmployeeWorkspaceTabs(activePage){
   const tabs = [
     {label:'Dashboard', page:'emp-dashboard'},
@@ -2756,7 +2756,7 @@ function pageEmpDashboard(){
           <div class="emp-pp-illus-blob blob-c"></div>
           <div class="emp-pp-illus-board"></div>
           <div class="emp-pp-illus-clock"></div>
-          <div class="emp-pp-illus">⏱</div>
+          <div class="emp-pp-illus">â±</div>
         </div>
       </div>
 
@@ -2767,7 +2767,7 @@ function pageEmpDashboard(){
             <div class="emp-pp-leaf">
               <div>
                 <span>${card.name}</span>
-                <div class="emp-pp-leaf-meta">Quota: ${formatLeaveBalanceValue(card.quota)} Days · Used: ${formatLeaveBalanceValue(card.used)} Days</div>
+                <div class="emp-pp-leaf-meta">Quota: ${formatLeaveBalanceValue(card.quota)} Days Â· Used: ${formatLeaveBalanceValue(card.used)} Days</div>
               </div>
               <strong>${formatLeaveBalanceValue(card.left)} Left</strong>
             </div>
@@ -2845,10 +2845,10 @@ function pageEmpAttendance(){
   const logRows=DB.attendance.filter(a=>a.empId===u.id).map(a=>`
     <tr><td>${formatDate(a.date)}</td>
     <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
-    <td>${a.in||'—'}</td><td>${a.breakIn||'—'}</td><td>${a.breakOut||'—'}</td><td>${a.out||'—'}</td>
-    <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'—'}</td>
+    <td>${a.in||'-'}</td><td>${a.breakOut||'-'}</td><td>${a.breakIn||'-'}</td><td>${a.out||'-'}</td>
+    <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'â€”'}</td>
     <td>${statusBadge(a.late?'Late':a.status)}</td>
-    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'—'}</td>
+    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'â€”'}</td>
     </tr>`).join('');
 
   const regRows=DB.regulations.filter(r=>r.empId===u.id).map(r=>`
@@ -2866,18 +2866,18 @@ function pageEmpAttendance(){
         <span class="cw-chip">Worked ${getLiveWorkedTimeLabel()}</span>
       </div>
       ${!ps.punchedIn&&!shiftCompleted
-        ?`<button class="punch-btn pb-in" onclick="punchIn()">▶ Clock In</button>`
+        ?`<button class="punch-btn pb-in" onclick="punchIn()">â–¶ Clock In</button>`
         :ps.punchedIn
-          ?`<button class="punch-btn pb-out" onclick="punchOut()">■ Clock Out</button>
-            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">↩ Break Out</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">☕ Break In</button>`}`
-          :`<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>✓ Shift Completed</button>`}
+          ?`<button class="punch-btn pb-out" onclick="punchOut()">â–  Clock Out</button>
+            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">â†© Break Out</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">â˜• Break In</button>`}`
+          :`<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>âœ“ Shift Completed</button>`}
       <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.35);">Policy: ${getCurrentShiftPolicy()}</div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || '—'}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? '—' : (punchDisplay.clockOut || '—')}</span></div>
-      <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'—'}</span></div>
+      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || 'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? 'â€”' : (punchDisplay.clockOut || 'â€”')}</span></div>
+      <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'â€”'}</span></div>
       <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
     </div>
@@ -2918,7 +2918,7 @@ function pageEmpLeaves(){
         <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${formatLeaveBalanceValue(r)}/${formatLeaveBalanceValue(t)} days remaining</span></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(r/t*100)}%;background:${c};"></div></div>
       </div>`).join('')}
-      <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: Jan–Dec. Carry forward: max 5 days.</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: Janâ€“Dec. Carry forward: max 5 days.</div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:12px;">Approval Workflow</div>
@@ -3004,7 +3004,7 @@ function pageEmpProfile(){
     <div class="av av-64" style="background:${u.avatarColor}33;color:${u.avatarColor};border:3px solid ${u.avatarColor}55;">${u.avatar}</div>
     <div>
       <div class="ph-name">${u.fname} ${u.lname}</div>
-      <div class="ph-role">${u.desg} · ${u.id||emp?.id}</div>
+      <div class="ph-role">${u.desg} Â· ${u.id||emp?.id}</div>
       <div class="ph-tags"><span class="badge bg-green">Active</span><span class="badge bg-blue">${u.dept}</span></div>
     </div>
   </div>
@@ -3019,22 +3019,22 @@ function pageEmpProfile(){
       <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
       <div class="irow"><span class="ikey">Office Email</span><span class="ival">${u.email}</span></div>
       <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${u.phone}</span></div>
-      <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(emp?.dob)||'—'}</span></div>
-      <div class="irow"><span class="ikey">CNIC</span><span class="ival">${emp?.cnic||'—'}</span></div>
-      <div class="irow"><span class="ikey">Address</span><span class="ival">${emp?.address||'—'}</span></div>
+      <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(emp?.dob)||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">CNIC</span><span class="ival">${emp?.cnic||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Address</span><span class="ival">${emp?.address||'â€”'}</span></div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Employment Details</div>
       <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
-      <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 – 20:00</span></div>
-      <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon – Fri</span></div>
+      <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 â€“ 20:00</span></div>
+      <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon â€“ Fri</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(emp?.status||'Active')}</span></div>
       <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
-      <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'—'}</span></div>
+      <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'â€”'}</span></div>
       <div class="card-title" style="margin:16px 0 10px;">Next of Kin</div>
-      <div class="irow"><span class="ikey">Name</span><span class="ival">${emp?.kin||'—'}</span></div>
-      <div class="irow"><span class="ikey">Relationship</span><span class="ival">${emp?.kinRel||'—'}</span></div>
-      <div class="irow"><span class="ikey">Contact</span><span class="ival">${emp?.kinPhone||'—'}</span></div>
+      <div class="irow"><span class="ikey">Name</span><span class="ival">${emp?.kin||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Relationship</span><span class="ival">${emp?.kinRel||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Contact</span><span class="ival">${emp?.kinPhone||'â€”'}</span></div>
     </div>
   </div>`;
 }
@@ -3106,7 +3106,7 @@ function profileTimeline(employee){
   if(latestLeave){
     items.push({
       title:`${latestLeave.type} request ${String(latestLeave.status||'Pending').toLowerCase()}`,
-      meta:`${formatDate(latestLeave.from)} to ${formatDate(latestLeave.to)} • ${formatLeaveDuration(latestLeave)}`,
+      meta:`${formatDate(latestLeave.from)} to ${formatDate(latestLeave.to)} â€¢ ${formatLeaveDuration(latestLeave)}`,
       date: latestLeave.applied || latestLeave.from,
     });
   }
@@ -3206,7 +3206,7 @@ function renderProfileWorkspace(employee, options={}){
       <div class="pp-summary-body">
         <div class="pp-avatar-stage"><div class="av av-64" style="background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;">${employee.avatar}</div></div>
         <div class="pp-name">${employee.id || '-' } : ${employee.fname} ${employee.lname}</div>
-        <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` • ${employee.workLocation}` : ''}</div>
+        <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` â€¢ ${employee.workLocation}` : ''}</div>
         <div class="pp-chipbar">${statusBadge(employee.status || 'Active')}<span class="badge bg-blue">${profileValue(employee.dept)}</span></div>
         <div class="pp-meta-list">
           <div class="pp-meta-row"><div class="pp-meta-key">Login ID</div><div class="pp-meta-val">${profileValue(employee.id)}</div></div>
@@ -3315,12 +3315,12 @@ function pageEmpTeam(){
 
   return `
   ${teamTabs}
-  <div class="alert al-info"><span>ℹ️</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
+  <div class="alert al-info"><span>â„¹ï¸</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
   <div class="card" style="margin-bottom:14px;">
-    <div class="card-hdr"><div class="card-title">My Department — ${u.dept}</div></div>
-    <div class="irow"><span class="ikey">Department Head</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'—'}</span></div>
+    <div class="card-hdr"><div class="card-title">My Department â€” ${u.dept}</div></div>
+    <div class="irow"><span class="ikey">Department Head</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'â€”'}</span></div>
     <div class="irow"><span class="ikey">Total Members</span><span class="ival">${DB.employees.filter(e=>e.dept===u.dept).length}</span></div>
-    <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'—'}</span></div>
+    <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'â€”'}</span></div>
   </div>
   <div class="g2">${cards||'<div class="card"><p style="color:var(--muted);">No other team members found.</p></div>'}</div>`;
 }
@@ -3408,4 +3408,5 @@ function pageRealtimeLive(){
   </div>`;
 }
 
-// ══════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+

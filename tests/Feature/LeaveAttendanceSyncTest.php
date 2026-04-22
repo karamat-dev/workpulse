@@ -233,4 +233,85 @@ class LeaveAttendanceSyncTest extends TestCase
 
         $this->assertDatabaseCount('leave_requests', 1);
     }
+
+    public function test_pending_leave_requests_do_not_reduce_available_quota(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-302',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        $leaveTypeId = DB::table('leave_types')->insertGetId([
+            'name' => 'Annual Leave',
+            'code' => 'annual',
+            'paid' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_policies')->insert([
+            'year' => (int) now()->format('Y'),
+            'leave_type_id' => $leaveTypeId,
+            'quota_days' => 5,
+            'carry_forward_days' => 0,
+            'pro_rata' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_requests')->insert([
+            'code' => 'LV-RESERVED1',
+            'user_id' => $employee->id,
+            'leave_type_id' => $leaveTypeId,
+            'from_date' => now()->addDays(2)->toDateString(),
+            'to_date' => now()->addDays(4)->toDateString(),
+            'duration_type' => 'full_day',
+            'half_day_slot' => null,
+            'days' => 3,
+            'reason' => 'Already pending approval',
+            'handover_to' => null,
+            'status' => 'Pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_approvals')->insert([
+            [
+                'leave_request_id' => DB::table('leave_requests')->where('code', 'LV-RESERVED1')->value('id'),
+                'step' => 'manager',
+                'reviewer_user_id' => null,
+                'status' => 'Pending',
+                'reviewed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'leave_request_id' => DB::table('leave_requests')->where('code', 'LV-RESERVED1')->value('id'),
+                'step' => 'hr',
+                'reviewer_user_id' => null,
+                'status' => 'Waiting',
+                'reviewed_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'annual',
+                'from_date' => now()->addDays(8)->toDateString(),
+                'to_date' => now()->addDays(10)->toDateString(),
+                'reason' => 'Pending leave should not block this request',
+            ]);
+
+        $response->assertCreated()->assertJson([
+            'ok' => true,
+        ]);
+
+        $this->assertDatabaseCount('leave_requests', 2);
+    }
 }

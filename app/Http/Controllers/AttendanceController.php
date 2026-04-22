@@ -560,8 +560,8 @@ class AttendanceController extends Controller
                     $row['designation'] ?? '',
                     $row['status'] ?? '',
                     $row['punches']['clock_in'] ?? '',
-                    $row['punches']['break_in'] ?? '',
                     $row['punches']['break_out'] ?? '',
+                    $row['punches']['break_in'] ?? '',
                     $row['punches']['clock_out'] ?? '',
                     $row['worked_minutes'] ?? 0,
                     $row['overtime_minutes'] ?? 0,
@@ -812,3 +812,4 @@ class AttendanceController extends Controller
         return response()->json(['ok' => true]);
     }
 }
+
