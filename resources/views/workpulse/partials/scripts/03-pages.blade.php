@@ -2756,7 +2756,7 @@ function pageEmpDashboard(){
           <div class="emp-pp-illus-blob blob-c"></div>
           <div class="emp-pp-illus-board"></div>
           <div class="emp-pp-illus-clock"></div>
-          <div class="emp-pp-illus">â±</div>
+          <div class="emp-pp-illus" aria-hidden="true"></div>
         </div>
       </div>
 

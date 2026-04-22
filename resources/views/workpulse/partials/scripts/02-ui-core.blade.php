@@ -1,7 +1,106 @@
 //  MODAL HELPERS
 // ══════════════════════════════════════════════════
-function openModal(id){ document.getElementById(id).classList.add('open'); }
+const __workpulseMojibakeMap = [
+  ['\u00C2\u00B7', ' - '],
+  ['\u00E2\u20AC\u201D', '-'],
+  ['\u00E2\u20AC\u201C', '-'],
+  ['\u00E2\u20AC\u00A2', ' - '],
+  ['\u00E2\u20A0\u00B9', '<'],
+  ['\u00E2\u20A0\u00BA', '>'],
+  ['\u00E2\u20A0\u2122', '->'],
+  ['\u00E2\u20A0\u0090', '<-'],
+  ['\u00E2\u20A0\u00A9', '<-'],
+  ['\u00E2\u0153\u201C', 'OK'],
+  ['\u00E2\u0153\u2026', 'OK'],
+  ['\u00E2\u20AC\u0179', 'Info'],
+  ['\u00E2\u0161\u00A0\u00EF\u00B8\u008F', 'Warning'],
+  ['\u00E2\u02DC\u2022', 'Break'],
+  ['\u00E2\u008F\u00B1', 'Clock'],
+  ['\u00E2\u008F\u00B3', 'Pending'],
+  ['\u00E2\u0087\u201E', 'Transfer'],
+  ['\u00E2\u0161\u2122\u00EF\u00B8\u008F', 'Settings'],
+  ['\u00F0\u0178\u201C\u00A6', 'Days:'],
+  ['\u00F0\u0178\u008F\u2013\u00EF\u00B8\u008F', 'Holiday'],
+  ['\u00C3\u2014', 'x'],
+  ['\u00E2\u20AC\u00A6', '...'],
+  ['\u00EF\u00B8\u008F', ''],
+];
+
+function normalizeBrokenText(value){
+  let text = String(value ?? '');
+  __workpulseMojibakeMap.forEach(([bad, good]) => {
+    text = text.split(bad).join(good);
+  });
+  return text;
+}
+
+function normalizeMojibake(root = document.body){
+  if(!root) return;
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while(walker.nextNode()){
+    textNodes.push(walker.currentNode);
+  }
+
+  textNodes.forEach(node => {
+    const fixed = normalizeBrokenText(node.nodeValue);
+    if(fixed !== node.nodeValue){
+      node.nodeValue = fixed;
+    }
+  });
+
+  root.querySelectorAll('*').forEach(el => {
+    ['title','placeholder','aria-label'].forEach(attr => {
+      const value = el.getAttribute(attr);
+      if(!value) return;
+      const fixed = normalizeBrokenText(value);
+      if(fixed !== value){
+        el.setAttribute(attr, fixed);
+      }
+    });
+  });
+}
+
+let __workpulseNormalizeTimer = null;
+let __workpulseNormalizeObserver = null;
+
+function scheduleMojibakeNormalization(root = document.body){
+  clearTimeout(__workpulseNormalizeTimer);
+  __workpulseNormalizeTimer = setTimeout(() => normalizeMojibake(root || document.body), 0);
+}
+
+function observeMojibakeChanges(){
+  if(__workpulseNormalizeObserver || typeof MutationObserver === 'undefined' || !document.body) return;
+
+  __workpulseNormalizeObserver = new MutationObserver(mutations => {
+    const shouldNormalize = mutations.some(mutation =>
+      mutation.type === 'characterData' ||
+      mutation.addedNodes?.length ||
+      (mutation.type === 'attributes' && ['title','placeholder','aria-label'].includes(mutation.attributeName))
+    );
+
+    if(shouldNormalize){
+      scheduleMojibakeNormalization(document.body);
+    }
+  });
+
+  __workpulseNormalizeObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['title','placeholder','aria-label']
+  });
+}
+
+function openModal(id){
+  document.getElementById(id).classList.add('open');
+  normalizeMojibake(document.getElementById(id));
+}
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+setTimeout(() => normalizeMojibake(document.body), 0);
+setTimeout(() => observeMojibakeChanges(), 0);
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
 });
@@ -226,6 +325,7 @@ function initApp(){
 
   showPage(getDefaultPageForRole(DB.currentRole));
   buildTopbarActions();
+  normalizeMojibake(document.body);
 }
 
 function getDefaultPageForRole(role){
@@ -457,6 +557,7 @@ function showPage(id){
   if(typeof window.setupLiveAttendanceRefresh === 'function'){
     window.setupLiveAttendanceRefresh(id);
   }
+  normalizeMojibake(main);
   runPageAfterRender(id);
   if(id==='reports' && typeof window.loadAttendanceReport === 'function'){
     setTimeout(()=>{
