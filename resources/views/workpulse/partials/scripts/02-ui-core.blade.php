@@ -503,18 +503,33 @@ function startBrowserNotificationPolling(){
 
 function initApp(){
   const u = DB.currentUser;
+  const fullName = (u.fname+' '+u.lname).trim();
   document.getElementById('sb-name').textContent = u.fname+' '+u.lname;
   document.getElementById('sb-role').textContent =
     DB.currentRole==='admin' ? 'Administrator'
     : DB.currentRole==='hr' ? 'HR Manager'
     : DB.currentRole==='manager' ? 'Manager'
     : 'Employee';
+  const tbName = document.getElementById('tb-name');
+  const tbEmail = document.getElementById('tb-email');
+  if(tbName) tbName.textContent = fullName;
+  if(tbEmail) tbEmail.textContent = u.email || '';
   if(u.profilePhotoUrl){
     document.getElementById('sb-avatar').innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
     document.getElementById('sb-avatar').style.background = 'transparent';
+    const tbAvatar = document.getElementById('tb-avatar');
+    if(tbAvatar){
+      tbAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
+      tbAvatar.style.background = 'transparent';
+    }
   }else{
     document.getElementById('sb-avatar').textContent = u.avatar;
     document.getElementById('sb-avatar').style.background = u.avatarColor;
+    const tbAvatar = document.getElementById('tb-avatar');
+    if(tbAvatar){
+      tbAvatar.textContent = u.avatar;
+      tbAvatar.style.background = u.avatarColor;
+    }
   }
 
   // Always reset punchState to clean defaults first, then restore from storage

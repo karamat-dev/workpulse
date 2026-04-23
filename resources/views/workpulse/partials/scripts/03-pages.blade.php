@@ -1487,6 +1487,7 @@ function dashboardUpcomingItems(){
 
 function pageAdminDashboard(){
   const today=new Date().toISOString().split('T')[0];
+  const currentUser = DB.currentUser || {};
   const todayAtt=DB.attendance.filter(a=>a.date===today);
   const liveStatus = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
   const present=liveStatus.filter(l=>l.status==='in'||l.status==='break').length || todayAtt.filter(a=>a.status==='Present').length;
@@ -1509,13 +1510,25 @@ function pageAdminDashboard(){
   const upcoming = dashboardUpcomingItems();
 
   return `
+  <div class="card dash-welcome-card" style="margin-bottom:14px;">
+    <div class="dash-welcome-copy">
+      <div class="dash-kicker">Operations Overview</div>
+      <h2>Hello ${currentUser.fname || 'Team'},</h2>
+      <p>Track attendance, approvals, leave coverage, and today’s team movement from one polished workspace.</p>
+    </div>
+    <div class="dash-welcome-pills">
+      <span class="dash-pill soft">${present} present now</span>
+      <span class="dash-pill">${pendingLeaves} approvals</span>
+      <span class="dash-pill danger">${absent} absent</span>
+    </div>
+  </div>
   <div class="g2" style="margin-bottom:12px;">
     <div class="alert al-info" style="margin-bottom:0;"><span>Info</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
     <div class="alert al-warn" style="margin-bottom:0;"><span>Alert</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
   </div>
   <div class="alert al-danger"><span>Alert</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
 
-  <div class="g4" style="margin-bottom:14px;">
+  <div class="g4 dash-stat-grid" style="margin-bottom:14px;">
     <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">+ ${newJoiners} new today</div></div>
     <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
     <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
