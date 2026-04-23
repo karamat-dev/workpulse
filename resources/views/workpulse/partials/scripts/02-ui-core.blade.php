@@ -189,20 +189,6 @@ async function fetchWithCsrfRetry(url, options = {}){
 // ══════════════════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════════════════
-let loginRole = 'admin';
-function selectLoginRole(r){
-  loginRole = r;
-  document.getElementById('lt-admin').classList.toggle('active', r==='admin');
-  document.getElementById('lt-emp').classList.toggle('active', r==='employee');
-  if(r==='admin'){
-    document.getElementById('l-email').value='admin@workpulse.com';
-    document.getElementById('l-pass').value='admin123';
-  } else {
-    document.getElementById('l-email').value='employee1@workpulse.com';
-    document.getElementById('l-pass').value='emp123';
-  }
-}
-
 function doLogin(){
   const email = document.getElementById('l-email').value.trim();
   const pass = document.getElementById('l-pass').value.trim();
@@ -523,8 +509,13 @@ function initApp(){
     : DB.currentRole==='hr' ? 'HR Manager'
     : DB.currentRole==='manager' ? 'Manager'
     : 'Employee';
-  document.getElementById('sb-avatar').textContent = u.avatar;
-  document.getElementById('sb-avatar').style.background = u.avatarColor;
+  if(u.profilePhotoUrl){
+    document.getElementById('sb-avatar').innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
+    document.getElementById('sb-avatar').style.background = 'transparent';
+  }else{
+    document.getElementById('sb-avatar').textContent = u.avatar;
+    document.getElementById('sb-avatar').style.background = u.avatarColor;
+  }
 
   // Always reset punchState to clean defaults first, then restore from storage
   DB.punchState = {punchedIn:false,onBreak:false,clockInTime:null,clockOutTime:null,breakOutTime:null,breakInTime:null,totalBreakMs:0,currentSessionBreakMs:0,sessionLogs:[]};
@@ -667,6 +658,7 @@ const adminNav = [
     {label:'Calendar & Events',page:'calendar',icon:'cal'},
     {label:'Reports',page:'reports',icon:'report'},
     {label:'Announcements',page:'announcements',icon:'megaphone'},
+    {label:'Policies',page:'policies',icon:'doc'},
     {label:'Company Details',page:'company',icon:'building'},
   ]},
 ];
@@ -683,6 +675,7 @@ const hrNav = [
   ]},
   {sect:'Communication', items:[
     {label:'Announcements',page:'announcements',icon:'megaphone'},
+    {label:'Policies',page:'policies',icon:'doc'},
     {label:'Calendar & Events',page:'calendar',icon:'cal'},
   ]},
 ];
@@ -700,6 +693,7 @@ const empNav = [
   ]},
   {sect:'Company', items:[
     {label:'Announcements',page:'emp-announcements',icon:'megaphone'},
+    {label:'Policies',page:'emp-policies',icon:'doc'},
     {label:'Events & Calendar',page:'emp-calendar',icon:'cal'},
   ]},
 ];
@@ -719,6 +713,7 @@ const icons={
   building:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="3" width="14" height="11" rx="1.5"/><path d="M5 9h6M5 12h4"/><circle cx="8" cy="6" r="1.5"/></svg>`,
   user:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>`,
   shield:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1l5 2v4c0 3.3-2.1 6.2-5 7.3C5.1 13.2 3 10.3 3 7V3l5-2z"/><path d="M6.2 8l1.2 1.2L10 6.5"/></svg>`,
+  doc:`<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 1.5h5l3 3V14a1 1 0 01-1 1H4a1 1 0 01-1-1v-11a1.5 1.5 0 011.5-1.5z"/><path d="M9 1.5V5h3"/><path d="M5.5 8h5M5.5 10.5h5M5.5 13h3.5"/></svg>`,
 };
 
 function buildNav(){
@@ -749,12 +744,12 @@ const pageTitles = {
   dashboard:'Dashboard',attendance:'Attendance',realtime:'Real-Time Monitor',
   leave:'Leave Management',employees:'Employees',roles:'Roles & Permissions',departments:'Teams',
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
-  announcements:'Announcements',company:'Company Details',
+  announcements:'Announcements',policies:'Company Policies',company:'Company Details',
   notifications:'Notifications',
   'hr-dashboard':'HR Dashboard',
   'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
   'emp-leaves':'My Leaves','emp-notifications':'Notifications','emp-profile':'My Profile',
-  'emp-team':'My Team','emp-announcements':'Announcements','emp-calendar':'Events & Calendar',
+  'emp-team':'My Team','emp-announcements':'Announcements','emp-policies':'Company Policies','emp-calendar':'Events & Calendar',
   'emp-profile-detail':'Employee Profile',
 };
 
@@ -812,6 +807,7 @@ function renderPage(id){
       case 'calendar': return pageCalendar();
       case 'reports': return pageReports();
       case 'announcements': return pageAnnouncements();
+      case 'policies': return pagePolicies();
       case 'company': return pageCompany();
       case 'notifications': return pageNotifications();
       // Employee pages
@@ -822,6 +818,7 @@ function renderPage(id){
       case 'emp-profile': return pageEmpProfile();
       case 'emp-team': return pageEmpTeam();
       case 'emp-announcements': return pageAnnouncements(true);
+      case 'emp-policies': return pagePolicies(true);
       case 'emp-calendar': return pageCalendar(true);
       case 'emp-profile-detail': return pageEmpProfileDetail();
       default: return `<div class="card"><p>Page not found: ${id}</p></div>`;
@@ -837,7 +834,7 @@ function renderPage(id){
 // ══════════════════════════════════════════════════
 function statusBadge(s){
   const map={
-    'Active':'bg-green','Probation':'bg-amber','Inactive':'bg-gray','On Leave':'bg-purple',
+    'Active':'bg-green','Probation':'bg-amber','Offboarding':'bg-blue','Inactive':'bg-gray','On Leave':'bg-purple',
     'Approved':'bg-green','Rejected':'bg-red','Pending':'bg-amber','Waiting':'bg-gray',
     'Present':'bg-green','Absent':'bg-red','Leave':'bg-purple','Late':'bg-amber',
     'National':'bg-blue','Religious':'bg-amber','Optional':'bg-gray',
@@ -983,7 +980,18 @@ function getLiveWorkedTimeLabel(asOf = new Date()){
   return formatWorkedMinutesLabel(totalMinutes, false);
 }
 
-function formatDate(d){ return d ? new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}) : '—'; }
+function formatDate(d){
+  if(!d) return '—';
+  const raw = String(d).trim();
+  if(!raw) return '—';
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? `${raw}T00:00:00`
+    : raw.replace(' ', 'T');
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime())
+    ? '—'
+    : parsed.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+}
 function formatDateTime(dt){
   if(!dt) return '—';
   const parsed = new Date(dt);

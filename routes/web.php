@@ -12,6 +12,7 @@ use App\Http\Controllers\DepartmentsController;
 use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\NotificationsController;
+use App\Http\Controllers\PoliciesController;
 use App\Http\Controllers\ShiftsController;
 use App\Http\Controllers\TransferController;
 use Illuminate\Http\Request;
@@ -41,6 +42,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/me/notifications', [MeController::class, 'notifications']);
         Route::patch('/me/account', [MeController::class, 'updateAccount']);
         Route::patch('/me/notifications/read-all', [MeController::class, 'markNotificationsRead']);
+        Route::get('/policies', [PoliciesController::class, 'index']);
+        Route::post('/policies', [PoliciesController::class, 'store']);
+        Route::delete('/policies/{policyId}', [PoliciesController::class, 'destroy']);
         Route::post('/notifications', [NotificationsController::class, 'store'])->middleware('perm:announcements.manage');
         Route::patch('/notifications/{referenceCode}', [NotificationsController::class, 'update'])->middleware('perm:announcements.manage');
         Route::delete('/notifications/{referenceCode}', [NotificationsController::class, 'destroy'])->middleware('perm:announcements.manage');
@@ -76,6 +80,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/export', [TransferController::class, 'export'])->middleware('perm:employees.manage');
             Route::get('/employees/export', [TransferController::class, 'exportEmployees'])->middleware('perm:employees.manage');
             Route::post('/employees/import', [TransferController::class, 'importEmployees'])->middleware('perm:employees.manage');
+            Route::get('/company/export', [TransferController::class, 'exportCompany'])->middleware('perm:employees.manage');
+            Route::post('/company/import', [TransferController::class, 'importCompany'])->middleware('perm:employees.manage');
         });
 
         Route::prefix('attendance')->group(function () {

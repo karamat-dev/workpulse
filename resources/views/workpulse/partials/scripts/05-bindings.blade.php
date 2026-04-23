@@ -1,6 +1,5 @@
 //  EXPOSE ALL FUNCTIONS TO WINDOW (fixes onclick scope)
 // ══════════════════════════════════════════════════
-window.selectLoginRole = selectLoginRole;
 window.doLogin = doLogin;
 window.doLogout = doLogout;
 window.showPage = showPage;
@@ -60,6 +59,10 @@ window.exportEmployeeCSV = exportEmployeeCSV;
 window.exportTransferData = exportTransferData;
 window.exportEmployeeProfilesJson = exportEmployeeProfilesJson;
 window.importEmployeeProfiles = importEmployeeProfiles;
+window.exportCompanyDetailsJson = exportCompanyDetailsJson;
+window.importCompanyDetails = importCompanyDetails;
+window.uploadCompanyPolicy = uploadCompanyPolicy;
+window.deleteCompanyPolicy = deleteCompanyPolicy;
 window.printPage = printPage;
 window.wpReload = wpReload;
 

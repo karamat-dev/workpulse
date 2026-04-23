@@ -43,9 +43,6 @@ body{
 .login-logo{font-family:var(--font-main);font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px;}
 .login-logo span{color:var(--accent);}
 .login-sub{font-size:13px;color:var(--muted);margin-bottom:28px;}
-.login-tabs{display:flex;gap:6px;background:var(--surface2);border-radius:999px;padding:5px;margin-bottom:24px;border:1px solid var(--border);}
-.login-tab{flex:1;padding:9px 10px;text-align:center;font-size:13px;font-weight:700;border-radius:999px;cursor:pointer;color:var(--muted);transition:.18s;}
-.login-tab.active{background:linear-gradient(180deg,#FFFFFF 0%, #F3FAFB 100%);color:var(--green-dark);box-shadow:0 4px 10px rgba(38,134,147,.08);}
 .lf-group{margin-bottom:14px;}
 .lf-label{display:block;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:5px;}
 .lf-input{width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--font-main);font-size:14px;color:var(--text);background:var(--surface);outline:none;transition:border .15s;}
@@ -829,7 +826,8 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 
 /* upgraded workspace ui */
 .hero-panel{background:linear-gradient(135deg,#102327 0%,#1B4E55 55%,#268693 100%);border-radius:18px;padding:20px 22px;color:#fff;position:relative;overflow:hidden;border:1px solid rgba(255,255,255,.06);}
-.hero-panel::before{content:'';position:absolute;inset:auto -40px -60px auto;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08);}
+.hero-panel::before{content:'';position:absolute;inset:auto -40px -60px auto;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08);pointer-events:none;}
+.hero-panel > *{position:relative;z-index:1;}
 .hero-title{font-family:var(--font-main);font-size:24px;font-weight:800;letter-spacing:-.4px;}
 .hero-sub{font-size:13px;color:rgba(255,255,255,.72);max-width:760px;margin-top:6px;}
 .hero-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;}

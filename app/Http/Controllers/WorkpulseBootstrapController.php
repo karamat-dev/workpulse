@@ -138,6 +138,8 @@ class WorkpulseBootstrapController extends Controller
                 'employee_profiles.personal_phone',
                 'employee_profiles.cnic_document_path',
                 'employee_profiles.cnic_document_name',
+                'employee_profiles.profile_photo_path',
+                'employee_profiles.profile_photo_name',
                 'shifts.id as shift_id',
                 'shifts.code as shift_code',
                 'shifts.name as shift_name',
@@ -210,6 +212,9 @@ class WorkpulseBootstrapController extends Controller
             'cnicDocumentPath' => $profile?->cnic_document_path,
             'cnicDocumentName' => $profile?->cnic_document_name,
             'cnicDocumentUrl' => $profile?->cnic_document_path ? asset($profile->cnic_document_path) : null,
+            'profilePhotoPath' => $profile?->profile_photo_path,
+            'profilePhotoName' => $profile?->profile_photo_name,
+            'profilePhotoUrl' => $profile?->profile_photo_path ? asset($profile->profile_photo_path) : null,
             'avatar' => $avatar,
             'avatarColor' => $avatarColor,
             'status' => $profile?->status ?? 'Active',
@@ -234,6 +239,8 @@ class WorkpulseBootstrapController extends Controller
             'employee_profiles.personal_phone as phone',
             'employee_profiles.cnic_document_path as cnic_document_path',
             'employee_profiles.cnic_document_name as cnic_document_name',
+            'employee_profiles.profile_photo_path as profile_photo_path',
+            'employee_profiles.profile_photo_name as profile_photo_name',
             'shifts.id as shift_id',
             'shifts.code as shift_code',
             'shifts.name as shift_name',
@@ -320,6 +327,9 @@ class WorkpulseBootstrapController extends Controller
                 'cnicDocumentPath' => $employee->cnic_document_path,
                 'cnicDocumentName' => $employee->cnic_document_name,
                 'cnicDocumentUrl' => $employee->cnic_document_path ? asset($employee->cnic_document_path) : null,
+                'profilePhotoPath' => $employee->profile_photo_path,
+                'profilePhotoName' => $employee->profile_photo_name,
+                'profilePhotoUrl' => $employee->profile_photo_path ? asset($employee->profile_photo_path) : null,
                 'avatar' => $av,
                 'avatarColor' => $color,
                 'status' => $employee->status ?? 'Active',
@@ -768,6 +778,29 @@ class WorkpulseBootstrapController extends Controller
             ])
             ->values();
 
+        $companyPolicies = DB::table('company_policies')
+            ->leftJoin('users', 'users.id', '=', 'company_policies.uploaded_by')
+            ->orderByDesc('company_policies.created_at')
+            ->get([
+                'company_policies.id',
+                'company_policies.title',
+                'company_policies.file_name',
+                'company_policies.file_size',
+                'company_policies.file_path',
+                'company_policies.created_at',
+                'users.name as uploaded_by_name',
+            ])
+            ->map(fn ($policy) => [
+                'id' => (int) $policy->id,
+                'title' => $policy->title,
+                'fileName' => $policy->file_name,
+                'fileSize' => (int) ($policy->file_size ?? 0),
+                'fileUrl' => $policy->file_path ? asset($policy->file_path) : null,
+                'uploadedBy' => $policy->uploaded_by_name ?: 'Admin',
+                'uploadedAt' => $policy->created_at ? (string) $policy->created_at : null,
+            ])
+            ->values();
+
         $notifications = DB::table('employee_notifications')
             ->where('user_id', $user->id)
             ->orderByDesc('created_at')
@@ -811,6 +844,7 @@ class WorkpulseBootstrapController extends Controller
             'announcements' => $announcements,
             'holidays' => $holidays,
             'events' => $events,
+            'companyPolicies' => $companyPolicies,
             'notifications' => $notifications,
             'notificationCount' => $notificationCount,
             'customNotifications' => $customNotifications,

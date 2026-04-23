@@ -23,6 +23,7 @@ class TransferController extends Controller
         $this->ensureAdmin($request);
 
         $employees = $this->employeeExportRows(true);
+        $company = $this->companyExportRow();
         $departments = DB::table('departments')->orderBy('name')->get();
         $shifts = DB::table('shifts')->orderBy('name')->get();
         $attendance = DB::table('attendance_days')->orderByDesc('date')->get();
@@ -33,6 +34,7 @@ class TransferController extends Controller
         $payload = [
             'app' => 'WorkPulse',
             'exported_at' => now()->toIso8601String(),
+            'company' => $company,
             'employees' => $employees,
             'departments' => $departments,
             'shifts' => $shifts,
@@ -216,6 +218,55 @@ class TransferController extends Controller
         return response()->json(['ok' => true, 'imported' => $imported]);
     }
 
+    public function exportCompany(Request $request): StreamedResponse
+    {
+        $this->ensureAdmin($request);
+
+        $payload = [
+            'app' => 'WorkPulse',
+            'exported_at' => now()->toIso8601String(),
+            'company' => $this->companyExportRow(),
+        ];
+
+        return response()->streamDownload(function () use ($payload) {
+            echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        }, 'workpulse-company-details.json', [
+            'Content-Type' => 'application/json; charset=UTF-8',
+        ]);
+    }
+
+    public function importCompany(Request $request): JsonResponse
+    {
+        $this->ensureAdmin($request);
+
+        $validated = $request->validate([
+            'file' => ['required', 'file', 'mimes:json', 'max:5120'],
+        ]);
+
+        $payload = json_decode(file_get_contents($validated['file']->getRealPath()), true);
+        $row = $payload['company'] ?? ($payload['data']['company'] ?? null);
+
+        if (!is_array($row) || $row === []) {
+            return response()->json(['ok' => false, 'message' => 'No company details found in import file.'], 422);
+        }
+
+        DB::table('company_settings')->updateOrInsert(
+            ['id' => 1],
+            [
+                'company_name' => $row['company_name'] ?? $row['companyName'] ?? null,
+                'website_link' => $row['website_link'] ?? $row['website'] ?? null,
+                'official_email' => $row['official_email'] ?? $row['officialEmail'] ?? null,
+                'official_contact_no' => $row['official_contact_no'] ?? $row['officialContactNo'] ?? null,
+                'office_location' => $row['office_location'] ?? $row['officeLocation'] ?? null,
+                'linkedin_page' => $row['linkedin_page'] ?? $row['linkedinPage'] ?? null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return response()->json(['ok' => true, 'message' => 'Company details imported successfully.']);
+    }
+
     private function employeeExportRows(bool $includeConfidential): array
     {
         $select = [
@@ -273,5 +324,19 @@ class TransferController extends Controller
             ->get()
             ->map(fn ($row) => (array) $row)
             ->all();
+    }
+
+    private function companyExportRow(): array
+    {
+        $company = DB::table('company_settings')->where('id', 1)->first();
+
+        return [
+            'company_name' => $company?->company_name,
+            'website_link' => $company?->website_link,
+            'official_email' => $company?->official_email,
+            'official_contact_no' => $company?->official_contact_no,
+            'office_location' => $company?->office_location,
+            'linkedin_page' => $company?->linkedin_page,
+        ];
     }
 }

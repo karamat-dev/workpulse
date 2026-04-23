@@ -3,10 +3,6 @@
   <div class="login-box">
     <div class="login-logo">Work<span>Pulse</span></div>
     <div class="login-sub">Attendance Management System</div>
-    <div class="login-tabs">
-      <div class="login-tab active" id="lt-admin" onclick="window.selectLoginRole('admin')">Admin / HR</div>
-      <div class="login-tab" id="lt-emp" onclick="window.selectLoginRole('employee')">Employee</div>
-    </div>
     <div class="lf-group">
       <label class="lf-label">Email Address <span class="req-star">*</span></label>
       <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">

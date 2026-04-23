@@ -193,7 +193,7 @@ class LeaveAttendanceSyncTest extends TestCase
 
         $response->assertStatus(422)->assertJson([
             'ok' => false,
-            'message' => 'Only permanent employees can apply for leave.',
+            'message' => 'Only permanent and contract employees can apply for leave.',
         ]);
 
         $this->assertDatabaseCount('leave_requests', 0);
@@ -208,6 +208,41 @@ class LeaveAttendanceSyncTest extends TestCase
             'employee_code' => 'EMP-301',
         ]);
         $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $date = now()->addDay()->toDateString();
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $date,
+                'to_date' => $date,
+            ]);
+
+        $response->assertCreated()->assertJson([
+            'ok' => true,
+        ]);
+
+        $this->assertDatabaseCount('leave_requests', 1);
+    }
+
+    public function test_contract_employee_can_apply_for_leave(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-304',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Contract');
 
         DB::table('leave_types')->insert([
             'name' => 'Unpaid Leave',

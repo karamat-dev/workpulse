@@ -425,8 +425,8 @@ function openAccountSettings(){
     errEl.style.display = 'none';
   }
 
-  const emailEl = document.getElementById('acc-email');
-  if(emailEl) emailEl.value = DB.currentUser?.email || '';
+  const profilePhotoEl = document.getElementById('acc-profile-photo');
+  if(profilePhotoEl) profilePhotoEl.value = '';
 
   ['acc-current-password','acc-new-password','acc-confirm-password'].forEach(id=>{
     const el = document.getElementById(id);
@@ -437,7 +437,7 @@ function openAccountSettings(){
 }
 
 async function submitAccountSettings(){
-  const email = document.getElementById('acc-email')?.value?.trim() || '';
+  const profilePhoto = document.getElementById('acc-profile-photo')?.files?.[0] || null;
   const currentPassword = document.getElementById('acc-current-password')?.value || '';
   const newPassword = document.getElementById('acc-new-password')?.value || '';
   const confirmPassword = document.getElementById('acc-confirm-password')?.value || '';
@@ -448,9 +448,17 @@ async function submitAccountSettings(){
     errEl.style.display = 'none';
   }
 
-  if(!email || !currentPassword){
+  if(!profilePhoto && !newPassword){
     if(errEl){
-      errEl.textContent = 'Email and current password are required.';
+      errEl.textContent = 'Choose a profile picture or enter a new password.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+
+  if(newPassword && !currentPassword){
+    if(errEl){
+      errEl.textContent = 'Current password is required to change password.';
       errEl.style.display = 'block';
     }
     return;
@@ -473,14 +481,17 @@ async function submitAccountSettings(){
   }
 
   try{
+    const formData = new FormData();
+    if(profilePhoto) formData.append('profile_photo', profilePhoto);
+    if(currentPassword) formData.append('current_password', currentPassword);
+    if(newPassword){
+      formData.append('password', newPassword);
+      formData.append('password_confirmation', confirmPassword || '');
+    }
+
     await wpApi('/api/me/account', {
       method:'PATCH',
-      body: JSON.stringify({
-        email,
-        current_password: currentPassword,
-        password: newPassword || null,
-        password_confirmation: confirmPassword || null
-      })
+      body: formData
     });
     await wpReload();
     closeModal('accountSettingsModal');
@@ -713,7 +724,7 @@ function deleteLeaveType(code){
 }
 
 function deleteEmployeeCnicDocument(employeeCode){
-  showConfirm('Delete CNIC Document', 'This will remove the uploaded CNIC document from the employee profile. You can upload a new one later.', '⚠️', async function(){
+  showConfirm('Delete Profile Document', 'This will remove the uploaded document from the employee profile. You can upload a new one later.', '⚠️', async function(){
     try{
       await wpApi('/api/employees/'+encodeURIComponent(employeeCode)+'/cnic-document', {method:'DELETE'});
       await wpReload();
@@ -868,8 +879,13 @@ function exportEmployeeProfilesJson(){
   showToast('Employee profile export started.','green');
 }
 
-function importEmployeeProfiles(){
-  const input = document.getElementById('transfer-import-file');
+function exportCompanyDetailsJson(){
+  window.location.href = '/api/transfer/company/export';
+  showToast('Company details export started.','green');
+}
+
+function importTransferJson(inputId, endpoint, successMessage){
+  const input = document.getElementById(inputId);
   if(!input) return;
   input.value = '';
   input.onchange = async function(){
@@ -878,15 +894,31 @@ function importEmployeeProfiles(){
     const formData = new FormData();
     formData.append('file', file);
     try{
-      const data = await wpApi('/api/transfer/employees/import', {method:'POST', body: formData});
+      const data = await wpApi(endpoint, {method:'POST', body: formData});
       await wpReload();
-      showToast(`Imported ${data.imported || 0} employee profile(s).`,'green');
+      showToast(successMessage(data),'green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
       showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   };
   input.click();
+}
+
+function importEmployeeProfiles(){
+  importTransferJson(
+    'transfer-import-file',
+    '/api/transfer/employees/import',
+    (data)=>`Imported ${data.imported || 0} employee profile(s).`
+  );
+}
+
+function importCompanyDetails(){
+  importTransferJson(
+    'company-import-file',
+    '/api/transfer/company/import',
+    ()=> 'Company details imported successfully.'
+  );
 }
 
 function openCreateShift(){
@@ -961,6 +993,54 @@ function deleteShift(shiftId){
       await wpApi(`/api/shifts/${encodeURIComponent(shiftId)}`, {method:'DELETE'});
       await wpReload();
       showToast('Shift deleted.','green');
+      if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+    }catch(e){
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
+    }
+  });
+}
+
+async function uploadCompanyPolicy(){
+  const title = document.getElementById('policy-title')?.value?.trim() || '';
+  const file = document.getElementById('policy-file')?.files?.[0] || null;
+
+  if(!title){
+    showToast('Policy title is required.','red');
+    return;
+  }
+
+  if(!file){
+    showToast('Please choose a PDF file.','red');
+    return;
+  }
+
+  try{
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('policy_file', file);
+
+    await wpApi('/api/policies', {
+      method:'POST',
+      body: formData
+    });
+    await wpReload();
+    const titleEl = document.getElementById('policy-title');
+    const fileEl = document.getElementById('policy-file');
+    if(titleEl) titleEl.value = '';
+    if(fileEl) fileEl.value = '';
+    showToast('Policy uploaded successfully.','green');
+    if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+function deleteCompanyPolicy(policyId){
+  showConfirm('Delete Policy', 'This will permanently remove the policy PDF from the company library.', 'Warning', async function(){
+    try{
+      await wpApi(`/api/policies/${encodeURIComponent(policyId)}`, {method:'DELETE'});
+      await wpReload();
+      showToast('Policy deleted.','green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
       showToast('Backend error: '+(e?.message||'Failed'),'red');

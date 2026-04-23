@@ -49,6 +49,17 @@ const DB = {
     {id:'AN-003',title:'✅ New Attendance Policy — Effective May 1',cat:'Policy',audience:'All Employees',msg:'Starting May 1, the shift starts at 11:00 AM with a 10-minute grace period. Late arrivals after 11:10 AM will be marked "Late". Repeated late arrivals (3+) will trigger an HR review.',author:'Sara Ahmed',role:'HR Manager',date:'2025-04-05'},
   ],
 
+  company: {
+    company_name:'WorkPulse Technologies Pvt. Ltd.',
+    website_link:'www.workpulse.com',
+    official_email:'info@workpulse.com',
+    official_contact_no:'+92 42 35761234',
+    office_location:'12 Tech City, Arfa Software Park, Lahore',
+    linkedin_page:'linkedin.com/company/workpulse',
+  },
+
+  companyPolicies: [],
+
   events: [],
 
   holidays: [

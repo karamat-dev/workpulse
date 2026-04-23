@@ -52,6 +52,8 @@ async function wpReload(){
       DB.notifications = data.notifications || [];
       DB.notificationCount = data.notificationCount || 0;
       DB.customNotifications = data.customNotifications || [];
+      DB.company = data.company || {};
+      DB.companyPolicies = data.companyPolicies || [];
       if(typeof handleBrowserNotifications === 'function'){
         handleBrowserNotifications(DB.notifications);
       }
@@ -1361,12 +1363,12 @@ function formatNotificationAudienceLabel(audience){
 }
 
 function deleteEmployee(id){
-  if(!confirm('Are you sure you want to remove this employee?')) return;
+  if(!confirm('Are you sure you want to remove this employee from the active directory? This will move the record to Ex-employee.')) return;
   wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'})
     .then(()=>wpReload())
     .then(()=>{ if(document.getElementById('page-title').textContent==='Employees') showPage('employees'); })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  showToast('Employee removed','red');
+  showToast('Employee moved to Ex-employee','amber');
 }
 
 function filterTable(inputId, tableId){
@@ -1380,16 +1382,28 @@ function filterTable(inputId, tableId){
 //  TAB SWITCHER
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 function switchTab(group, tab){
+  window.__workpulseTabState = window.__workpulseTabState || {};
+  window.__workpulseTabState[group] = tab;
   document.querySelectorAll(`[id^="${group}-tc-"]`).forEach(el=>el.classList.remove('active'));
   document.querySelectorAll(`[data-tab-group="${group}"]`).forEach(el=>el.classList.remove('active'));
   const tc=document.getElementById(`${group}-tc-${tab}`);
   if(tc) tc.classList.add('active');
   document.querySelectorAll(`[data-tab-group="${group}"][data-tab="${tab}"]`).forEach(el=>el.classList.add('active'));
+  if(group === 'employees-directory' && typeof applyEmployeeDirectoryFilters === 'function'){
+    applyEmployeeDirectoryFilters();
+  }
 }
 
 function buildTabs(group, tabs, activeTab){
-  const tabHtml=tabs.map(t=>`<div class="tab${t.id===activeTab?' active':''}" data-tab-group="${group}" data-tab="${t.id}" onclick="switchTab('${group}','${t.id}')">${t.label}</div>`).join('');
-  const contentHtml=tabs.map(t=>`<div class="tab-content${t.id===activeTab?' active':''}" id="${group}-tc-${t.id}">${t.content}</div>`).join('');
+  window.__workpulseTabState = window.__workpulseTabState || {};
+  const tabIds = tabs.map(t => t.id);
+  const resolvedActiveTab = tabIds.includes(window.__workpulseTabState[group])
+    ? window.__workpulseTabState[group]
+    : (tabIds.includes(activeTab) ? activeTab : tabIds[0]);
+  window.__workpulseTabState[group] = resolvedActiveTab;
+
+  const tabHtml=tabs.map(t=>`<div class="tab${t.id===resolvedActiveTab?' active':''}" data-tab-group="${group}" data-tab="${t.id}" onclick="switchTab('${group}','${t.id}')">${t.label}</div>`).join('');
+  const contentHtml=tabs.map(t=>`<div class="tab-content${t.id===resolvedActiveTab?' active':''}" id="${group}-tc-${t.id}">${t.content}</div>`).join('');
   return `<div class="tabs">${tabHtml}</div>${contentHtml}`;
 }
 
@@ -1996,10 +2010,26 @@ function pageLeave(){
 }
 
 function pageEmployees(){
-  const activeCount = DB.employees.filter(e=>e.status==='Active').length;
-  const probationCount = DB.employees.filter(e=>e.status==='Probation').length;
-  const inactiveCount = DB.employees.filter(e=>e.status==='Inactive').length;
-  const rows=DB.employees.map(e=>`
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  const today = new Date().toISOString().slice(0, 10);
+  const getEmployeeLifecycleStage = (employee) => {
+    const status = String(employee?.status || '').toLowerCase();
+    const lastWorkingDate = String(employee?.lwd || '');
+    if(status === 'inactive' || status === 'resigned') return 'ex';
+    if(lastWorkingDate){
+      return lastWorkingDate < today ? 'ex' : 'offboarding';
+    }
+    if(status === 'offboarding') return 'offboarding';
+    return 'current';
+  };
+  const currentEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='current');
+  const offboardingEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='offboarding');
+  const exEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='ex');
+  const activeCount = currentEmployees.filter(e=>e.status==='Active').length;
+  const probationCount = currentEmployees.filter(e=>e.status==='Probation').length;
+  const offboardingCount = offboardingEmployees.length;
+  const exCount = exEmployees.length;
+  const renderDirectoryRows = (items, emptyLabel, allowRemove = false) => items.map(e=>`
     <tr>
       <td>${e.id}</td>
       <td><div class="ucell"><div class="av av-32" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
@@ -2016,9 +2046,9 @@ function pageEmployees(){
       <td>${statusBadge(e.status)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm" onclick="viewEmpProfile('${e.id}')">Open</button>
-        <button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>
+        ${allowRemove ? `<button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>` : ''}
       </div></td>
-    </tr>`).join('');
+    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">${emptyLabel}</td></tr>`;
 
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
@@ -2028,13 +2058,15 @@ function pageEmployees(){
       <div class="hero-chip"><div class="k">Total Employees</div><div class="v">${DB.employees.length}</div></div>
       <div class="hero-chip"><div class="k">Active</div><div class="v">${activeCount}</div></div>
       <div class="hero-chip"><div class="k">Probation</div><div class="v">${probationCount}</div></div>
-      <div class="hero-chip"><div class="k">Teams</div><div class="v">${DB.departments.length}</div></div>
+      <div class="hero-chip"><div class="k">Offboarding</div><div class="v">${offboardingCount}</div></div>
+      <div class="hero-chip"><div class="k">Ex-employee</div><div class="v">${exCount}</div></div>
     </div>
   </div>
 
   <div class="directory-stats">
     <div class="directory-stat"><div class="label">Active Employees</div><div class="num">${activeCount}</div><div class="hint">Ready for payroll and attendance cycles</div></div>
-    <div class="directory-stat"><div class="label">Inactive Employees</div><div class="num">${inactiveCount}</div><div class="hint">Archived or offboarded records</div></div>
+    <div class="directory-stat"><div class="label">Offboarding</div><div class="num">${offboardingCount}</div><div class="hint">Employees serving notice or in exit process</div></div>
+    <div class="directory-stat"><div class="label">Ex-employees</div><div class="num">${exCount}</div><div class="hint">Records after last working date or archive</div></div>
     <div class="directory-stat"><div class="label">Probation Reviews</div><div class="num">${probationCount}</div><div class="hint">Need follow-up from HR</div></div>
     <div class="directory-stat"><div class="label">Managers Listed</div><div class="num">${new Set(DB.employees.map(e=>e.manager).filter(Boolean)).size}</div><div class="hint">Reporting lines visible in profiles</div></div>
   </div>
@@ -2043,10 +2075,12 @@ function pageEmployees(){
     <div class="directory-top">
       <div>
         <div class="panel-title">Employee Directory</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with team-linked employee codes, office location, user role, line manager, and quick profile access.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">PayPeople-style team listing with dedicated tabs for active employees, offboarding cases, and ex-employees after the exit date is completed.</div>
       </div>
       <div class="data-pill-row">
-        <span class="data-pill">Visible records <strong>${DB.employees.length}</strong></span>
+        <span class="data-pill">Current records <strong>${currentEmployees.length}</strong></span>
+        <span class="data-pill">Offboarding <strong>${offboardingEmployees.length}</strong></span>
+        <span class="data-pill">Ex-employee <strong>${exEmployees.length}</strong></span>
         <span class="data-pill">Team leads <strong>${DB.departments.filter(d=>d.head&&d.head!=='-').length}</strong></span>
       </div>
     </div>
@@ -2068,6 +2102,8 @@ function pageEmployees(){
           <div class="data-pill-row">
             <span class="data-pill">Active <strong>${activeCount}</strong></span>
             <span class="data-pill">Probation <strong>${probationCount}</strong></span>
+            <span class="data-pill">Offboarding <strong>${offboardingCount}</strong></span>
+            <span class="data-pill">Ex-employee <strong>${exCount}</strong></span>
           </div>
         </div>
         <div style="display:flex;align-items:end;justify-content:flex-end;">
@@ -2075,18 +2111,37 @@ function pageEmployees(){
         </div>
       </div>
     </div>
-    <div class="soft-table"><div class="table-wrap"><table id="emp-table">
-      <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table></div></div>
+    ${buildTabs('employees-directory',[
+      {id:'current',label:`Employees (${currentEmployees.length})`,content:`
+        <div class="soft-table"><div class="table-wrap"><table id="emp-table-current">
+          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>${renderDirectoryRows(currentEmployees, 'No active employees found.', true)}</tbody>
+        </table></div></div>`},
+      {id:'offboarding',label:`Offboarding (${offboardingEmployees.length})`,content:`
+        <div class="soft-table"><div class="table-wrap"><table id="emp-table-offboarding">
+          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>${renderDirectoryRows(offboardingEmployees, 'No employees are currently in offboarding.')}</tbody>
+        </table></div></div>`},
+      {id:'ex',label:`Ex-employee (${exEmployees.length})`,content:`
+        <div class="soft-table"><div class="table-wrap"><table id="emp-table-ex">
+          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody>${renderDirectoryRows(exEmployees, 'No ex-employee records found.')}</tbody>
+        </table></div></div>`},
+    ], 'current')}
   </div>`;
 }
 
 function applyEmployeeDirectoryFilters(){
   const searchText = (document.getElementById('emp-search')?.value || '').trim().toLowerCase();
   const teamFilter = document.getElementById('emp-team-filter')?.value || '';
+  const activeTab = (window.__workpulseTabState && window.__workpulseTabState['employees-directory']) || 'current';
+  const tableId = {
+    current: 'emp-table-current',
+    offboarding: 'emp-table-offboarding',
+    ex: 'emp-table-ex',
+  }[activeTab] || 'emp-table-current';
 
-  document.querySelectorAll('#emp-table tbody tr').forEach(row=>{
+  document.querySelectorAll(`#${tableId} tbody tr`).forEach(row=>{
     const cells = row.querySelectorAll('td');
     const searchableText = Array.from(cells).map(cell => cell.textContent.toLowerCase()).join(' ');
     const rowTeam = cells[3]?.textContent?.trim() || '';
@@ -2094,6 +2149,14 @@ function applyEmployeeDirectoryFilters(){
     const matchesTeam = !teamFilter || rowTeam === teamFilter;
     row.style.display = matchesSearch && matchesTeam ? '' : 'none';
   });
+
+  ['emp-table-current', 'emp-table-offboarding', 'emp-table-ex']
+    .filter(id => id !== tableId)
+    .forEach(otherTableId => {
+      document.querySelectorAll(`#${otherTableId} tbody tr`).forEach(row=>{
+        row.style.display = '';
+      });
+    });
 }
 
 function filterEmpDept(val){
@@ -2614,25 +2677,21 @@ async function loadAttendanceReport(){
 
 window.loadAttendanceReport = loadAttendanceReport;
 
-function downloadAttendanceMonthlyCSV(){
-  const v = document.getElementById('rp-att-month')?.value;
-  if(!v) return;
-  const parts = v.split('-');
-  const year = parseInt(parts[0],10);
-  const month = parseInt(parts[1],10);
-  window.location.href = `/api/reports/attendance/monthly.csv?year=${year}&month=${month}`;
-}
-
-window.downloadAttendanceMonthlyCSV = downloadAttendanceMonthlyCSV;
-
 async function loadMonthlySummary(){
   try{
-    const v = document.getElementById('rp-att-month')?.value || new Date().toISOString().slice(0,7);
-    const parts = v.split('-');
-    const year = parseInt(parts[0],10);
-    const month = parseInt(parts[1],10);
-    const data = await wpApi(`/api/reports/attendance/monthly?year=${year}&month=${month}`, {method:'GET', headers:{}});
-    const rows = (data && data.rows) ? data.rows : [];
+    const filters = getMonthlyAttendanceFilters();
+    if(!filters.employeeValid){
+      showToast('Select a valid employee from search results.','red');
+      return;
+    }
+    const fallbackMonth = new Date().toISOString().slice(0,7);
+    if(!filters.query){
+      const parts = fallbackMonth.split('-');
+      filters.query = new URLSearchParams({year: parts[0], month: String(parseInt(parts[1], 10))}).toString();
+    }
+
+    const data = await wpApi(`/api/reports/attendance/monthly?${filters.query}`, {method:'GET', headers:{}});
+    const rows = ((data && data.rows) ? data.rows : []).filter(row => !filters.selectedDept || (row.department || '') === filters.selectedDept);
 
     const deptMap = {};
     rows.forEach(r=>{
@@ -2677,9 +2736,8 @@ async function loadMonthlySummary(){
     const totalDays = totals.present + totals.absent + totals.leave;
     const attPct = totalDays ? Math.round((totals.present / totalDays) * 100) : 0;
 
-    const monthLabel = new Date(year, month-1, 1).toLocaleDateString('en-GB', {month:'long', year:'numeric'});
     const set = (id,val)=>{ const el=document.getElementById(id); if(el) el.textContent = String(val); };
-    set('rp-m-month', monthLabel);
+    set('rp-m-month', formatAttendanceRangeLabel(data?.range));
     set('rp-m-emps', totalEmployees);
     set('rp-m-att', attPct + '%');
   }catch(e){
@@ -2729,6 +2787,16 @@ function pageReports(){
   const lateCount = monthRows.filter(a=>a.late).length;
   const approvedLeave = DB.leaves.filter(l=>l.status==='Approved').length;
   const totalOt = monthRows.reduce((sum,row)=>sum + (+row.overtime||0),0);
+  const employeeDirectory = (DB.employees || [])
+    .slice()
+    .sort((a,b)=>(`${a.id||''} ${a.fname||''} ${a.lname||''}`).localeCompare(`${b.id||''} ${b.fname||''} ${b.lname||''}`))
+    .map(employee => ({
+      code: employee.id || '',
+      name: `${(employee.fname||'').trim()} ${(employee.lname||'').trim()}`.trim(),
+    }));
+  const employeeOptions = employeeDirectory
+    .map(employee => `<option value="${employee.code} - ${employee.name}"></option>`)
+    .join('');
 
   return buildTabs('rp',[
     {id:'daily',label:'Daily Attendance Report',content:`
@@ -2755,17 +2823,32 @@ function pageReports(){
     {id:'monthly',label:'Monthly Attendance Report',content:`
       <div class="hero-panel" style="margin-bottom:14px;">
         <div class="hero-title">Monthly Attendance Report</div>
-        <div class="hero-sub">Track attendance performance across the selected month with employee-level summaries and team rollups.</div>
+        <div class="hero-sub">Track attendance performance by month or a custom date range, then export the same filtered employee data whenever needed.</div>
         <div class="hero-chip-row">
-          <div class="hero-chip"><div class="k">Tracked Month</div><div class="v" style="font-size:17px;">${ym}</div></div>
-          <div class="hero-chip"><div class="k">Employees Seen</div><div class="v">${uniqueEmployees}</div></div>
-          <div class="hero-chip"><div class="k">Late Instances</div><div class="v">${lateCount}</div></div>
-          <div class="hero-chip"><div class="k">OT Minutes</div><div class="v">${totalOt}</div></div>
+          <div class="hero-chip"><div class="k">Tracked Range</div><div class="v" id="rp-att-range-label" style="font-size:17px;">${ym}</div></div>
+          <div class="hero-chip"><div class="k">Employees Seen</div><div class="v" id="rp-att-employees-seen">${uniqueEmployees}</div></div>
+          <div class="hero-chip"><div class="k">Late Instances</div><div class="v" id="rp-att-late-instances">${lateCount}</div></div>
+          <div class="hero-chip"><div class="k">OT Minutes</div><div class="v" id="rp-att-ot-minutes">${totalOt}</div></div>
         </div>
       </div>
       <div class="toolbar-card" style="margin-bottom:14px;">
         <div class="toolbar-grid">
-          <div><label class="fl">Month</label><input type="month" class="fi" id="rp-att-month" value="${ym}"></div>
+          <div><label class="fl">Filter Type</label><select class="fi" id="rp-att-filter-mode" onchange="window.syncMonthlyAttendanceFilterMode()"><option value="month" selected>Single Month</option><option value="custom">Custom Date Range</option></select></div>
+          <div id="rp-att-month-wrap"><label class="fl">Month</label><input type="month" class="fi" id="rp-att-month" value="${ym}"></div>
+          <div id="rp-att-custom-range-row" style="display:none;grid-column:span 2;">
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+              <div><label class="fl">Start Date</label><input type="date" class="fi" id="rp-att-start-date" value="${today}"></div>
+              <div><label class="fl">End Date</label><input type="date" class="fi" id="rp-att-end-date" value="${today}"></div>
+            </div>
+          </div>
+          <div>
+            <label class="fl">Employee</label>
+            <input type="search" class="fi" id="rp-att-employee-search" list="rp-att-employee-list" placeholder="Search by employee code or name">
+            <datalist id="rp-att-employee-list">
+              <option value="">All Employees</option>
+              ${employeeOptions}
+            </datalist>
+          </div>
           <div><label class="fl">Team</label><select class="fi" id="rp-monthly-dept"><option value="">All Teams</option>${DB.departments.map(d=>`<option value="${d.name}">${d.name}</option>`).join('')}</select></div>
           <div><label class="fl">Insight</label><div class="data-pill-row"><span class="data-pill">Present <strong>${presentCount}</strong></span><span class="data-pill">Leave <strong>${approvedLeave}</strong></span></div></div>
           <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;"><button class="btn btn-sm btn-primary" onclick="window.loadMonthlyAttendanceReport()">Refresh</button><button class="btn btn-sm" onclick="window.downloadAttendanceMonthlyCSV()">Export CSV</button></div>
@@ -2882,15 +2965,101 @@ function downloadAttendanceDailyCSV(){
 
 window.downloadAttendanceDailyCSV = downloadAttendanceDailyCSV;
 
+function getMonthlyAttendanceFilters(){
+  const mode = document.getElementById('rp-att-filter-mode')?.value || 'month';
+  const employeeSearch = (document.getElementById('rp-att-employee-search')?.value || '').trim();
+  const employeeCode = resolveMonthlyAttendanceEmployeeCode(employeeSearch);
+  const selectedDept = document.getElementById('rp-monthly-dept')?.value || '';
+  const monthValue = document.getElementById('rp-att-month')?.value || '';
+  const startDate = document.getElementById('rp-att-start-date')?.value || '';
+  const endDate = document.getElementById('rp-att-end-date')?.value || '';
+  const params = new URLSearchParams();
+
+  if(mode === 'custom'){
+    if(startDate) params.set('start_date', startDate);
+    if(endDate) params.set('end_date', endDate);
+  }else if(monthValue){
+    const parts = monthValue.split('-');
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if(Number.isFinite(year)) params.set('year', String(year));
+    if(Number.isFinite(month)) params.set('month', String(month));
+  }
+
+  if(employeeCode) params.set('employee_code', employeeCode);
+
+  return {
+    mode,
+    employeeSearch,
+    employeeCode,
+    employeeValid: !employeeSearch || !!employeeCode,
+    selectedDept,
+    monthValue,
+    startDate,
+    endDate,
+    query: params.toString(),
+  };
+}
+
+function resolveMonthlyAttendanceEmployeeCode(employeeSearch){
+  if(!employeeSearch) return '';
+
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  const normalizedSearch = employeeSearch.trim().toLowerCase();
+  const exactCodeMatch = employees.find(employee => String(employee.id || '').toLowerCase() === normalizedSearch);
+  if(exactCodeMatch) return exactCodeMatch.id || '';
+
+  const exactLabelMatch = employees.find(employee => {
+    const name = `${(employee.fname || '').trim()} ${(employee.lname || '').trim()}`.trim();
+    return `${String(employee.id || '')} - ${name}`.trim().toLowerCase() === normalizedSearch;
+  });
+  if(exactLabelMatch) return exactLabelMatch.id || '';
+
+  const exactNameMatches = employees.filter(employee => {
+    const name = `${(employee.fname || '').trim()} ${(employee.lname || '').trim()}`.trim().toLowerCase();
+    return name === normalizedSearch;
+  });
+  if(exactNameMatches.length === 1) return exactNameMatches[0].id || '';
+
+  const partialMatches = employees.filter(employee => {
+    const name = `${(employee.fname || '').trim()} ${(employee.lname || '').trim()}`.trim().toLowerCase();
+    const code = String(employee.id || '').toLowerCase();
+    return code.includes(normalizedSearch) || name.includes(normalizedSearch);
+  });
+
+  return partialMatches.length === 1 ? (partialMatches[0].id || '') : '';
+}
+
+function syncMonthlyAttendanceFilterMode(){
+  const mode = document.getElementById('rp-att-filter-mode')?.value || 'month';
+  const monthField = document.getElementById('rp-att-month-wrap');
+  const customFields = document.getElementById('rp-att-custom-range-row');
+  if(monthField) monthField.style.display = mode === 'custom' ? 'none' : '';
+  if(customFields) customFields.style.display = mode === 'custom' ? '' : 'none';
+}
+
+window.syncMonthlyAttendanceFilterMode = syncMonthlyAttendanceFilterMode;
+
+function formatAttendanceRangeLabel(range){
+  if(!range || !range.start || !range.end) return '-';
+  if(range.start === range.end) return range.start;
+  return `${range.start} to ${range.end}`;
+}
+
 async function loadMonthlyAttendanceReport(){
   try{
-    const v = document.getElementById('rp-att-month')?.value;
-    if(!v) return;
-    const parts = v.split('-');
-    const year = parseInt(parts[0],10);
-    const month = parseInt(parts[1],10);
-    const data = await wpApi(`/api/reports/attendance/monthly?year=${year}&month=${month}`, {method:'GET', headers:{}});
-    const selectedDept = document.getElementById('rp-monthly-dept')?.value || '';
+    const filters = getMonthlyAttendanceFilters();
+    if(!filters.employeeValid){
+      showToast('Select a valid employee from search results.','red');
+      return;
+    }
+    if((filters.mode === 'custom' && (!filters.startDate || !filters.endDate)) || (!filters.query)){
+      showToast('Select a valid month or custom date range.','red');
+      return;
+    }
+
+    const data = await wpApi(`/api/reports/attendance/monthly?${filters.query}`, {method:'GET', headers:{}});
+    const selectedDept = filters.selectedDept;
     const rows = ((data && data.rows) ? data.rows : []).filter(row => !selectedDept || (row.department || '') === selectedDept);
     const dates = (data && data.dates) ? data.dates : [];
     const tb = document.getElementById('rp-att-tbody');
@@ -2934,12 +3103,31 @@ async function loadMonthlyAttendanceReport(){
     set('rp-absent', sum.absent);
     set('rp-late', sum.late);
     set('rp-ot', sum.ot);
+    set('rp-att-range-label', formatAttendanceRangeLabel(data?.range));
+    set('rp-att-employees-seen', rows.length);
+    set('rp-att-late-instances', sum.late);
+    set('rp-att-ot-minutes', sum.ot);
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
 window.loadMonthlyAttendanceReport = loadMonthlyAttendanceReport;
+
+function downloadAttendanceMonthlyCSV(){
+  const filters = getMonthlyAttendanceFilters();
+  if(!filters.employeeValid){
+    showToast('Select a valid employee from search results.','red');
+    return;
+  }
+  if((filters.mode === 'custom' && (!filters.startDate || !filters.endDate)) || (!filters.query)){
+    showToast('Select a valid month or custom date range.','red');
+    return;
+  }
+  window.location.href = `/api/reports/attendance/monthly.csv?${filters.query}`;
+}
+
+window.downloadAttendanceMonthlyCSV = downloadAttendanceMonthlyCSV;
 
 function pageAnnouncements(empView=false){
   const items=DB.announcements.map(a=>`
@@ -2961,17 +3149,105 @@ function pageAnnouncements(empView=false){
   ${items||'<div class="card"><p style="color:var(--muted);">No announcements yet.</p></div>'}`;
 }
 
+function formatFileSize(bytes){
+  const value = Number(bytes || 0);
+  if(!value) return '0 KB';
+  if(value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(value / 1024))} KB`;
+}
+
+function pagePolicies(isEmployee=false){
+  const policies = Array.isArray(DB.companyPolicies) ? DB.companyPolicies : [];
+  const canManage = DB.currentRole === 'admin' && !isEmployee;
+  const rows = policies.map(policy => `
+    <tr>
+      <td>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <strong>${policy.title || 'Policy Document'}</strong>
+          <span style="font-size:12px;color:var(--muted);">${policy.fileName || 'PDF file'}</span>
+        </div>
+      </td>
+      <td>${formatFileSize(policy.fileSize)}</td>
+      <td>${formatDate(policy.uploadedAt)}</td>
+      <td>${policy.uploadedBy || 'Admin'}</td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="window.open('${policy.fileUrl}','_blank')">Open PDF</button>
+          ${canManage ? `<button class="btn btn-sm btn-danger" onclick="window.deleteCompanyPolicy(${policy.id})">Delete</button>` : ''}
+        </div>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No company policies uploaded yet.</td></tr>`;
+
+  return `
+  <div class="hero-panel" style="margin-bottom:14px;">
+    <div class="hero-title">Company Policies</div>
+    <div class="hero-sub">${canManage ? 'Upload and manage official company policy PDFs for the whole organization. Employees can open the latest policy documents directly from this page.' : 'View official company policy PDFs published by admin. Open any policy to read the full document.'}</div>
+    <div class="hero-chip-row">
+      <div class="hero-chip"><div class="k">Policies</div><div class="v">${policies.length}</div></div>
+      <div class="hero-chip"><div class="k">Format</div><div class="v">PDF</div></div>
+      <div class="hero-chip"><div class="k">Access</div><div class="v">${canManage ? 'Admin' : 'View Only'}</div></div>
+    </div>
+  </div>
+
+  ${canManage ? `
+    <div class="card" style="margin-bottom:14px;">
+      <div class="card-hdr">
+        <div class="card-title">Upload Policy</div>
+        <div style="font-size:12px;color:var(--muted);">Only PDF files are allowed. Employees will only be able to open and read them.</div>
+      </div>
+      <div class="toolbar-grid">
+        <div>
+          <label class="fl">Policy Title</label>
+          <input class="fi" id="policy-title" placeholder="e.g. Attendance Policy">
+        </div>
+        <div>
+          <label class="fl">PDF File</label>
+          <input type="file" class="fi" id="policy-file" accept=".pdf,application/pdf">
+        </div>
+        <div style="display:flex;align-items:end;justify-content:flex-end;">
+          <button class="btn btn-primary" onclick="window.uploadCompanyPolicy()">Upload Policy</button>
+        </div>
+      </div>
+    </div>
+  ` : ''}
+
+  <div class="directory-card">
+    <div class="directory-top">
+      <div>
+        <div class="panel-title">Policy Library</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:3px;">Central place for HR, compliance, workplace, and employee handbook PDFs.</div>
+      </div>
+      <div class="data-pill-row">
+        <span class="data-pill">Published <strong>${policies.length}</strong></span>
+      </div>
+    </div>
+    <div class="soft-table"><div class="table-wrap"><table>
+      <thead><tr><th>Policy</th><th>Size</th><th>Uploaded</th><th>Uploaded By</th><th>Action</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
 function pageCompany(){
+  const company = DB.company || {};
+  const companyName = company.company_name || 'WorkPulse Technologies Pvt. Ltd.';
+  const website = company.website_link || 'www.workpulse.com';
+  const officialEmail = company.official_email || 'info@workpulse.com';
+  const officialContact = company.official_contact_no || '+92 42 35761234';
+  const officeLocation = company.office_location || '12 Tech City, Arfa Software Park, Lahore';
+  const linkedin = company.linkedin_page || 'linkedin.com/company/workpulse';
+
   return `
   <div class="g2">
     <div class="card">
       <div class="card-title" style="margin-bottom:14px;">Company Information</div>
-      <div class="irow"><span class="ikey">Company Name</span><span class="ival">WorkPulse Technologies Pvt. Ltd.</span></div>
-      <div class="irow"><span class="ikey">Website</span><span class="ival" style="color:var(--accent);">www.workpulse.com</span></div>
-      <div class="irow"><span class="ikey">Official Email</span><span class="ival">info@workpulse.com</span></div>
-      <div class="irow"><span class="ikey">Contact No</span><span class="ival">+92 42 35761234</span></div>
-      <div class="irow"><span class="ikey">Office Location</span><span class="ival">12 Tech City, Arfa Software Park, Lahore</span></div>
-      <div class="irow"><span class="ikey">LinkedIn</span><span class="ival" style="color:var(--accent);">linkedin.com/company/workpulse</span></div>
+      <div class="irow"><span class="ikey">Company Name</span><span class="ival">${companyName}</span></div>
+      <div class="irow"><span class="ikey">Website</span><span class="ival" style="color:var(--accent);">${website}</span></div>
+      <div class="irow"><span class="ikey">Official Email</span><span class="ival">${officialEmail}</span></div>
+      <div class="irow"><span class="ikey">Contact No</span><span class="ival">${officialContact}</span></div>
+      <div class="irow"><span class="ikey">Office Location</span><span class="ival">${officeLocation}</span></div>
+      <div class="irow"><span class="ikey">LinkedIn</span><span class="ival" style="color:var(--accent);">${linkedin}</span></div>
       <div class="irow"><span class="ikey">No. of Employees</span><span class="ival">${DB.employees.length}</span></div>
       <div class="irow"><span class="ikey">Industry</span><span class="ival">Software & Technology</span></div>
       <div class="irow"><span class="ikey">Incorporated</span><span class="ival">2018</span></div>
@@ -2995,7 +3271,7 @@ function pageCompany(){
     <div class="card-hdr">
       <div>
         <div class="card-title">Transfer Data</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Move company data safely by downloading a full transfer package or importing/exporting complete employee profiles.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Move company data safely by downloading a full transfer package or importing/exporting complete employee profiles and company details.</div>
       </div>
       <span class="badge bg-blue">Admin Tool</span>
     </div>
@@ -3005,11 +3281,13 @@ function pageCompany(){
       <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
       <div class="stat-card"><div class="stat-label">Shifts</div><div class="stat-val">${(DB.shifts||[]).length}</div><div class="stat-sub">Standard schedules available</div></div>
     </div>
-  <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes employees, teams, attendance, leave, regulations, holidays, announcements, and live attendance snapshot in one JSON file.</div></div>
+  <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes company details, employees, teams, attendance, leave, holidays, announcements, and other operational data in one JSON file.</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
-      <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Employee Profiles JSON</button>
+      <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Full Employee Profiles JSON</button>
       <button class="btn" onclick="window.importEmployeeProfiles()">Import Employee Profiles JSON</button>
+      <button class="btn" onclick="window.exportCompanyDetailsJson()">Export Company Details JSON</button>
+      <button class="btn" onclick="window.importCompanyDetails()">Import Company Details JSON</button>
       <button class="btn" onclick="window.exportEmployeeCSV()">Employees CSV</button>
       <button class="btn" onclick="window.exportAttendanceCSV()">Attendance CSV</button>
       <button class="btn" onclick="window.exportLeaveCSV()">Leave CSV</button>
@@ -3062,7 +3340,6 @@ function pageEmpDashboard(){
     const workedHeroLabel = formatWorkedHoursClockLabel(workedBreakdown.totalMinutes);
     const shiftCompleted = isShiftCompletedForDate(today);
     const myLeaves=leaves.filter(l=>l.empId===u.id);
-    const myPending=myLeaves.filter(l=>l.status==='Pending').length;
     const leaveCards = [
       findLeaveBalance('sick') || {name:'Sick Leaves', allocated:0, used:0, remaining:0},
       findLeaveBalance('annual') || {name:'Annual Leaves', allocated:0, used:0, remaining:0},
@@ -3156,10 +3433,6 @@ function pageEmpDashboard(){
     </div>
 
     <div class="emp-pp-right">
-      <div class="emp-pp-card">
-        <div class="card-hdr"><div class="emp-pp-title">Pending Tasks</div><span class="badge bg-blue">${myPending}</span></div>
-        <div class="emp-pp-empty">${myPending ? `${myPending} task(s) pending` : 'No pending task available'}</div>
-      </div>
       <div class="emp-pp-card">
         <div class="card-hdr"><div class="emp-pp-title">Who is Off</div><span class="badge bg-purple">${whoOff}</span></div>
         <div class="emp-pp-empty">${whoOff ? `${whoOff} employee(s) on leave today` : 'No employee is leave or off'}</div>
@@ -3476,6 +3749,15 @@ function profileValue(value, fallback='-'){
   return value===undefined || value===null || value==='' ? fallback : value;
 }
 
+function renderAvatarDisplay(person, sizeClass='av av-64', style=''){
+  const finalStyle = style ? `${style}${style.trim().endsWith(';') ? '' : ';'}` : '';
+  if(person?.profilePhotoUrl){
+    return `<div class="${sizeClass}" style="${finalStyle}overflow:hidden;padding:0;"><img src="${person.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;"></div>`;
+  }
+
+  return `<div class="${sizeClass}" style="${finalStyle}">${person?.avatar || ''}</div>`;
+}
+
 function profileInfoRow(label, value, formatter=null){
   const display = formatter ? formatter(value) : profileValue(value);
   return `<div class="pp-info-row"><div class="label">${label}</div><div class="value">${display}</div></div>`;
@@ -3551,13 +3833,13 @@ function profileTimeline(employee){
 
 function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='Open Document'){
   const cnicDocument = employee.cnicDocumentUrl
-    ? `<div class="pp-doc-actions"><a class="btn btn-sm btn-primary" href="${employee.cnicDocumentUrl}" target="_blank" rel="noopener">${selfLabel}</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${employee.id}')">Delete CNIC</button>` : ''}</div>`
-    : `<div class="pp-mini-empty">CNIC document has not been uploaded yet.</div>`;
+    ? `<div class="pp-doc-actions"><a class="btn btn-sm btn-primary" href="${employee.cnicDocumentUrl}" target="_blank" rel="noopener">${selfLabel}</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${employee.id}')">Delete Document</button>` : ''}</div>`
+    : `<div class="pp-mini-empty">No profile document has been uploaded yet.</div>`;
 
   return `<div class="pp-doc-grid">
     <div class="pp-doc-card">
-      <div class="panel-title">CNIC Document</div>
-      <div class="meta">${employee.cnicDocumentName || 'Official ID record'}</div>
+      <div class="panel-title">Profile Document</div>
+      <div class="meta">${employee.cnicDocumentName || 'Employee document record'}</div>
       <div style="margin-top:10px;">${profileInfoRow('National ID', employee.cnic)}</div>
       ${cnicDocument}
     </div>
@@ -3637,7 +3919,7 @@ function renderProfileWorkspace(employee, options={}){
     <div class="pp-summary-card">
       <div class="pp-cover"></div>
       <div class="pp-summary-body">
-        <div class="pp-avatar-stage"><div class="av av-64" style="background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;">${employee.avatar}</div></div>
+        <div class="pp-avatar-stage">${renderAvatarDisplay(employee, 'av av-64', `background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;`)}</div>
         <div class="pp-name">${employee.id || '-' } : ${employee.fname} ${employee.lname}</div>
         <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` â€¢ ${employee.workLocation}` : ''}</div>
         <div class="pp-chipbar">${statusBadge(employee.status || 'Active')}<span class="badge bg-blue">${profileValue(employee.dept)}</span></div>
@@ -3696,7 +3978,7 @@ function pageEmpProfileDetail(){
     heroSub: `${profileValue(e.desg)} in ${profileValue(e.dept)} with a complete profile workspace for official records, salary visibility, reporting structure, leave history, attendance, documents, and lifecycle details.`,
     canSeeSalary: DB.currentRole === 'admin',
     canManageEmployeeDocs: DB.currentRole === 'admin',
-    documentButtonLabel: 'Open CNIC Document',
+    documentButtonLabel: 'Open Document',
     tabGroup: 'epdPlus',
     headerAction: `<button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>`,
     sideAction: DB.currentRole === 'admin' ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button>` : '',
@@ -3712,7 +3994,7 @@ function pageEmpProfile(){
     heroSub: 'A PayPeople-inspired profile workspace with all major employee identity, employment, salary, bank, leave, history, document, and lifecycle sections in one view.',
     canSeeSalary: true,
     canManageEmployeeDocs: false,
-    documentButtonLabel: 'Open My CNIC Document',
+    documentButtonLabel: 'Open My Document',
     tabGroup: 'mePlus',
     headerAction: `<button class="btn btn-sm btn-primary" onclick="window.openAccountSettings()">Account Settings</button>`,
   })}`;

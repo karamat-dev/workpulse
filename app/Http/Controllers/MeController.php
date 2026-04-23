@@ -4,9 +4,10 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Str;
 
 class MeController extends Controller
 {
@@ -86,6 +87,8 @@ class MeController extends Controller
             'employee_profiles.status',
             'employee_profiles.work_location',
             'employee_profiles.confirmation_date',
+            'employee_profiles.profile_photo_path',
+            'employee_profiles.profile_photo_name',
             // personal
             'employee_profiles.date_of_birth as dob',
             'employee_profiles.gender',
@@ -142,30 +145,73 @@ class MeController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'email' => [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($user->id),
-            ],
-            'current_password' => ['required', 'current_password'],
+            'current_password' => ['nullable', 'current_password', 'required_with:password'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'profile_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
-        $update = [
-            'email' => $validated['email'],
-            'updated_at' => now(),
-        ];
-
-        if (!empty($validated['password'])) {
-            $update['password'] = Hash::make($validated['password']);
+        if (empty($validated['password']) && !$request->hasFile('profile_photo')) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Add a new password or choose a profile picture to update your account.',
+            ], 422);
         }
 
-        DB::table('users')->where('id', $user->id)->update($update);
+        DB::transaction(function () use ($request, $user, $validated) {
+            if (!empty($validated['password'])) {
+                DB::table('users')->where('id', $user->id)->update([
+                    'password' => Hash::make($validated['password']),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            if ($request->hasFile('profile_photo')) {
+                $profile = DB::table('employee_profiles')
+                    ->where('user_id', $user->id)
+                    ->first(['profile_photo_path', 'profile_photo_name']);
+
+                $photoMeta = $this->storeProfilePhoto($request->file('profile_photo'), $user->employee_code ?? (string) $user->id);
+
+                if ($profile?->profile_photo_path) {
+                    $absolutePath = public_path($profile->profile_photo_path);
+                    if (File::exists($absolutePath)) {
+                        File::delete($absolutePath);
+                    }
+                }
+
+                DB::table('employee_profiles')->updateOrInsert(
+                    ['user_id' => $user->id],
+                    [
+                        'profile_photo_path' => $photoMeta['path'],
+                        'profile_photo_name' => $photoMeta['name'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+        });
 
         return response()->json([
             'ok' => true,
             'message' => 'Account updated successfully.',
         ]);
+    }
+
+    private function storeProfilePhoto($file, string $employeeCode): array
+    {
+        $directory = public_path('uploads/profile-photos');
+        if (!File::exists($directory)) {
+            File::makeDirectory($directory, 0755, true);
+        }
+
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $filename = sprintf('profile-%s-%s.%s', $employeeCode, Str::lower(Str::random(8)), $extension);
+
+        $file->move($directory, $filename);
+
+        return [
+            'path' => 'uploads/profile-photos/'.$filename,
+            'name' => $file->getClientOriginalName(),
+        ];
     }
 }

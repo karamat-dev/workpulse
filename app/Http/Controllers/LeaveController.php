@@ -722,10 +722,13 @@ class LeaveController extends Controller
             ->where('user_id', $request->user()->id)
             ->value('employment_type');
 
-        if ($employmentType !== null && strcasecmp((string) $employmentType, 'Permanent') !== 0) {
+        if (
+            $employmentType !== null
+            && !in_array(strtolower((string) $employmentType), ['permanent', 'contract'], true)
+        ) {
             return response()->json([
                 'ok' => false,
-                'message' => 'Only permanent employees can apply for leave.',
+                'message' => 'Only permanent and contract employees can apply for leave.',
             ], 422);
         }
 

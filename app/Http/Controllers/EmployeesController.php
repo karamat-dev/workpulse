@@ -12,6 +12,9 @@ use Illuminate\Validation\Rule;
 
 class EmployeesController extends Controller
 {
+    private const OFFBOARDING_STATUS = 'Offboarding';
+    private const EX_EMPLOYEE_STATUSES = ['Inactive', 'Resigned'];
+
     public function show(Request $request, string $employeeCode): JsonResponse
     {
         $user = $request->user();
@@ -50,7 +53,7 @@ class EmployeesController extends Controller
             'manager' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])], // default employee
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
-            'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'cnic_document' => ['nullable', 'file', 'max:10240'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
@@ -156,7 +159,10 @@ class EmployeesController extends Controller
                         : null),
                     'last_working_date' => $validated['lwd'] ?? null,
                     'employment_type' => $validated['type'] ?? 'Permanent',
-                    'status' => ($validated['type'] ?? '') === 'Probation' ? 'Probation' : 'Active',
+                    'status' => $this->resolveEmploymentStatus(
+                        ($validated['type'] ?? '') === 'Probation' ? 'Probation' : 'Active',
+                        $validated['lwd'] ?? null,
+                    ),
                     'work_location' => $validated['work_location'] ?? null,
                     'confirmation_date' => $validated['confirmation_date'] ?? null,
                     'date_of_birth' => $validated['dob'] ?? null,
@@ -240,7 +246,7 @@ class EmployeesController extends Controller
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
             'passport_no' => ['nullable', 'string', 'max:50'],
-            'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'cnic_document' => ['nullable', 'file', 'max:10240'],
             'address' => ['nullable', 'string', 'max:255'],
             'marital_status' => ['nullable', 'string', 'max:30'],
             'blood' => ['nullable', 'string', 'max:10'],
@@ -332,7 +338,10 @@ class EmployeesController extends Controller
                     'probation_end_date' => $validated['dop'] ?? null,
                     'last_working_date' => $validated['lwd'] ?? null,
                     'employment_type' => $validated['type'] ?? 'Permanent',
-                    'status' => $validated['status'] ?? 'Active',
+                    'status' => $this->resolveEmploymentStatus(
+                        $validated['status'] ?? 'Active',
+                        $validated['lwd'] ?? null,
+                    ),
                     'work_location' => $validated['work_location'] ?? null,
                     'confirmation_date' => $validated['confirmation_date'] ?? null,
                     'date_of_birth' => $validated['dob'] ?? null,
@@ -426,9 +435,36 @@ class EmployeesController extends Controller
             return response()->json(['ok' => false, 'message' => 'Cannot delete yourself'], 422);
         }
 
-        DB::table('users')->where('id', $userId)->delete();
+        DB::table('employee_profiles')
+            ->where('user_id', $userId)
+            ->update([
+                'status' => 'Inactive',
+                'last_working_date' => DB::raw("COALESCE(last_working_date, '".now()->toDateString()."')"),
+                'updated_at' => now(),
+            ]);
 
-        return response()->json(['ok' => true]);
+        return response()->json([
+            'ok' => true,
+            'message' => 'Employee moved to ex-employee records.',
+        ]);
+    }
+
+    private function resolveEmploymentStatus(?string $status, ?string $lastWorkingDate): string
+    {
+        $normalizedStatus = trim((string) ($status ?? '')) ?: 'Active';
+        $today = now()->toDateString();
+
+        if (in_array($normalizedStatus, self::EX_EMPLOYEE_STATUSES, true)) {
+            return $normalizedStatus;
+        }
+
+        if ($lastWorkingDate) {
+            return $lastWorkingDate < $today
+                ? 'Inactive'
+                : self::OFFBOARDING_STATUS;
+        }
+
+        return $normalizedStatus;
     }
 
     private function employeeQuery(bool $includeConfidential)

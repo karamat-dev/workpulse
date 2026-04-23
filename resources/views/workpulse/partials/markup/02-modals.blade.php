@@ -135,7 +135,7 @@
     </div>
     <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
     <div class="fg"><label class="fl">Login Password</label><input type="password" class="fi" id="ne-password" placeholder="Set employee password"></div>
-    <div class="fg"><label class="fl">CNIC Document <span class="req-star">*</span></label><input type="file" class="fi" id="ne-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
+    <div class="fg"><label class="fl">Profile Document <span class="req-star">*</span></label><input type="file" class="fi" id="ne-cnic-document"></div>
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
@@ -324,11 +324,11 @@
         <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ee-confirmation-date"></div>
         <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ee-work-location"></div>
       </div>
-      <div class="fg"><label class="fl">Replace CNIC Document</label><input type="file" class="fi" id="ee-cnic-document" accept=".pdf,.jpg,.jpeg,.png"></div>
+      <div class="fg"><label class="fl">Replace Profile Document</label><input type="file" class="fi" id="ee-cnic-document"></div>
       <div class="fg"><label class="fl">Reset Login Password</label><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
-        <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Inactive</option><option>Resigned</option></select></div>
+        <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Offboarding</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>
       <div class="fg">
@@ -412,6 +412,7 @@
 </div>
 
 <input type="file" id="transfer-import-file" accept=".json,application/json" style="display:none;">
+<input type="file" id="company-import-file" accept=".json,application/json" style="display:none;">
 
 <!-- Edit Leave Balance Modal (Admin) -->
 <div class="modal-overlay" id="editLeaveModal">
@@ -462,13 +463,13 @@
 <div class="modal-overlay" id="accountSettingsModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Account Settings</div><button class="modal-close" onclick="window.closeModal('accountSettingsModal')">Ã—</button></div>
-    <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="acc-email" placeholder="your@company.com"></div>
-    <div class="fg"><label class="fl">Current Password <span class="req-star">*</span></label><input type="password" class="fi" id="acc-current-password" placeholder="Required to save changes"></div>
+    <div class="fg"><label class="fl">Profile Picture</label><input type="file" class="fi" id="acc-profile-photo" accept=".jpg,.jpeg,.png,.webp"></div>
+    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="acc-current-password" placeholder="Required only when changing password"></div>
     <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"></div>
     <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"></div>
     <div id="acc-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
-      Employees can update only their own email and password here. Profile, team, type, probation, and other HR details stay managed by admin.
+      Employees can update only their own password and profile picture here. Profile, team, type, salary, and other HR details stay managed by admin.
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('accountSettingsModal')">Cancel</button>
@@ -526,7 +527,3 @@
     </div>
   </div>
 </div>
-
-
-
-

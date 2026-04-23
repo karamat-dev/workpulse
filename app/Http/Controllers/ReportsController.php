@@ -5,13 +5,56 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportsController extends Controller
 {
-    private function buildAttendanceStatusMap(string $start, string $end)
+    private function validateAttendanceReportFilters(Request $request): array
     {
-        $dayRows = DB::table('users')
+        $validator = Validator::make($request->all(), [
+            'year' => ['nullable', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['nullable', 'integer', 'min:1', 'max:12'],
+            'start_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
+            'employee_code' => ['nullable', 'string', 'exists:users,employee_code'],
+        ]);
+
+        $validated = $validator->validate();
+
+        $hasCustomRange = !empty($validated['start_date']) || !empty($validated['end_date']);
+        if ($hasCustomRange) {
+            Validator::make($validated, [
+                'start_date' => ['required', 'date'],
+                'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            ])->validate();
+
+            return [
+                'start' => now()->parse($validated['start_date'])->startOfDay()->toDateString(),
+                'end' => now()->parse($validated['end_date'])->startOfDay()->toDateString(),
+                'employee_code' => $validated['employee_code'] ?? null,
+                'mode' => 'custom',
+            ];
+        }
+
+        Validator::make($validated, [
+            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
+            'month' => ['required', 'integer', 'min:1', 'max:12'],
+        ])->validate();
+
+        return [
+            'start' => now()->setDate($validated['year'], $validated['month'], 1)->startOfMonth()->toDateString(),
+            'end' => now()->setDate($validated['year'], $validated['month'], 1)->endOfMonth()->toDateString(),
+            'employee_code' => $validated['employee_code'] ?? null,
+            'mode' => 'monthly',
+            'year' => (int) $validated['year'],
+            'month' => (int) $validated['month'],
+        ];
+    }
+
+    private function buildAttendanceStatusMap(string $start, string $end, ?string $employeeCode = null)
+    {
+        $usersQuery = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('attendance_days', function ($join) use ($start, $end) {
@@ -19,6 +62,7 @@ class ReportsController extends Controller
                     ->whereBetween('attendance_days.date', [$start, $end]);
             })
             ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->when($employeeCode, fn ($query) => $query->where('users.employee_code', $employeeCode))
             ->select([
                 'users.id as user_id',
                 'users.employee_code',
@@ -30,14 +74,18 @@ class ReportsController extends Controller
                 'attendance_days.late',
                 'attendance_days.overtime_minutes',
             ])
-            ->orderBy('users.employee_code')
-            ->get();
+            ->orderBy('users.employee_code');
+
+        $dayRows = $usersQuery->get();
+        $userIds = $dayRows->pluck('user_id')->unique()->filter()->values();
 
         $leaveRows = DB::table('leave_requests')
             ->join('users', 'users.id', '=', 'leave_requests.user_id')
             ->where('leave_requests.status', 'Approved')
             ->where('leave_requests.from_date', '<=', $end)
             ->where('leave_requests.to_date', '>=', $start)
+            ->when($userIds->isNotEmpty(), fn ($query) => $query->whereIn('leave_requests.user_id', $userIds))
+            ->when($userIds->isEmpty(), fn ($query) => $query->whereRaw('1 = 0'))
             ->select([
                 'leave_requests.user_id',
                 'leave_requests.from_date',
@@ -74,15 +122,11 @@ class ReportsController extends Controller
 
     public function monthlyAttendance(Request $request): JsonResponse
     {
-        $validated = $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'month' => ['required', 'integer', 'min:1', 'max:12'],
-        ]);
+        $filters = $this->validateAttendanceReportFilters($request);
+        $start = $filters['start'];
+        $end = $filters['end'];
 
-        $start = now()->setDate($validated['year'], $validated['month'], 1)->startOfMonth()->toDateString();
-        $end = now()->setDate($validated['year'], $validated['month'], 1)->endOfMonth()->toDateString();
-
-        [$days, $groupedRows, $leaveByUserDate] = $this->buildAttendanceStatusMap($start, $end);
+        [$days, $groupedRows, $leaveByUserDate] = $this->buildAttendanceStatusMap($start, $end, $filters['employee_code']);
 
         $rows = $groupedRows->map(function ($records, $userId) use ($days, $leaveByUserDate) {
             $first = $records->first();
@@ -127,6 +171,12 @@ class ReportsController extends Controller
 
         return response()->json([
             'ok' => true,
+            'filter' => [
+                'mode' => $filters['mode'],
+                'employee_code' => $filters['employee_code'],
+                'year' => $filters['year'] ?? null,
+                'month' => $filters['month'] ?? null,
+            ],
             'range' => ['start' => $start, 'end' => $end],
             'dates' => $days->values(),
             'rows' => $rows,
@@ -135,22 +185,20 @@ class ReportsController extends Controller
 
     public function monthlyAttendanceCsv(Request $request): StreamedResponse
     {
-        $validated = $request->validate([
-            'year' => ['required', 'integer', 'min:2000', 'max:2100'],
-            'month' => ['required', 'integer', 'min:1', 'max:12'],
-        ]);
-
-        $start = now()->setDate($validated['year'], $validated['month'], 1)->startOfMonth()->toDateString();
-        $end = now()->setDate($validated['year'], $validated['month'], 1)->endOfMonth()->toDateString();
-
+        $filters = $this->validateAttendanceReportFilters($request);
         $payload = $this->monthlyAttendance(new Request([
-            'year' => $validated['year'],
-            'month' => $validated['month'],
+            'year' => $filters['year'] ?? null,
+            'month' => $filters['month'] ?? null,
+            'start_date' => $filters['mode'] === 'custom' ? $filters['start'] : null,
+            'end_date' => $filters['mode'] === 'custom' ? $filters['end'] : null,
+            'employee_code' => $filters['employee_code'],
         ]))->getData(true);
         $dates = $payload['dates'] ?? [];
         $rows = $payload['rows'] ?? [];
 
-        $filename = sprintf('attendance-monthly-%04d-%02d.csv', $validated['year'], $validated['month']);
+        $filename = $filters['mode'] === 'custom'
+            ? sprintf('attendance-%s-to-%s.csv', $filters['start'], $filters['end'])
+            : sprintf('attendance-monthly-%04d-%02d.csv', $filters['year'], $filters['month']);
 
         return response()->streamDownload(function () use ($rows, $dates) {
             $out = fopen('php://output', 'w');
