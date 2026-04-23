@@ -86,10 +86,29 @@
   </div>
 </div>
 
+<!-- Notification Modal -->
+<div class="modal-overlay" id="notificationModal">
+  <div class="modal employee-modal">
+    <div class="modal-hdr"><div class="modal-title">Manage Notification</div><button class="modal-close" onclick="window.closeModal('notificationModal')">Ã—</button></div>
+    <input type="hidden" id="ntf-reference-code" value="">
+    <div class="fg"><label class="fl">Title <span class="req-star">*</span></label><input type="text" class="fi" id="ntf-title" placeholder="Notification title..."></div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Audience</label>
+        <select class="fi" id="ntf-aud" onchange="window.toggleNotificationRecipients()"></select></div>
+      <div class="fg" id="ntf-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ntf-targets" multiple size="6"></select></div>
+    </div>
+    <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ntf-msg" rows="4" placeholder="Type your notification..."></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn" onclick="window.closeModal('notificationModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="window.submitNotification()">Save Notification</button>
+    </div>
+  </div>
+</div>
+
 <!-- Announcement Modal -->
 <div class="modal-overlay" id="announcementModal">
-  <div class="modal">
-    <div class="modal-hdr"><div class="modal-title">Post Announcement</div><button class="modal-close" onclick="window.closeModal('announcementModal')">×</button></div>
+  <div class="modal employee-modal">
+    <div class="modal-hdr"><div class="modal-title" id="announcement-modal-title">Post Announcement</div><button class="modal-close" onclick="window.closeModal('announcementModal')">×</button></div>
     <div class="fg"><label class="fl">Title <span class="req-star">*</span></label><input type="text" class="fi" id="ann-title" placeholder="Announcement title..."></div>
     <div class="g2">
       <div class="fg"><label class="fl">Category</label>
@@ -101,14 +120,14 @@
     <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="window.submitAnnouncement()"">Publish</button>
+      <button class="btn btn-primary" id="announcement-submit-btn" onclick="window.submitAnnouncement()">Publish</button>
     </div>
   </div>
 </div>
 
 <!-- Add Employee Modal -->
 <div class="modal-overlay" id="addEmpModal">
-  <div class="modal">
+  <div class="modal employee-modal">
     <div class="modal-hdr"><div class="modal-title">Add New Employee</div><button class="modal-close" onclick="window.closeModal('addEmpModal')">×</button></div>
     <div class="g2">
       <div class="fg"><label class="fl">First Name <span class="req-star">*</span></label><input type="text" class="fi" id="ne-fname" placeholder="First name"></div>
@@ -127,7 +146,7 @@
         <select class="fi" id="ne-dept"><option>Engineering</option><option>HR</option><option>Finance</option><option>Marketing</option><option>Product</option><option>Operations</option></select></div>
       <div class="fg"><label class="fl">Designation <span class="req-star">*</span></label><input type="text" class="fi" id="ne-desg" placeholder="Job title"></div>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:-4px;margin-bottom:10px;">Employee code is generated automatically from the selected team, for example <code>Eng-emp001</code> or <code>Dev-emp001</code>.</div>
+    <div class="modal-note" style="margin-top:-4px;margin-bottom:12px;">Employee code is generated automatically from the selected team, for example <code>Eng-emp001</code> or <code>Dev-emp001</code>.</div>
     <div class="fg"><label class="fl">User Role</label>
       <select class="fi" id="ne-role">
         <option value="employee">Employee</option>
@@ -185,7 +204,7 @@
       <div style="font-size:11px;color:var(--muted);margin-top:6px;">Search and select from all employees in the dropdown.</div>
     </div>
     <div class="fg"><label class="fl">Standard Shift</label><select class="fi" id="ne-shift"></select></div>
-    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin:12px 0;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <div class="employee-salary-grid" style="margin:14px 0;">
       <div class="fg"><label class="fl">Pay Period</label><input type="text" class="fi" id="ne-pay-period" placeholder="Monthly - Payroll"></div>
       <div class="fg"><label class="fl">Salary Start Date</label><input type="date" class="fi" id="ne-salary-start-date"></div>
       <div class="fg"><label class="fl">Basic Salary (PKR)</label><input type="number" class="fi" id="ne-basic" min="0"></div>
@@ -198,7 +217,7 @@
       <div class="fg"><label class="fl">Account No</label><input type="text" class="fi" id="ne-acct"></div>
       <div class="fg" style="grid-column:1 / -1;"><label class="fl">IBAN</label><input type="text" class="fi" id="ne-iban"></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('addEmpModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitAddEmployee()">Add Employee</button>
     </div>
@@ -507,3 +526,7 @@
     </div>
   </div>
 </div>
+
+
+
+

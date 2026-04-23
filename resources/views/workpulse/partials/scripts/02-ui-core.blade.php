@@ -101,6 +101,14 @@ function openModal(id){
   if(id === 'addEmpModal' && typeof syncEmployeeManagerOptions === 'function'){
     syncEmployeeManagerOptions('ne-manager', '');
   }
+  if(id === 'announcementModal'){
+    if(typeof syncAnnouncementAudienceOptions === 'function') syncAnnouncementAudienceOptions();
+    if(typeof syncAnnouncementRecipientOptions === 'function') syncAnnouncementRecipientOptions();
+  }
+  if(id === 'notificationModal'){
+    if(typeof syncNotificationAudienceOptions === 'function') syncNotificationAudienceOptions();
+    if(typeof syncNotificationRecipientOptions === 'function') syncNotificationRecipientOptions();
+  }
   normalizeMojibake(document.getElementById(id));
 }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
@@ -245,6 +253,7 @@ function doLogout(){
       ...(csrf ? {'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': csrf} : {})
     }
   }).finally(()=>{
+    resetBrowserNotificationPolling();
     DB.currentUser=null; DB.currentRole=null;
     document.getElementById('app').classList.remove('visible');
     document.getElementById('login-screen').style.display='flex';
@@ -306,6 +315,206 @@ function loadPunchState(empId){
 // ══════════════════════════════════════════════════
 //  INIT APP
 // ══════════════════════════════════════════════════
+let browserNotificationPollTimer = null;
+
+function browserNotificationsSupported(){
+  return typeof window !== 'undefined' && 'Notification' in window;
+}
+
+function getBrowserNotificationUserKey(){
+  const user = DB.currentUser || {};
+  return String(user.id || user.email || 'guest');
+}
+
+function getBrowserNotificationStorageKey(){
+  return `workpulse_browser_notifications_${getBrowserNotificationUserKey()}`;
+}
+
+function getBrowserNotificationPromptKey(){
+  return `workpulse_browser_notifications_prompted_${getBrowserNotificationUserKey()}`;
+}
+
+function syncBrowserNotificationPermission(){
+  const permission = browserNotificationsSupported() ? Notification.permission : 'unsupported';
+  if(DB.browserNotifications){
+    DB.browserNotifications.permission = permission;
+  }
+  return permission;
+}
+
+function hydrateBrowserNotificationState(){
+  if(!DB.browserNotifications){
+    DB.browserNotifications = {initialized:false, permission:'default', sentIds:[], promptRequested:false};
+  }
+
+  syncBrowserNotificationPermission();
+
+  try{
+    const raw = localStorage.getItem(getBrowserNotificationStorageKey());
+    const parsed = raw ? JSON.parse(raw) : {};
+    DB.browserNotifications.sentIds = Array.isArray(parsed.sentIds) ? parsed.sentIds.map(String).slice(-200) : [];
+    DB.browserNotifications.initialized = Boolean(parsed.initialized);
+  } catch(e){
+    DB.browserNotifications.sentIds = [];
+    DB.browserNotifications.initialized = false;
+  }
+
+  try{
+    DB.browserNotifications.promptRequested = localStorage.getItem(getBrowserNotificationPromptKey()) === '1';
+  } catch(e){
+    DB.browserNotifications.promptRequested = false;
+  }
+}
+
+function persistBrowserNotificationState(){
+  if(!DB.currentUser || !DB.browserNotifications) return;
+
+  try{
+    localStorage.setItem(getBrowserNotificationStorageKey(), JSON.stringify({
+      initialized: Boolean(DB.browserNotifications.initialized),
+      sentIds: Array.isArray(DB.browserNotifications.sentIds) ? DB.browserNotifications.sentIds.slice(-200) : [],
+    }));
+    if(DB.browserNotifications.promptRequested){
+      localStorage.setItem(getBrowserNotificationPromptKey(), '1');
+    }
+  } catch(e){}
+}
+
+function resetBrowserNotificationPolling(){
+  if(browserNotificationPollTimer){
+    clearInterval(browserNotificationPollTimer);
+    browserNotificationPollTimer = null;
+  }
+}
+
+function seedBrowserNotificationState(notifications){
+  if(!DB.browserNotifications) return;
+  DB.browserNotifications.sentIds = Array.isArray(notifications)
+    ? notifications.map(item => String(item.id)).filter(Boolean).slice(-200)
+    : [];
+  DB.browserNotifications.initialized = true;
+  persistBrowserNotificationState();
+}
+
+function openNotificationFromBrowser(){
+  try{ window.focus(); } catch(e){}
+  if(typeof openNotificationsPage === 'function'){
+    openNotificationsPage();
+  }
+}
+
+function showBrowserNotificationAlert(notification){
+  if(!browserNotificationsSupported() || Notification.permission !== 'granted') return;
+
+  const title = normalizeBrokenText(notification?.title || 'WorkPulse Notification');
+  const body = normalizeBrokenText(notification?.message || notification?.referenceCode || 'You have a new update.');
+
+  try{
+    const desktopNotification = new Notification(title, {
+      body,
+      tag: `workpulse-${notification?.id || Date.now()}`,
+      renotify: false,
+      silent: false,
+    });
+
+    desktopNotification.onclick = function(){
+      desktopNotification.close();
+      openNotificationFromBrowser();
+    };
+
+    setTimeout(() => desktopNotification.close(), 10000);
+  } catch(e){}
+}
+
+function handleBrowserNotifications(notifications, {seedOnly=false} = {}){
+  if(!DB.currentUser) return;
+
+  if(!DB.browserNotifications){
+    DB.browserNotifications = {initialized:false, permission:'default', sentIds:[], promptRequested:false};
+  }
+
+  const items = Array.isArray(notifications) ? notifications : [];
+  const trackedIds = new Set((DB.browserNotifications.sentIds || []).map(String));
+
+  if(seedOnly || !DB.browserNotifications.initialized){
+    seedBrowserNotificationState(items);
+    return;
+  }
+
+  items
+    .filter(item => item && item.id !== undefined && item.id !== null)
+    .forEach(item => {
+      const id = String(item.id);
+      if(!trackedIds.has(id) && !item.isRead){
+        showBrowserNotificationAlert(item);
+      }
+      trackedIds.add(id);
+    });
+
+  DB.browserNotifications.sentIds = Array.from(trackedIds).slice(-200);
+  persistBrowserNotificationState();
+}
+
+async function ensureBrowserNotificationPermission({prompt=false} = {}){
+  if(!browserNotificationsSupported()) return 'unsupported';
+
+  const currentPermission = syncBrowserNotificationPermission();
+  if(currentPermission !== 'default' || !prompt) return currentPermission;
+  if(DB.browserNotifications?.promptRequested) return currentPermission;
+
+  try{
+    DB.browserNotifications.promptRequested = true;
+    persistBrowserNotificationState();
+    const nextPermission = await Notification.requestPermission();
+    if(DB.browserNotifications){
+      DB.browserNotifications.permission = nextPermission;
+    }
+    persistBrowserNotificationState();
+    return nextPermission;
+  } catch(e){
+    return currentPermission;
+  }
+}
+
+async function pollBrowserNotifications(){
+  if(!DB.currentUser) return;
+
+  try{
+    const response = await fetch('/api/me/notifications', {
+      method: 'GET',
+      credentials: 'same-origin',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+    if(!response.ok) return;
+
+    const payload = await response.json().catch(() => null);
+    if(!payload?.ok) return;
+
+    DB.notifications = payload.notifications || [];
+    DB.notificationCount = payload.unreadCount || 0;
+    handleBrowserNotifications(DB.notifications);
+
+    if(typeof updateNotificationUI === 'function'){
+      updateNotificationUI();
+    }
+
+    if(window.__workpulseCurrentPage === 'notifications' || window.__workpulseCurrentPage === 'emp-notifications'){
+      showPage(window.__workpulseCurrentPage);
+    }
+  } catch(e){}
+}
+
+function startBrowserNotificationPolling(){
+  resetBrowserNotificationPolling();
+  if(!DB.currentUser) return;
+  browserNotificationPollTimer = setInterval(() => {
+    pollBrowserNotifications();
+  }, 30000);
+}
+
 function initApp(){
   const u = DB.currentUser;
   document.getElementById('sb-name').textContent = u.fname+' '+u.lname;
@@ -325,6 +534,10 @@ function initApp(){
 
   buildNav();
   updateNotificationUI();
+  hydrateBrowserNotificationState();
+  handleBrowserNotifications(DB.notifications, {seedOnly:true});
+  startBrowserNotificationPolling();
+  setTimeout(() => ensureBrowserNotificationPermission({prompt:true}), 1200);
   startClock();
   scheduleMidnightReset();
 
@@ -429,7 +642,7 @@ function buildTopbarActions(){
     el.innerHTML=`<button class="btn btn-sm" onclick="window.showPage('leave')">Review Leaves</button>
     <button class="btn btn-sm btn-ghost" onclick="window.showPage('reports')">Team Reports</button>`;
   } else {
-    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ Announce</button>
+    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
     <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
   }
 }

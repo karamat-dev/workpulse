@@ -11,6 +11,7 @@ use App\Http\Controllers\AnnouncementsController;
 use App\Http\Controllers\DepartmentsController;
 use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
+use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\ShiftsController;
 use App\Http\Controllers\TransferController;
 use Illuminate\Http\Request;
@@ -40,6 +41,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/me/notifications', [MeController::class, 'notifications']);
         Route::patch('/me/account', [MeController::class, 'updateAccount']);
         Route::patch('/me/notifications/read-all', [MeController::class, 'markNotificationsRead']);
+        Route::post('/notifications', [NotificationsController::class, 'store'])->middleware('perm:announcements.manage');
+        Route::patch('/notifications/{referenceCode}', [NotificationsController::class, 'update'])->middleware('perm:announcements.manage');
+        Route::delete('/notifications/{referenceCode}', [NotificationsController::class, 'destroy'])->middleware('perm:announcements.manage');
 
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');
@@ -56,6 +60,8 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::post('/announcements', [AnnouncementsController::class, 'store'])->middleware('perm:announcements.manage');
+        Route::patch('/announcements/{announcementId}', [AnnouncementsController::class, 'update'])->middleware('perm:announcements.manage');
+        Route::delete('/announcements/{announcementId}', [AnnouncementsController::class, 'destroy'])->middleware('perm:announcements.manage');
         Route::post('/holidays', [HolidaysController::class, 'store'])->middleware('perm:leave.manage');
         Route::delete('/holidays/{date}', [HolidaysController::class, 'destroy'])->middleware('perm:leave.manage');
 

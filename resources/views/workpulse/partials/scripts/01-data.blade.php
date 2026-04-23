@@ -115,6 +115,13 @@ const DB = {
 
   notifications: [],
   notificationCount: 0,
+  customNotifications: [],
+  browserNotifications: {
+    initialized: false,
+    permission: 'default',
+    sentIds: [],
+    promptRequested: false,
+  },
 
   // Punch state per user session
   punchState: {

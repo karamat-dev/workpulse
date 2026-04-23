@@ -51,6 +51,10 @@ async function wpReload(){
       DB.events = data.events || [];
       DB.notifications = data.notifications || [];
       DB.notificationCount = data.notificationCount || 0;
+      DB.customNotifications = data.customNotifications || [];
+      if(typeof handleBrowserNotifications === 'function'){
+        handleBrowserNotifications(DB.notifications);
+      }
     }
     if(typeof syncPunchStateFromBootstrap === 'function'){
       syncPunchStateFromBootstrap();
@@ -69,6 +73,8 @@ async function wpReload(){
     if(typeof syncNewEmployeeManagerOptions === 'function') syncNewEmployeeManagerOptions();
     syncAnnouncementAudienceOptions();
     syncAnnouncementRecipientOptions();
+    syncNotificationAudienceOptions();
+    syncNotificationRecipientOptions();
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
@@ -84,6 +90,9 @@ async function refreshEmployeeWorkspaceSnapshot(pageId){
     DB.events = data.events || [];
     DB.notifications = data.notifications || [];
     DB.notificationCount = data.notificationCount || 0;
+    if(typeof handleBrowserNotifications === 'function'){
+      handleBrowserNotifications(DB.notifications);
+    }
     if(window.__workpulseCurrentPage === pageId){
       if(typeof updateNotificationUI === 'function') updateNotificationUI();
       showPage(pageId);
@@ -285,6 +294,47 @@ function toggleAnnouncementRecipients(){
   if(wrap) wrap.style.display = audience === 'specific' ? 'block' : 'none';
 }
 
+function syncNotificationAudienceOptions(){
+  const select = document.getElementById('ntf-aud');
+  if(!select) return;
+
+  const currentValue = select.value || 'all';
+  const options = [
+    {value:'all', label:'All Employees'},
+    {value:'role:employee', label:'Employees Only'},
+    {value:'role:manager', label:'Managers Only'},
+    {value:'role:hr', label:'HR Only'},
+    {value:'role:admin', label:'Admins Only'},
+    ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Team: ${name}`})),
+    {value:'specific', label:'Specific Employees'},
+  ];
+
+  select.innerHTML = options.map(option => `<option value="${option.value}">${option.label}</option>`).join('');
+  select.value = options.some(option => option.value === currentValue) ? currentValue : 'all';
+  toggleNotificationRecipients();
+}
+
+function syncNotificationRecipientOptions(){
+  const select = document.getElementById('ntf-targets');
+  if(!select) return;
+
+  const selected = Array.from(select.selectedOptions || []).map(option => option.value);
+  select.innerHTML = (Array.isArray(DB.employees) ? DB.employees : [])
+    .map(employee => `<option value="${employee.id}">${employee.fname} ${employee.lname} (${employee.id})</option>`)
+    .join('');
+
+  selected.forEach(value => {
+    const option = Array.from(select.options).find(item => item.value === value);
+    if(option) option.selected = true;
+  });
+}
+
+function toggleNotificationRecipients(){
+  const audience = document.getElementById('ntf-aud')?.value || 'all';
+  const wrap = document.getElementById('ntf-recipient-wrap');
+  if(wrap) wrap.style.display = audience === 'specific' ? 'block' : 'none';
+}
+
 function getLeaveTypeCode(label){
   const normalized = String(label || '').toLowerCase();
   const dynamicMatch = getLeaveTypesList().find(type => String(type.name || '').toLowerCase() === normalized);
@@ -454,10 +504,27 @@ async function wpAutoCloseStaleAttendance(){
 
 function getTodayLocalDate(){
   const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth()+1).padStart(2,'0');
-  const day = String(now.getDate()).padStart(2,'0');
+  return formatLocalDateValue(now);
+}
+
+function formatLocalDateValue(date){
+  if(!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth()+1).padStart(2,'0');
+  const day = String(date.getDate()).padStart(2,'0');
   return `${year}-${month}-${day}`;
+}
+
+function getDateRangeValues(from, to){
+  if(!from || !to) return [];
+  const dates = [];
+  let cursor = new Date(from+'T00:00:00');
+  const end = new Date(to+'T00:00:00');
+  while(cursor <= end){
+    dates.push(formatLocalDateValue(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
 }
 
 function getShiftEndForDate(dateStr){
@@ -670,6 +737,7 @@ function submitLeave(){
   const to=document.getElementById('lv-to').value;
   const reason=document.getElementById('lv-reason').value;
   const handover=document.getElementById('lv-handover').value;
+  renderLeaveBreakdownRows();
   const dailyBreakdown = getLeaveDailyBreakdown();
   if(!from||!to||!reason){ showToast('Please fill all required fields','red'); return; }
   if(!dailyBreakdown.length){ showToast('Choose leave duration for each selected day','red'); return; }
@@ -687,11 +755,11 @@ function submitLeave(){
     .then(()=>wpReload())
     .then(()=>{
       const page = DB.currentRole==='employee' ? 'emp-leaves' : 'leave';
+      closeModal('leaveModal');
+      showToast('Leave request submitted!','green');
       if(document.getElementById('page-title').textContent===pageTitles[page]) showPage(page);
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  closeModal('leaveModal');
-  showToast('Leave request submitted!','green');
 }
 
 function formatLeaveDuration(leave){
@@ -728,15 +796,7 @@ function formatLeaveBalanceValue(value){
 function getLeaveDateRange(){
   const from = document.getElementById('lv-from')?.value;
   const to = document.getElementById('lv-to')?.value || from;
-  if(!from || !to) return [];
-  const dates = [];
-  let cursor = new Date(from+'T00:00:00');
-  const end = new Date(to+'T00:00:00');
-  while(cursor <= end){
-    dates.push(cursor.toISOString().split('T')[0]);
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return dates;
+  return getDateRangeValues(from, to);
 }
 
 function renderLeaveBreakdownRows(){
@@ -974,7 +1034,22 @@ async function submitRegulation(){
   }
 }
 
+window.__workpulseAnnouncementEditId = '';
+
+function resetAnnouncementForm(){
+  window.__workpulseAnnouncementEditId = '';
+  document.getElementById('ann-title').value='';
+  document.getElementById('ann-cat').value='General';
+  document.getElementById('ann-msg').value='';
+  document.getElementById('ann-aud').value='all';
+  document.getElementById('announcement-modal-title').textContent='Post Announcement';
+  document.getElementById('announcement-submit-btn').textContent='Publish';
+  Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => { option.selected = false; });
+  toggleAnnouncementRecipients();
+}
+
 function submitAnnouncement(){
+  const announcementId=window.__workpulseAnnouncementEditId || '';
   const title=document.getElementById('ann-title').value;
   const cat=document.getElementById('ann-cat').value;
   const audience=document.getElementById('ann-aud').value;
@@ -982,17 +1057,134 @@ function submitAnnouncement(){
   const recipientCodes = Array.from(document.getElementById('ann-targets')?.selectedOptions || []).map(option => option.value);
   if(!title||!msg){ showToast('Title and message required','red'); return; }
   if(audience==='specific' && !recipientCodes.length){ showToast('Select at least one employee','red'); return; }
-  wpApi('/api/announcements', {method:'POST', body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes})})
+  const path = announcementId ? `/api/announcements/${announcementId}` : '/api/announcements';
+  const method = announcementId ? 'PATCH' : 'POST';
+  const successMessage = announcementId ? 'Announcement updated!' : 'Announcement published!';
+  wpApi(path, {method, body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes})})
     .then(()=>wpReload())
+    .then(()=>{
+      resetAnnouncementForm();
+      closeModal('announcementModal');
+      showToast(successMessage,'green');
+      if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
+    })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  document.getElementById('ann-title').value='';
-  document.getElementById('ann-msg').value='';
-  document.getElementById('ann-aud').value='all';
-  Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => { option.selected = false; });
+}
+
+function openAnnouncementModal(announcementId=''){
+  syncAnnouncementAudienceOptions();
+  syncAnnouncementRecipientOptions();
+  resetAnnouncementForm();
+
+  if(announcementId){
+    const current = (Array.isArray(DB.announcements) ? DB.announcements : []).find(a => String(a.id) === String(announcementId));
+    if(current){
+      window.__workpulseAnnouncementEditId = current.id.replace('AN-','');
+      document.getElementById('ann-title').value = current.title || '';
+      document.getElementById('ann-cat').value = current.cat || 'General';
+      document.getElementById('ann-aud').value = current.audienceKey || 'all';
+      document.getElementById('ann-msg').value = current.msg || '';
+      document.getElementById('announcement-modal-title').textContent='Edit Announcement';
+      document.getElementById('announcement-submit-btn').textContent='Update';
+      Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => {
+        option.selected = Array.isArray(current.recipients) && current.recipients.some(recipient => recipient.employeeCode === option.value);
+      });
+    }
+  }
+
   toggleAnnouncementRecipients();
-  closeModal('announcementModal');
-  showToast('Announcement published!','green');
-  if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
+  openModal('announcementModal');
+}
+
+function deleteAnnouncement(announcementId){
+  const id = String(announcementId || '').replace('AN-','');
+  if(!id) return;
+  if(!confirm('Delete this announcement?')) return;
+
+  wpApi(`/api/announcements/${id}`, {method:'DELETE'})
+    .then(()=>wpReload())
+    .then(()=>{
+      showToast('Announcement deleted!','green');
+      if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function resetNotificationForm(){
+  document.getElementById('ntf-reference-code').value = '';
+  document.getElementById('ntf-title').value = '';
+  document.getElementById('ntf-msg').value = '';
+  document.getElementById('ntf-aud').value = 'all';
+  Array.from(document.getElementById('ntf-targets')?.options || []).forEach(option => { option.selected = false; });
+  toggleNotificationRecipients();
+}
+
+function openNotificationModal(referenceCode=''){
+  if(typeof syncNotificationAudienceOptions === 'function') syncNotificationAudienceOptions();
+  if(typeof syncNotificationRecipientOptions === 'function') syncNotificationRecipientOptions();
+  resetNotificationForm();
+
+  if(referenceCode){
+    const current = (Array.isArray(DB.customNotifications) ? DB.customNotifications : []).find(item => item.referenceCode === referenceCode);
+    if(current){
+      document.getElementById('ntf-reference-code').value = current.referenceCode || '';
+      document.getElementById('ntf-title').value = current.title || '';
+      document.getElementById('ntf-msg').value = current.message || '';
+      document.getElementById('ntf-aud').value = current.audience || 'all';
+      Array.from(document.getElementById('ntf-targets')?.options || []).forEach(option => {
+        option.selected = (current.recipientEmployeeCodes || []).includes(option.value);
+      });
+      toggleNotificationRecipients();
+    }
+  }
+
+  openModal('notificationModal');
+}
+
+function submitNotification(){
+  const referenceCode = document.getElementById('ntf-reference-code').value.trim();
+  const title = document.getElementById('ntf-title').value.trim();
+  const audience = document.getElementById('ntf-aud').value;
+  const msg = document.getElementById('ntf-msg').value.trim();
+  const recipientCodes = Array.from(document.getElementById('ntf-targets')?.selectedOptions || []).map(option => option.value);
+
+  if(!title || !msg){ showToast('Title and message required','red'); return; }
+  if(audience === 'specific' && !recipientCodes.length){ showToast('Select at least one employee','red'); return; }
+
+  const path = referenceCode ? `/api/notifications/${referenceCode}` : '/api/notifications';
+  const method = referenceCode ? 'PATCH' : 'POST';
+  const successMessage = referenceCode ? 'Notification updated!' : 'Notification sent!';
+
+  wpApi(path, {
+    method,
+    body: JSON.stringify({
+      title,
+      audience: audience || 'all',
+      message: msg,
+      recipient_employee_codes: recipientCodes,
+    })
+  })
+    .then(() => wpReload())
+    .then(() => {
+      resetNotificationForm();
+      closeModal('notificationModal');
+      showToast(successMessage,'green');
+      if(window.__workpulseCurrentPage === 'notifications') showPage('notifications');
+    })
+    .catch(e => showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function deleteNotification(referenceCode){
+  if(!referenceCode) return;
+  if(!confirm('Delete this notification for all recipients?')) return;
+
+  wpApi(`/api/notifications/${referenceCode}`, {method:'DELETE'})
+    .then(() => wpReload())
+    .then(() => {
+      showToast('Notification deleted','green');
+      if(window.__workpulseCurrentPage === 'notifications') showPage('notifications');
+    })
+    .catch(e => showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function submitAddEmployee(){
@@ -1139,10 +1331,12 @@ function approveLeave(decision){
   if(!lv) return;
   wpApi('/api/leave/'+encodeURIComponent(lv.id)+'/review', {method:'PATCH', body: JSON.stringify({step: ((DB.currentRole==='hr'||DB.currentRole==='admin')?'hr':'manager'), status: decision, notes: ''})})
     .then(()=>wpReload())
-    .then(()=>{ if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave'); })
+    .then(()=>{
+      if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+      closeModal('approvalModal');
+      showToast(`Leave ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
+    })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  closeModal('approvalModal');
-  showToast(`Leave ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
 }
 
 async function markAllNotificationsRead(){
@@ -1151,6 +1345,19 @@ async function markAllNotificationsRead(){
   if(window.__workpulseCurrentPage === 'emp-notifications' || window.__workpulseCurrentPage === 'notifications'){
     showPage(window.__workpulseCurrentPage);
   }
+}
+
+function formatNotificationAudienceLabel(audience){
+  if(!audience || audience === 'all') return 'All Employees';
+  if(audience === 'specific') return 'Specific Employees';
+  if(String(audience).startsWith('role:')){
+    const role = String(audience).slice(5);
+    return role.charAt(0).toUpperCase() + role.slice(1);
+  }
+  if(String(audience).startsWith('department:')){
+    return `Team: ${String(audience).slice(11)}`;
+  }
+  return audience;
 }
 
 function deleteEmployee(id){
@@ -1315,9 +1522,13 @@ function pageAdminDashboard(){
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Team Attendance</div></div>
-      ${DB.departments.map(d=>{const pct=d.count?Math.round(d.present/d.count*100):0;return`
+      ${DB.departments.map(d=>{
+        const totalEmployees = Number(d.count || 0);
+        const markedAttendance = Number(d.present || 0);
+        const pct = totalEmployees ? Math.round((markedAttendance / totalEmployees) * 100) : 0;
+        return`
       <div style="padding:7px 0;border-bottom:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${pct}%</strong></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${markedAttendance}/${totalEmployees}</strong></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${d.color};"></div></div>
       </div>`}).join('')}
     </div>
@@ -2735,7 +2946,10 @@ function pageAnnouncements(empView=false){
     <div class="ann" style="border-left-color:${a.cat==='Event'?'var(--purple)':a.cat==='Policy'?'var(--green)':a.cat==='Important'?'var(--red)':'var(--accent)'};">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;">
         <div class="ann-title">${a.title}</div>
-        <span class="badge bg-blue" style="flex-shrink:0;margin-left:8px;">${a.cat}</span>
+        <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:8px;">
+          <span class="badge bg-blue">${a.cat}</span>
+          ${!empView && DB.currentRole === 'admin' ? `<button class="btn btn-sm" onclick="window.openAnnouncementModal('${a.id}')">Edit</button><button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteAnnouncement('${a.id}')">Delete</button>` : ''}
+        </div>
       </div>
       <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
       ${Array.isArray(a.recipients) && a.recipients.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${a.recipients.map(recipient => `<span class="badge bg-blue">${recipient.name}</span>`).join('')}</div>` : ''}
@@ -2743,7 +2957,7 @@ function pageAnnouncements(empView=false){
     </div>`).join('');
 
   return `
-  ${!empView?`<div style="display:flex;justify-content:flex-end;margin-bottom:14px;"><button class="btn btn-sm btn-primary" onclick="window.openModal('announcementModal')">+ New Announcement</button></div>`:''}
+  ${!empView?`<div style="display:flex;justify-content:flex-end;margin-bottom:14px;"><button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ New Announcement</button></div>`:''}
   ${items||'<div class="card"><p style="color:var(--muted);">No announcements yet.</p></div>'}`;
 }
 
@@ -2994,16 +3208,30 @@ function pageEmpAttendance(){
   const punchDisplay = getTodayPunchDisplay();
   const workedBreakdown = getTodayWorkedBreakdown();
   const shiftCompleted = isShiftCompletedForDate(today);
+  const liveClock = new Date().toLocaleTimeString('en-GB');
+  const liveDate = new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
 
   const statusBadgeHtml=ps.punchedIn?(ps.onBreak?`<span class="badge bg-amber">On Break</span>`:`<span class="badge bg-green">In Office</span>`):(shiftCompleted?`<span class="badge bg-gray">Completed</span>`:`<span class="badge bg-gray">Not Clocked In</span>`);
+
+  let employeePunchButtons = '';
+  if(!ps.punchedIn && !shiftCompleted){
+    employeePunchButtons = `<button class="punch-btn pb-in" onclick="punchIn()">Clock In</button>`;
+  } else if(ps.punchedIn){
+    employeePunchButtons = `<button class="punch-btn pb-out" onclick="punchOut()">Clock Out</button>
+      ${ps.onBreak
+        ? `<button class="punch-btn pb-break-in" onclick="breakIn()">Break Out</button>`
+        : `<button class="punch-btn pb-break" onclick="breakOut()">Break In</button>`}`;
+  } else {
+    employeePunchButtons = `<button class="punch-btn punch-btn-muted" disabled>Shift Completed</button>`;
+  }
 
   const logRows=DB.attendance.filter(a=>a.empId===u.id).map(a=>`
     <tr><td>${formatDate(a.date)}</td>
     <td>${new Date(a.date+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</td>
     <td>${a.in||'-'}</td><td>${a.breakOut||'-'}</td><td>${a.breakIn||'-'}</td><td>${a.out||'-'}</td>
-    <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'â€”'}</td>
+    <td>${calcWorkHours(a)}</td><td>${a.overtime?'+'+a.overtime+'m':'-'}</td>
     <td>${statusBadge(a.late?'Late':a.status)}</td>
-    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'â€”'}</td>
+    <td>${(a.status==='Present'&&!a.out&&!a.in)?`<button class="btn btn-sm" onclick="window.openRegulationModal()">Regulate</button>`:'-'}</td>
     </tr>`).join('');
 
   const regRows=DB.regulations.filter(r=>r.empId===u.id).map(r=>`
@@ -3011,30 +3239,51 @@ function pageEmpAttendance(){
 
   return `
   ${renderEmployeeWorkspaceTabs('emp-attendance')}
-  <div class="g2" style="margin-bottom:18px;">
-    <div class="clock-widget">
-      <div class="cw-time" id="cw-time-display">${new Date().toLocaleTimeString('en-GB')}</div>
-      <div class="cw-date">${new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
-      <div class="cw-status">${statusBadgeHtml}</div>
-      <div class="cw-meta">
-        <span class="cw-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
-        <span class="cw-chip">Worked ${getLiveWorkedTimeLabel()}</span>
+  <div class="admin-att-shell" style="margin-bottom:18px;">
+    <div class="admin-att-hero">
+      <div class="admin-att-hero-panel">
+        <div class="admin-att-eyebrow">My Attendance</div>
+        <div class="admin-att-time" id="cw-time-display">${liveClock}</div>
+        <div class="admin-att-date">${liveDate}</div>
+        <div class="admin-att-status">${statusBadgeHtml}</div>
+        <div class="admin-att-meta">
+          <span class="admin-att-chip">Shift ${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span>
+          <span class="admin-att-chip">Worked ${getLiveWorkedTimeLabel()}</span>
+        </div>
+        <div class="admin-att-actions">
+          ${employeePunchButtons}
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.58);">Policy: ${getCurrentShiftPolicy()}</div>
       </div>
-      ${!ps.punchedIn&&!shiftCompleted
-        ?`<button class="punch-btn pb-in" onclick="punchIn()">â–¶ Clock In</button>`
-        :ps.punchedIn
-          ?`<button class="punch-btn pb-out" onclick="punchOut()">â–  Clock Out</button>
-            ${ps.onBreak?`<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">â†© Break Out</button>`:`<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">â˜• Break In</button>`}`
-          :`<button class="punch-btn" style="background:var(--surface2);color:var(--muted);" disabled>âœ“ Shift Completed</button>`}
-      <div style="margin-top:10px;font-size:11px;color:rgba(255,255,255,.35);">Policy: ${getCurrentShiftPolicy()}</div>
     </div>
-    <div class="card">
-      <div class="card-title" style="margin-bottom:13px;">Today's Summary</div>
-      <div class="irow"><span class="ikey">Clock In</span><span class="ival">${punchDisplay.clockIn || 'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Clock Out</span><span class="ival">${ps.punchedIn ? 'â€”' : (punchDisplay.clockOut || 'â€”')}</span></div>
-      <div class="irow"><span class="ikey">Break Duration</span><span class="ival">${todayRec.breakOut&&todayRec.breakIn?'30 min':'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Working Hours Today</span><span class="ival" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</span></div>
-      <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
+    <div class="admin-att-summary card">
+      <div class="card-hdr" style="margin-bottom:10px;">
+        <div class="card-title">Today's Summary</div>
+        <span class="badge bg-blue">Employee View</span>
+      </div>
+      <div class="admin-att-summary-grid">
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Clock In</span>
+          <strong class="admin-att-stat-value">${punchDisplay.clockIn || '-'}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Clock Out</span>
+          <strong class="admin-att-stat-value">${ps.punchedIn ? '-' : (punchDisplay.clockOut || '-')}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Break Time</span>
+          <strong class="admin-att-stat-value">${todayRec.breakOut&&todayRec.breakIn?'30 min':'-'}</strong>
+        </div>
+        <div class="admin-att-stat">
+          <span class="admin-att-stat-label">Working Hours Today</span>
+          <strong class="admin-att-stat-value" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</strong>
+        </div>
+      </div>
+      <div class="admin-att-details">
+        <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
+        <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
+        <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span></div>
+      </div>
     </div>
   </div>
   ${buildTabs('ema',[
@@ -3052,7 +3301,6 @@ function pageEmpAttendance(){
     </div>`},
   ],'log')}`;
 }
-
 function pageEmpLeaves(){
   const u=DB.currentUser;
   const myLeaves=DB.leaves.filter(l=>l.empId===u.id);
@@ -3093,6 +3341,7 @@ function pageEmpLeaves(){
 
 function pageNotifications(employeeView=false){
   const notifications = Array.isArray(DB.notifications) ? DB.notifications : [];
+  const customNotifications = Array.isArray(DB.customNotifications) ? DB.customNotifications : [];
   const unreadCount = Number(DB.notificationCount || 0);
   const refreshPage = employeeView ? 'emp-notifications' : 'notifications';
   const heroSub = employeeView
@@ -3109,6 +3358,7 @@ function pageNotifications(employeeView=false){
       regulation_review: 'Attendance',
       regulation_request_submitted: 'Request',
       leave_request_submitted: 'Request',
+      admin_custom_notification: 'Admin',
     };
     const badge = badgeMap[notification.type] || 'Update';
     const message = notification.message || 'You have a new update.';
@@ -3126,6 +3376,33 @@ function pageNotifications(employeeView=false){
     </div>`;
   }).join('');
 
+  const managementPanel = !employeeView && DB.currentRole === 'admin' ? `
+  <div class="card" style="margin-bottom:14px;">
+    <div class="card-hdr">
+      <div class="card-title">Admin Notification Manager</div>
+      <button class="btn btn-sm btn-primary" onclick="window.openNotificationModal()">+ New Notification</button>
+    </div>
+    <div class="notif-list">
+      ${customNotifications.map(notification => `
+        <div class="notif-card">
+          <div class="notif-card-head">
+            <div>
+              <div class="notif-card-title">${notification.title || 'Notification'}</div>
+              <div class="notif-card-meta">Audience: ${formatNotificationAudienceLabel(notification.audience)} • Recipients: ${notification.recipientCount || 0} • ${formatDateTime(notification.updatedAt || notification.createdAt)}</div>
+            </div>
+            <span class="badge bg-teal">${notification.referenceCode}</span>
+          </div>
+          <div class="notif-card-body">${notification.message || ''}</div>
+          <div class="notif-card-ref">Created by ${notification.authorName || 'Admin'}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+            <button class="btn btn-sm" onclick="window.openNotificationModal('${notification.referenceCode}')">Edit</button>
+            <button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteNotification('${notification.referenceCode}')">Delete</button>
+          </div>
+        </div>
+      `).join('') || `<div class="notif-empty">No custom notifications sent yet. Use New Notification to push a message from admin.</div>`}
+    </div>
+  </div>` : '';
+
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
     <div class="hero-title">Notifications</div>
@@ -3135,6 +3412,7 @@ function pageNotifications(employeeView=false){
       <div class="hero-chip"><div class="k">Total</div><div class="v">${notifications.length}</div></div>
     </div>
   </div>
+  ${managementPanel}
   <div class="card">
     <div class="card-hdr">
       <div class="card-title">Recent Updates</div>

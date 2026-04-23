@@ -80,6 +80,7 @@
                         DB.events = data.events || [];
                         DB.notifications = data.notifications || [];
                         DB.notificationCount = data.notificationCount || 0;
+                        DB.customNotifications = data.customNotifications || [];
                     }
 
                     // Load full persisted profile for employee self-profile views

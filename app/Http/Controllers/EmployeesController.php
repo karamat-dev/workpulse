@@ -50,7 +50,7 @@ class EmployeesController extends Controller
             'manager' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])], // default employee
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
-            'cnic_document' => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
@@ -139,7 +139,9 @@ class EmployeesController extends Controller
                 ]);
             }
 
-            $cnicDocumentMeta = $this->storeEmployeeDocument($cnicDocument, $employeeCode, $userId);
+            $cnicDocumentMeta = $cnicDocument
+                ? $this->storeEmployeeDocument($cnicDocument, $employeeCode, $userId)
+                : ['path' => null, 'name' => null];
 
             DB::table('employee_profiles')->updateOrInsert(
                 ['user_id' => $userId],
@@ -562,6 +564,10 @@ class EmployeesController extends Controller
 
     private function storeEmployeeDocument($file, string $employeeCode, int $userId): array
     {
+        if (!$file) {
+            return ['path' => null, 'name' => null];
+        }
+
         $directory = public_path('uploads/employee-documents');
         if (!File::exists($directory)) {
             File::makeDirectory($directory, 0755, true);

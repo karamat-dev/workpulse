@@ -788,6 +788,9 @@ class WorkpulseBootstrapController extends Controller
             ->values();
 
         $notificationCount = $notifications->where('isRead', false)->count();
+        $customNotifications = $user->role === 'admin'
+            ? NotificationsController::groupedCustomNotifications()
+            : collect();
 
         $company = DB::table('company_settings')->where('id', 1)->first();
 
@@ -810,6 +813,7 @@ class WorkpulseBootstrapController extends Controller
             'events' => $events,
             'notifications' => $notifications,
             'notificationCount' => $notificationCount,
+            'customNotifications' => $customNotifications,
             'company' => $company,
         ]);
     }

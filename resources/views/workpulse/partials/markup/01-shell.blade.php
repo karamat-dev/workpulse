@@ -29,10 +29,9 @@
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
-    <div class="sb-logo">
-      <h1>Work<span>Pulse</span></h1>
-      <p id="sb-version">Attendance Management System</p>
-    </div>
+  <div class="sb-logo">
+  <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo" style="height:100px;">
+</div>
     <div class="sb-user">
       <div class="av av-32" id="sb-avatar" style="background:var(--accent);color:#fff;">AK</div>
       <div class="sb-user-info">
