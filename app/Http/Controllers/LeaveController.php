@@ -802,22 +802,12 @@ class LeaveController extends Controller
             'updated_at' => now(),
         ]);
 
-        // Workflow: manager then HR (stored as steps).
         DB::table('leave_approvals')->insert([
-            [
-                'leave_request_id' => $leaveRequestId,
-                'step' => 'manager',
-                'reviewer_user_id' => null,
-                'status' => 'Pending',
-                'reviewed_at' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
             [
                 'leave_request_id' => $leaveRequestId,
                 'step' => 'hr',
                 'reviewer_user_id' => null,
-                'status' => 'Waiting',
+                'status' => 'Pending',
                 'reviewed_at' => null,
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -857,18 +847,11 @@ class LeaveController extends Controller
 
     public function pendingForReview(Request $request): JsonResponse
     {
-        // Managers: approvals step=manager status=Pending for their reports
-        // HR: approvals step=hr status=Pending or Waiting for any request after manager approval
-
         $user = $request->user();
 
         $query = DB::table('leave_requests')
             ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
             ->join('users', 'users.id', '=', 'leave_requests.user_id')
-            ->join('leave_approvals as mgr', function ($join) {
-                $join->on('mgr.leave_request_id', '=', 'leave_requests.id')
-                    ->where('mgr.step', '=', 'manager');
-            })
             ->join('leave_approvals as hr', function ($join) {
                 $join->on('hr.leave_request_id', '=', 'leave_requests.id')
                     ->where('hr.step', '=', 'hr');
@@ -884,19 +867,11 @@ class LeaveController extends Controller
                 'leave_requests.duration_type',
                 'leave_requests.half_day_slot',
                 'leave_requests.days',
-                'mgr.status as manager_status',
                 'hr.status as hr_status',
             ]);
 
         if ($user->hasPermission('leave.approve_hr')) {
-            // HR sees requests where manager approved and HR not finalized
-            $query->where('mgr.status', 'Approved')
-                ->whereIn('hr.status', ['Pending', 'Waiting']);
-        } elseif ($user->hasPermission('leave.approve_manager')) {
-            // Manager sees their team requests
-            $reportIds = DB::table('reporting_lines')->where('manager_user_id', $user->id)->pluck('user_id');
-            $query->whereIn('leave_requests.user_id', $reportIds)
-                ->where('mgr.status', 'Pending');
+            $query->where('hr.status', 'Pending');
         } else {
             return response()->json(['ok' => true, 'requests' => []]);
         }
@@ -909,34 +884,19 @@ class LeaveController extends Controller
     public function review(Request $request, string $code): JsonResponse
     {
         $validated = $request->validate([
-            'step' => ['required', Rule::in(['manager', 'hr'])],
             'status' => ['required', Rule::in(['Approved', 'Rejected'])],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $user = $request->user();
 
-        if ($validated['step'] === 'manager' && !$user->hasPermission('leave.approve_manager')) {
-            abort(403);
-        }
-        if ($validated['step'] === 'hr' && !$user->hasPermission('leave.approve_hr')) {
+        if (!$user->hasPermission('leave.approve_hr')) {
             abort(403);
         }
 
         $leaveRequest = DB::table('leave_requests')->where('code', $code)->first();
         if (!$leaveRequest) {
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
-        }
-
-        if ($validated['step'] === 'manager') {
-            $canReview = DB::table('reporting_lines')
-                ->where('user_id', $leaveRequest->user_id)
-                ->where('manager_user_id', $user->id)
-                ->exists();
-
-            if (!$canReview) {
-                abort(403);
-            }
         }
 
         DB::transaction(function () use ($validated, $user, $leaveRequest) {
@@ -959,7 +919,7 @@ class LeaveController extends Controller
 
             DB::table('leave_approvals')
                 ->where('leave_request_id', $leaveRequest->id)
-                ->where('step', $validated['step'])
+                ->where('step', 'hr')
                 ->update([
                     'status' => $validated['status'],
                     'notes' => $validated['notes'] ?? null,
@@ -968,33 +928,11 @@ class LeaveController extends Controller
                     'updated_at' => now(),
                 ]);
 
-            if ($validated['step'] === 'manager') {
-                // If manager approved, move HR step from Waiting -> Pending
-                if ($validated['status'] === 'Approved') {
-                    DB::table('leave_approvals')
-                        ->where('leave_request_id', $leaveRequest->id)
-                        ->where('step', 'hr')
-                        ->where('status', 'Waiting')
-                        ->update([
-                            'status' => 'Pending',
-                            'updated_at' => now(),
-                        ]);
-                } else {
-                    $finalStatus = 'Rejected';
-                    DB::table('leave_requests')->where('id', $leaveRequest->id)->update([
-                        'status' => 'Rejected',
-                        'updated_at' => now(),
-                    ]);
-                }
-            }
-
-            if ($validated['step'] === 'hr') {
-                $finalStatus = $validated['status'] === 'Approved' ? 'Approved' : 'Rejected';
-                DB::table('leave_requests')->where('id', $leaveRequest->id)->update([
-                    'status' => $finalStatus,
-                    'updated_at' => now(),
-                ]);
-            }
+            $finalStatus = $validated['status'] === 'Approved' ? 'Approved' : 'Rejected';
+            DB::table('leave_requests')->where('id', $leaveRequest->id)->update([
+                'status' => $finalStatus,
+                'updated_at' => now(),
+            ]);
 
             if (!$wasApproved && $finalStatus === 'Approved') {
                 $year = (int) date('Y', strtotime((string) $requestRow->from_date));
@@ -1024,11 +962,7 @@ class LeaveController extends Controller
                 );
             }
 
-            $title = match ($validated['step']) {
-                'manager' => $validated['status'] === 'Approved' ? 'Leave Request Reviewed by Manager' : 'Leave Request Rejected by Manager',
-                'hr' => $validated['status'] === 'Approved' ? 'Leave Request Approved' : 'Leave Request Rejected',
-                default => 'Leave Request Updated',
-            };
+            $title = $validated['status'] === 'Approved' ? 'Leave Request Approved' : 'Leave Request Rejected';
 
             $message = sprintf(
                 'Your %s request from %s to %s (%s) is now %s.',
@@ -1043,20 +977,6 @@ class LeaveController extends Controller
                 strtolower($finalStatus)
             );
 
-            if ($validated['step'] === 'manager' && $validated['status'] === 'Approved') {
-                $message = sprintf(
-                    'Your %s request from %s to %s (%s) was approved by your manager and sent to HR for final review.',
-                    $requestRow->leave_type_name ?? 'leave',
-                    (string) $requestRow->from_date,
-                    (string) $requestRow->to_date,
-                    $this->formatLeaveDurationLabel(
-                        (float) $requestRow->days,
-                        (string) ($requestRow->duration_type ?? 'full_day'),
-                        $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
-                    )
-                );
-            }
-
             $this->createEmployeeNotification(
                 (int) $requestRow->user_id,
                 'leave_review',
@@ -1065,7 +985,7 @@ class LeaveController extends Controller
                 'leave_request',
                 (string) $requestRow->code,
                 [
-                    'step' => $validated['step'],
+                    'step' => 'hr',
                     'decision' => $validated['status'],
                     'final_status' => $finalStatus,
                     'reviewer_id' => $user->id,

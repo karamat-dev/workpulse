@@ -476,4 +476,57 @@ class LeaveAttendanceSyncTest extends TestCase
             'status' => 'Leave',
         ]);
     }
+
+    public function test_leave_request_creates_only_hr_approval_step(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-909',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        $leaveTypeId = DB::table('leave_types')->insertGetId([
+            'name' => 'Annual Leave',
+            'code' => 'annual',
+            'paid' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_policies')->insert([
+            'year' => (int) now()->format('Y'),
+            'leave_type_id' => $leaveTypeId,
+            'quota_days' => 10,
+            'carry_forward_days' => 0,
+            'pro_rata' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'annual',
+                'from_date' => now()->addDays(5)->toDateString(),
+                'to_date' => now()->addDays(5)->toDateString(),
+                'reason' => 'One day leave',
+            ]);
+
+        $response->assertCreated()->assertJson(['ok' => true]);
+
+        $leaveRequestId = DB::table('leave_requests')->where('user_id', $employee->id)->value('id');
+
+        $this->assertDatabaseHas('leave_approvals', [
+            'leave_request_id' => $leaveRequestId,
+            'step' => 'hr',
+            'status' => 'Pending',
+        ]);
+
+        $this->assertDatabaseMissing('leave_approvals', [
+            'leave_request_id' => $leaveRequestId,
+            'step' => 'manager',
+        ]);
+    }
 }

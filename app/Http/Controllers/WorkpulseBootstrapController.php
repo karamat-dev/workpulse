@@ -485,10 +485,6 @@ class WorkpulseBootstrapController extends Controller
         $leaves = DB::table('leave_requests')
             ->join('users', 'users.id', '=', 'leave_requests.user_id')
             ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
-            ->leftJoin('leave_approvals as mgr', function ($join) {
-                $join->on('mgr.leave_request_id', '=', 'leave_requests.id')
-                    ->where('mgr.step', '=', 'manager');
-            })
             ->leftJoin('leave_approvals as hr', function ($join) {
                 $join->on('hr.leave_request_id', '=', 'leave_requests.id')
                     ->where('hr.step', '=', 'hr');
@@ -510,7 +506,6 @@ class WorkpulseBootstrapController extends Controller
                 'leave_requests.reason',
                 'leave_requests.handover_to as handover',
                 'leave_requests.created_at as applied_at',
-                'mgr.status as manager_status',
                 'hr.status as hr_status',
                 'leave_requests.status',
             ])
@@ -532,7 +527,7 @@ class WorkpulseBootstrapController extends Controller
                 'reason' => $leave->reason,
                 'handover' => $leave->handover,
                 'applied' => optional($leave->applied_at)->toDateString() ?? null,
-                'managerStatus' => $leave->manager_status ?? '-',
+                'managerStatus' => '-',
                 'hrStatus' => $leave->hr_status ?? '-',
                 'status' => $leave->status,
             ])

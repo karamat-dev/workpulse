@@ -1331,7 +1331,7 @@ function openApproval(leaveId){
 function approveLeave(decision){
   const lv=DB.leaves.find(l=>l.id===currentApprovalId);
   if(!lv) return;
-  wpApi('/api/leave/'+encodeURIComponent(lv.id)+'/review', {method:'PATCH', body: JSON.stringify({step: ((DB.currentRole==='hr'||DB.currentRole==='admin')?'hr':'manager'), status: decision, notes: ''})})
+  wpApi('/api/leave/'+encodeURIComponent(lv.id)+'/review', {method:'PATCH', body: JSON.stringify({status: decision, notes: ''})})
     .then(()=>wpReload())
     .then(()=>{
       if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
@@ -1885,7 +1885,7 @@ function pageLeave(){
       <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${l.empName.split(' ').map(x=>x[0]).join('')}</div>
       <div class="ucell-info"><div class="n">${l.empName}</div><div class="s">${l.dept}</div></div></div></td>
       <td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td><td>${l.reason}</td>
-      <td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td>
+      <td>${statusBadge(l.hrStatus)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm bg-green" onclick="openApproval('${l.id}')">Review</button>
       </div></td>
@@ -1894,8 +1894,7 @@ function pageLeave(){
   const allRows=all.map(l=>`
     <tr>
       <td>${l.empName}</td><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td>
-      <td>${formatLeaveDuration(l)}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td>
-      <td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
+      <td>${formatLeaveDuration(l)}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
     </tr>`).join('');
 
   const onLeaveTodayHTML = `
@@ -1968,7 +1967,7 @@ function pageLeave(){
         <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">Janâ€“Dec (Annual)</span></div>
         <div class="irow"><span class="ikey">Pro-Rata Calculation</span><span class="ival"><span class="badge ${leavePolicies.some(policy => policy.pro_rata) ? 'bg-green' : 'bg-red'}">${leavePolicies.some(policy => policy.pro_rata) ? 'Enabled' : 'Disabled'}</span></span></div>
         <div class="irow"><span class="ikey">Carry Forward</span><span class="ival">Configured per leave type</span></div>
-        <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee â†’ Manager â†’ HR</span></div>
+        <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee -> HR</span></div>
       </div>
     </div>`;
 
@@ -1985,13 +1984,13 @@ function pageLeave(){
   return buildTabs('lv',[
     {id:'all',label:'All Requests',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>HR</th><th>Status</th></tr></thead>
       <tbody>${allRows}</tbody></table></div></div>`},
     {id:'today',label:`On Leave Today (${onLeaveToday.length})`,content:onLeaveTodayHTML},
     {id:'pending',label:`Pending Approvals (${pending.length})`,content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
-      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>Manager</th><th>HR</th><th>Action</th></tr></thead>
-      <tbody>${pendingRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
+      <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>HR</th><th>Action</th></tr></thead>
+      <tbody>${pendingRows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
     {id:'balance',label:'Leave Balances',content:balanceHTML},
     {id:'types',label:'Leave Types',content:`
       <div class="card">
@@ -2877,7 +2876,7 @@ function pageReports(){
         </div>
         <div class="panel-card" style="margin:0;">
           <div class="panel-head"><div class="panel-title">Policy Notes</div><span class="badge bg-blue">HR</span></div>
-          <div class="irow"><span class="ikey">Workflow</span><span class="ival">Employee -> Manager -> HR</span></div>
+          <div class="irow"><span class="ikey">Workflow</span><span class="ival">Employee ???????? HR</span></div>
           <div class="irow"><span class="ikey">Carry Forward</span><span class="ival">Up to 5 days</span></div>
           <div class="irow"><span class="ikey">Policy Year</span><span class="ival">Jan - Dec</span></div>
           <div class="irow"><span class="ikey">Live Approved Leaves</span><span class="ival">${approvedLeave}</span></div>
@@ -3583,7 +3582,7 @@ function pageEmpLeaves(){
     : [['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']];
   const rows=myLeaves.map(l=>`
     <tr><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td>
-    <td>${formatDate(l.applied)}</td><td>${statusBadge(l.managerStatus)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
+    <td>${formatDate(l.applied)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
 
   return `
   <div class="g2" style="margin-bottom:14px;">
@@ -3600,15 +3599,15 @@ function pageEmpLeaves(){
       <div class="card-title" style="margin-bottom:12px;">Approval Workflow</div>
       <div class="tl">
         <div class="tl-item"><div class="tl-dot" style="background:var(--accent);"></div><div class="tl-line"></div><div><div style="font-weight:500;font-size:13px;">You apply</div><div style="font-size:11px;color:var(--muted);">Submit via portal with reason</div></div></div>
-        <div class="tl-item"><div class="tl-dot" style="background:var(--amber);"></div><div class="tl-line"></div><div><div style="font-weight:500;font-size:13px;">Line Manager reviews</div><div style="font-size:11px;color:var(--muted);">Approve/reject within 24h</div></div></div>
-        <div class="tl-item"><div class="tl-dot" style="background:var(--green);"></div><div><div style="font-weight:500;font-size:13px;">HR final approval</div><div style="font-size:11px;color:var(--muted);">Balance checked, auto-syncs to attendance</div></div></div>
+        <div class="tl-item"><div class="tl-dot" style="background:var(--green);"></div><div><div style="font-weight:500;font-size:13px;">HR reviews</div><div style="font-size:11px;color:var(--muted);">Approve or reject after balance check</div></div></div>
+        
       </div>
     </div>
   </div>
   <div class="card">
     <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>Manager</th><th>HR</th><th>Status</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>HR</th><th>Status</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
   </div>`;
 }
 
@@ -4133,3 +4132,5 @@ function pageRealtimeLive(){
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+
