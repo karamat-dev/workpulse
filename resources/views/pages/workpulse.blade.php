@@ -6,6 +6,8 @@
 <x-fullscreen-layout>
     @include('workpulse.partials.markup')
 
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
     <script>
         (function () {
             function showLoginScreen() {

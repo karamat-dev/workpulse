@@ -1431,6 +1431,121 @@ function dashboardAttendancePctForDate(dateObj){
   return Math.round((present / recs.length) * 100);
 }
 
+function renderDepartmentAttendanceChart(){
+  const chartEl = document.getElementById('dept-attendance-chart');
+  if(!chartEl) return;
+
+  const items = Array.isArray(DB.departments) ? DB.departments : [];
+  const palette = ['#BDEFD9', '#6E83D9', '#4058E2', '#D6DBFF', '#A7B2F3', '#C9CCF4'];
+  const labels = items.map(item => item.name);
+  const series = items.map(item => {
+    const present = Number(item.present || 0);
+    const count = Number(item.count || 0);
+    return present > 0 ? present : (count > 0 ? 1 : 0);
+  });
+  const colors = items.map((item, index) => palette[index % palette.length]);
+
+  if(window.__workpulseDeptChart){
+    try{ window.__workpulseDeptChart.destroy(); } catch(e){}
+    window.__workpulseDeptChart = null;
+  }
+
+  if(!window.ApexCharts){
+    chartEl.innerHTML = `<div class="dept-chart-fallback">Chart library unavailable</div>`;
+    return;
+  }
+
+  const chart = new ApexCharts(chartEl, {
+    chart: {
+      type: 'donut',
+      height: 220,
+      width: '100%',
+      toolbar: { show: false },
+      animations: { enabled: true, speed: 450 },
+      background: 'transparent'
+    },
+    series,
+    labels,
+    colors,
+    legend: { show: false },
+    dataLabels: { enabled: false },
+    stroke: {
+      width: 0
+    },
+    states: {
+      hover: {
+        filter: { type: 'lighten', value: 0.08 }
+      },
+      active: {
+        allowMultipleDataPointsSelection: false,
+        filter: { type: 'darken', value: 0.02 }
+      }
+    },
+    plotOptions: {
+      pie: {
+        startAngle: -90,
+        endAngle: 270,
+        donut: {
+          size: '64%',
+          background: 'transparent',
+          labels: {
+            show: true,
+            name: {
+              show: true,
+              offsetY: -4,
+              color: '#8B95B1',
+              fontSize: '11px',
+              fontWeight: 700
+            },
+            value: {
+              show: true,
+              offsetY: 8,
+              color: '#24304B',
+              fontSize: '24px',
+              fontWeight: 800,
+              formatter: function(val){
+                return String(Math.round(Number(val || 0))).padStart(2, '0');
+              }
+            },
+            total: {
+              show: true,
+              showAlways: true,
+              label: 'Teams',
+              color: '#8B95B1',
+              fontSize: '11px',
+              fontWeight: 700,
+              formatter: function(){
+                return String(items.length);
+              }
+            }
+          }
+        }
+      }
+    },
+    tooltip: {
+      theme: 'dark',
+      fillSeriesColor: false,
+      y: {
+        formatter: function(value, { seriesIndex }){
+          const item = items[seriesIndex] || {};
+          const present = Number(item.present || 0);
+          const count = Number(item.count || 0);
+          return `${present}/${count} marked`;
+        }
+      }
+    },
+    responsive: [{
+      breakpoint: 760,
+      options: {
+        chart: { height: 190 }
+      }
+    }]
+  });
+
+  chart.render();
+  window.__workpulseDeptChart = chart;
+}
+
 function dashboardRecentActivity(){
   const attEvents = DB.attendance
     .filter(a=>a.in||a.out||a.breakOut||a.breakIn)
@@ -1466,6 +1581,88 @@ function dashboardRecentActivity(){
     .slice(0,6);
 }
 
+function dashboardRecentRows(){
+  const today = new Date().toISOString().slice(0,10);
+  const attendanceRows = (DB.attendance || [])
+    .filter(a => a.in || a.out || a.breakOut || a.breakIn)
+    .map(a => {
+      const emp = (DB.employees || []).find(e => e.id === a.empId);
+      if(!emp) return null;
+      const status = a.in ? (a.out ? 'Clocked Out' : 'Clocked In') : 'Not Clocked In';
+      return {
+        date: a.date || today,
+        empId: emp.id,
+        name: `${emp.fname} ${emp.lname}`.trim(),
+        role: emp.desg || '-',
+        dept: emp.dept || '-',
+        avatar: emp.avatar || initials(emp.fname, emp.lname),
+        avatarColor: emp.avatarColor || 'var(--accent)',
+        status,
+        sortKey: `${a.date || today} ${a.out || a.in || ''}`
+      };
+    })
+    .filter(Boolean);
+
+  const leaveRows = (DB.leaves || [])
+    .filter(l => l.status === 'Pending')
+    .map(l => {
+      const emp = (DB.employees || []).find(e => e.id === l.empId);
+      const parts = String(l.empName || '').trim().split(/\s+/);
+      return {
+        date: l.applied || l.from || today,
+        empId: l.empId || '-',
+        name: l.empName || (emp ? `${emp.fname} ${emp.lname}` : 'Unknown'),
+        role: emp?.desg || l.type || '-',
+        dept: emp?.dept || l.dept || '-',
+        avatar: emp?.avatar || initials(parts[0] || 'U', parts.slice(1).join(' ') || 'N'),
+        avatarColor: emp?.avatarColor || 'var(--amber)',
+        status: 'Pending',
+        sortKey: `${l.applied || l.from || today} 00:00`
+      };
+    });
+
+  return [...attendanceRows, ...leaveRows]
+    .sort((a,b)=>String(b.sortKey).localeCompare(String(a.sortKey)))
+    .slice(0,5);
+}
+
+function normalizeDashboardSearchText(value=''){
+  return String(value || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function applyDashboardRecentSearchState(){
+  const query = String(window.__dashboardRecentSearch || '');
+  const input = document.getElementById('dashboard-recent-search-input');
+  if(input && input.value !== query){
+    input.value = query;
+  }
+  filterDashboardRecentRows(query);
+}
+
+function filterDashboardRecentRows(value=''){
+  const query = normalizeDashboardSearchText(value);
+  window.__dashboardRecentSearch = value || '';
+  let visibleCount = 0;
+
+  document.querySelectorAll('[data-dashboard-recent-row]').forEach(row => {
+    const attrText = normalizeDashboardSearchText(row.getAttribute('data-search') || '');
+    const rowText = normalizeDashboardSearchText(row.textContent || '');
+    const matches = !query || attrText.includes(query) || rowText.includes(query);
+
+    row.style.display = matches ? '' : 'none';
+    if(matches) visibleCount += 1;
+  });
+
+  document.querySelectorAll('[data-dashboard-recent-empty-search]').forEach(emptyState => {
+    emptyState.style.display = visibleCount === 0 ? '' : 'none';
+  });
+}
+window.filterDashboardRecentRows = filterDashboardRecentRows;
+window.applyDashboardRecentSearchState = applyDashboardRecentSearchState;
+
 function dashboardUpcomingItems(){
   const today = new Date().toISOString().slice(0,10);
   const holidays = (DB.holidays||[])
@@ -1493,20 +1690,36 @@ function pageAdminDashboard(){
   const present=liveStatus.filter(l=>l.status==='in'||l.status==='break').length || todayAtt.filter(a=>a.status==='Present').length;
   const absent=liveStatus.filter(l=>l.status==='not_checked_in').length || todayAtt.filter(a=>a.status==='Absent').length;
   const onLeave=liveStatus.filter(l=>l.status==='leave').length || DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
-  const pendingLeaves=DB.leaves.filter(l=>l.status==='Pending').length;
-  const lateToday=todayAtt.filter(a=>a.late).length;
-  const newJoiners=DB.employees.filter(e=>e.doj===today).length;
-  const checkedInNow = liveStatus
-    .filter(l=>l.status==='in'||l.status==='break')
-    .slice(0,5);
-  const notCheckedInNow = liveStatus
-    .filter(l=>l.status==='not_checked_in')
-    .slice(0,5);
-  const week = dashboardWeekDays().map(d=>({
-    label: d.toLocaleDateString('en-GB',{weekday:'short'}),
-    pct: dashboardAttendancePctForDate(d),
-  }));
+    const pendingLeaves=DB.leaves.filter(l=>l.status==='Pending').length;
+    const lateToday=todayAtt.filter(a=>a.late).length;
+    const newJoiners=DB.employees.filter(e=>e.doj===today).length;
+    const approvedTodayLeaves = DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today);
+    const sickLeaveCount = approvedTodayLeaves.filter(l=>String(l.type||'').toLowerCase().includes('sick')).length;
+    const otherLeaveCount = Math.max(0, approvedTodayLeaves.length - sickLeaveCount);
+    const attendanceSegmentsTotal = Math.max(1, absent + present + otherLeaveCount + sickLeaveCount);
+    const checkedInNow = liveStatus
+      .filter(l=>l.status==='in'||l.status==='break')
+      .slice(0,5);
+    const notCheckedInNow = liveStatus
+      .filter(l=>l.status==='not_checked_in')
+      .slice(0,5);
+    const deptPalette = ['#BDEFD9', '#6E83D9', '#4058E2', '#D6DBFF', '#A7B2F3', '#C9CCF4'];
+    const deptAttendanceItems = (DB.departments || []).map((d, index)=>{
+      const totalEmployees = Number(d.count || 0);
+      const markedAttendance = Number(d.present || 0);
+      return {
+        name: d.name,
+        color: deptPalette[index % deptPalette.length],
+        totalEmployees,
+        markedAttendance
+      };
+    });
+    const week = dashboardWeekDays().map(d=>({
+      label: d.toLocaleDateString('en-GB',{weekday:'short'}),
+      pct: dashboardAttendancePctForDate(d),
+    }));
   const recent = dashboardRecentActivity();
+  const recentRows = dashboardRecentRows();
   const upcoming = dashboardUpcomingItems();
 
   return `
@@ -1522,56 +1735,104 @@ function pageAdminDashboard(){
       <span class="dash-pill danger">${absent} absent</span>
     </div>
   </div>
-  <div class="g2" style="margin-bottom:12px;">
-    <div class="alert al-info" style="margin-bottom:0;"><span>Info</span><div><strong>Team pulse:</strong> ${present} present, ${onLeave} on leave, ${absent} absent today.</div></div>
-    <div class="alert al-warn" style="margin-bottom:0;"><span>Alert</span><div><strong>Action required:</strong> ${pendingLeaves} pending leave requests and ${lateToday} late arrivals today.</div></div>
-  </div>
-  <div class="alert al-danger"><span>Alert</span><div><strong>Absent:</strong> ${absent} employee(s) without notification &nbsp;|&nbsp; <strong>Late Arrivals:</strong> ${lateToday} employee(s) clocked in late today</div></div>
-
-  <div class="g4 dash-stat-grid" style="margin-bottom:14px;">
+    <div class="g4 dash-stat-grid" style="margin-bottom:14px;">
     <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">+ ${newJoiners} new today</div></div>
     <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
     <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
     <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests -></div></div>
   </div>
 
-  <div class="g2" style="margin-bottom:14px;">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Weekly Attendance</div><span class="badge bg-blue">This Week</span></div>
-      <div class="chart-area">
-        ${week.map(({label,pct})=>`
-        <div class="cb-wrap">
-          <div class="cb-bar" style="height:${Math.max(6,pct)}%;background:${pct>=85?'var(--green)':pct>=70?'var(--accent)':'var(--amber)'};"></div>
-          <div class="cb-lbl">${label}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:3px;text-align:center;">${pct}%</div>
-        </div>`).join('')}
+    <div class="g2" style="margin-bottom:14px;">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Attendance</div><span class="badge bg-blue">Live Today</span></div>
+        <div class="attendance-mini-card">
+          <div class="attendance-mini-bar">
+            <span class="attendance-mini-fill absence" style="width:${(absent/attendanceSegmentsTotal)*100}%;"></span>
+            <span class="attendance-mini-fill present" style="width:${(present/attendanceSegmentsTotal)*100}%;"></span>
+            <span class="attendance-mini-fill leave" style="width:${(otherLeaveCount/attendanceSegmentsTotal)*100}%;"></span>
+            <span class="attendance-mini-fill sick" style="width:${(sickLeaveCount/attendanceSegmentsTotal)*100}%;"></span>
+          </div>
+          <div class="attendance-mini-stats">
+            <div class="attendance-mini-item">
+              <div class="attendance-mini-meta"><span class="attendance-mini-dot absence"></span><span>Absence</span></div>
+              <strong>${absent.toString().padStart(2,'0')}</strong>
+            </div>
+            <div class="attendance-mini-item">
+              <div class="attendance-mini-meta"><span class="attendance-mini-dot present"></span><span>Present</span></div>
+              <strong>${present.toString().padStart(2,'0')}</strong>
+            </div>
+            <div class="attendance-mini-item">
+              <div class="attendance-mini-meta"><span class="attendance-mini-dot leave"></span><span>On leave</span></div>
+              <strong>${otherLeaveCount.toString().padStart(2,'0')}</strong>
+            </div>
+            <div class="attendance-mini-item">
+              <div class="attendance-mini-meta"><span class="attendance-mini-dot sick"></span><span>Sick leave</span></div>
+              <strong>${sickLeaveCount.toString().padStart(2,'0')}</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Team Attendance</div></div>
+        <div class="dept-summary-card">
+          <div class="dept-donut-wrap">
+            <div id="dept-attendance-chart" class="dept-chart-canvas" aria-label="Department attendance breakdown"></div>
+          </div>
+          <div class="dept-summary-list">
+            ${deptAttendanceItems.map(item=>`
+            <div class="dept-summary-item">
+              <div class="dept-summary-meta">
+                <span class="dept-summary-dot" style="background:${item.color};"></span>
+                <div class="dept-summary-copy">
+                  <span>${item.name}</span>
+                  <small>${item.markedAttendance} of ${item.totalEmployees} marked</small>
+                </div>
+              </div>
+              <strong>${item.markedAttendance}/${item.totalEmployees}</strong>
+            </div>`).join('')}
+          </div>
+        </div>
       </div>
     </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Team Attendance</div></div>
-      ${DB.departments.map(d=>{
-        const totalEmployees = Number(d.count || 0);
-        const markedAttendance = Number(d.present || 0);
-        const pct = totalEmployees ? Math.round((markedAttendance / totalEmployees) * 100) : 0;
-        return`
-      <div style="padding:7px 0;border-bottom:1px solid var(--border);">
-        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;"><span>${d.name}</span><strong>${markedAttendance}/${totalEmployees}</strong></div>
-        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${d.color};"></div></div>
-      </div>`}).join('')}
-    </div>
-  </div>
 
-  <div class="g2">
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Recent Activity</div><button class="btn btn-sm" onclick="window.showPage('attendance')">Open Attendance</button></div>
-      <div class="tl">
-        ${recent.map((ev,idx)=>`
-        <div class="tl-item">
-          <div class="tl-dot" style="background:${ev.color};"></div>${idx<recent.length-1?'<div class="tl-line"></div>':''}
-          <div><div style="font-size:13px;font-weight:500;">${ev.label}</div><div style="font-size:11px;color:var(--muted);">${ev.meta}</div></div>
-        </div>`).join('') || `<p style="color:var(--muted);">No recent activity available.</p>`}
+    <div class="g2">
+      <div class="card">
+        <div class="card-hdr dashboard-recent-head">
+          <div class="card-title">Recent</div>
+          <div class="dashboard-recent-tools">
+            <label class="dashboard-recent-search">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.8"></circle><path d="M10.8 10.8L14 14"></path></svg>
+              <input type="text" id="dashboard-recent-search-input" placeholder="Search for employee" value="${String(window.__dashboardRecentSearch || '').replace(/"/g,'&quot;')}" oninput="window.filterDashboardRecentRows(this.value)">
+            </label>
+            <button class="dashboard-filter-btn" type="button" onclick="window.showPage('employees')">Filter</button>
+          </div>
+        </div>
+        <div class="dashboard-recent-table">
+          <div class="dashboard-recent-thead">
+            <span>Date</span>
+            <span>Employee ID</span>
+            <span>Name</span>
+            <span>Role</span>
+            <span>Status</span>
+          </div>
+          <div class="dashboard-recent-tbody">
+            ${recentRows.map(row=>`
+            <div class="dashboard-recent-row" data-dashboard-recent-row data-search="${[row.date,row.empId,row.name,row.role,row.dept,row.status].join(' ')}">
+              <span>${formatDate(row.date)}</span>
+              <span>${row.empId}</span>
+              <span>
+                <div class="dashboard-recent-user">
+                  <div class="av av-28" style="background:${row.avatarColor};color:#fff;">${row.avatar}</div>
+                  <strong>${row.name}</strong>
+                </div>
+              </span>
+              <span>${row.role}</span>
+              <span>${statusBadge(row.status)}</span>
+            </div>`).join('')}
+            ${recentRows.length ? `<div class="dashboard-recent-empty" data-dashboard-recent-empty-search style="display:none;">No matching employees found.</div>` : `<div class="dashboard-recent-empty">No recent activity available.</div>`}
+          </div>
+        </div>
       </div>
-    </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Upcoming Events</div><button class="btn btn-sm" onclick="window.showPage('calendar')">View All</button></div>
       ${upcoming.map(ev=>`
@@ -4060,6 +4321,9 @@ async function refreshLiveAttendanceSnapshot(pageId){
     const data = await wpApi('/api/attendance/live', {method:'GET', headers:{}});
     DB.liveAttendance = data.liveAttendance || [];
     if(window.__workpulseCurrentPage === pageId){
+      if(pageId === 'dashboard' && document.activeElement && document.activeElement.id === 'dashboard-recent-search-input'){
+        return;
+      }
       showPage(pageId);
     }
   }catch(e){}
@@ -4145,5 +4409,3 @@ function pageRealtimeLive(){
 }
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-
-

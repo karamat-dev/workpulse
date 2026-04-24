@@ -504,8 +504,11 @@ function startBrowserNotificationPolling(){
 function initApp(){
   const u = DB.currentUser;
   const fullName = (u.fname+' '+u.lname).trim();
-  document.getElementById('sb-name').textContent = u.fname+' '+u.lname;
-  document.getElementById('sb-role').textContent =
+  const sbName = document.getElementById('sb-name');
+  const sbRole = document.getElementById('sb-role');
+  const sbAvatar = document.getElementById('sb-avatar');
+  if(sbName) sbName.textContent = u.fname+' '+u.lname;
+  if(sbRole) sbRole.textContent =
     DB.currentRole==='admin' ? 'Administrator'
     : DB.currentRole==='hr' ? 'HR Manager'
     : DB.currentRole==='manager' ? 'Manager'
@@ -515,16 +518,20 @@ function initApp(){
   if(tbName) tbName.textContent = fullName;
   if(tbEmail) tbEmail.textContent = u.email || '';
   if(u.profilePhotoUrl){
-    document.getElementById('sb-avatar').innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
-    document.getElementById('sb-avatar').style.background = 'transparent';
+    if(sbAvatar){
+      sbAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
+      sbAvatar.style.background = 'transparent';
+    }
     const tbAvatar = document.getElementById('tb-avatar');
     if(tbAvatar){
       tbAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
       tbAvatar.style.background = 'transparent';
     }
   }else{
-    document.getElementById('sb-avatar').textContent = u.avatar;
-    document.getElementById('sb-avatar').style.background = u.avatarColor;
+    if(sbAvatar){
+      sbAvatar.textContent = u.avatar;
+      sbAvatar.style.background = u.avatarColor;
+    }
     const tbAvatar = document.getElementById('tb-avatar');
     if(tbAvatar){
       tbAvatar.textContent = u.avatar;
@@ -538,6 +545,7 @@ function initApp(){
   loadPunchState(u.id);
   syncPunchStateFromBootstrap();
 
+  hydrateSidebarCollapseState();
   buildNav();
   updateNotificationUI();
   hydrateBrowserNotificationState();
@@ -601,6 +609,16 @@ function canAccessPage(pageId){
 }
 
 function runPageAfterRender(pageId){
+  if(pageId === 'dashboard'){
+    setTimeout(() => {
+      if(typeof renderDepartmentAttendanceChart === 'function'){
+        renderDepartmentAttendanceChart();
+      }
+      if(typeof window.applyDashboardRecentSearchState === 'function'){
+        window.applyDashboardRecentSearchState();
+      }
+    }, 0);
+  }
   if(pageId === 'leave'){
     setTimeout(() => {
       if(typeof updateLeaveTodayFilters === 'function'){
@@ -652,6 +670,38 @@ function buildTopbarActions(){
     <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
   }
 }
+
+function applySidebarCollapseState(){
+  const app = document.getElementById('app');
+  const toggle = document.getElementById('sidebar-toggle');
+  const collapsed = !!window.__sidebarCollapsed;
+  if(app){
+    app.classList.toggle('sidebar-collapsed', collapsed);
+  }
+  if(toggle){
+    toggle.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    toggle.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+  }
+}
+
+function toggleSidebarCollapse(forceValue){
+  const nextValue = typeof forceValue === 'boolean' ? forceValue : !window.__sidebarCollapsed;
+  window.__sidebarCollapsed = nextValue;
+  try{
+    localStorage.setItem('workpulse_sidebar_collapsed', nextValue ? '1' : '0');
+  }catch(e){}
+  applySidebarCollapseState();
+}
+
+function hydrateSidebarCollapseState(){
+  try{
+    window.__sidebarCollapsed = localStorage.getItem('workpulse_sidebar_collapsed') === '1';
+  }catch(e){
+    window.__sidebarCollapsed = false;
+  }
+  applySidebarCollapseState();
+}
+window.toggleSidebarCollapse = toggleSidebarCollapse;
 
 // ══════════════════════════════════════════════════
 //  NAVIGATION BUILD
@@ -746,7 +796,7 @@ function buildNav(){
       else if(item.page==='emp-notifications' && getUnreadNotificationCount() > 0) extra=`<span class="nav-badge">${getUnreadNotificationCount()}</span>`;
       else if(item.page==='leave' && pendingLeaveCount > 0) extra=`<span class="nav-badge">${pendingLeaveCount}</span>`;
       else if(item.badge) extra=`<span class="nav-badge">${item.badge}</span>`;
-      html += `<div class="nav-item" id="nav-${item.page}" onclick="window.showPage('${item.page}')">${icons[item.icon]||''}${item.label}${extra}</div>`;
+      html += `<div class="nav-item" id="nav-${item.page}" title="${item.label}" onclick="window.showPage('${item.page}')">${icons[item.icon]||''}<span class="nav-label">${item.label}</span>${extra}</div>`;
     });
   });
   document.getElementById('sidebar-nav').innerHTML = html;
@@ -852,6 +902,7 @@ function statusBadge(s){
     'Active':'bg-green','Probation':'bg-amber','Offboarding':'bg-blue','Inactive':'bg-gray','On Leave':'bg-purple',
     'Approved':'bg-green','Rejected':'bg-red','Pending':'bg-amber','Waiting':'bg-gray',
     'Present':'bg-green','Absent':'bg-red','Leave':'bg-purple','Late':'bg-amber',
+    'Clocked In':'bg-green','Not Clocked In':'bg-gray','Clocked Out':'bg-blue',
     'National':'bg-blue','Religious':'bg-amber','Optional':'bg-gray',
   };
   return `<span class="badge ${map[s]||'bg-gray'}">${s}</span>`;

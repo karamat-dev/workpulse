@@ -1,29 +1,68 @@
 <!-- LOGIN SCREEN -->
 <div id="login-screen">
-  <div class="login-box">
-    <div class="login-logo">Work<span>Pulse</span></div>
-    <div class="login-sub">Attendance Management System</div>
-    <div class="lf-group">
-      <label class="lf-label">Email Address <span class="req-star">*</span></label>
-      <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">
+  <div class="login-shell">
+    <div class="login-panel">
+      <div class="login-brand-row">
+        <div class="login-logo-mark">
+          <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
+        </div>
+        <div>
+          <div class="login-logo">Work<span>Pulse</span></div>
+          <div class="login-brand-copy">Build stronger HR operations</div>
+        </div>
+      </div>
+      <div class="login-copy-block">
+        <h1 class="login-headline">Modernize your HR operations</h1>
+        <p class="login-sub">Welcome back. Please sign in to your workspace and continue managing attendance, teams, and approvals.</p>
+      </div>
+      <div class="login-form-card">
+        <div class="lf-group">
+          <label class="lf-label">Email Address <span class="req-star">*</span></label>
+          <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">
+        </div>
+        <div class="lf-group">
+          <label class="lf-label">Password <span class="req-star">*</span></label>
+          <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
+        </div>
+        <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
+        <div class="login-form-meta">
+          <span>Use your official WorkPulse account credentials</span>
+          <span>Need help? Contact HR admin</span>
+        </div>
+        <button class="lf-btn" onclick="window.doLogin()">Sign In</button>
+      </div>
+      <div class="login-footer-note">
+        Secure workspace access for attendance, leave, approvals, and employee management.
+      </div>
     </div>
-    <div class="lf-group">
-      <label class="lf-label">Password <span class="req-star">*</span></label>
-      <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
-    </div>
-    <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
-    <button class="lf-btn" onclick="window.doLogin()">Sign In</button>
-    <div class="lf-hint">
-      <strong>Admin / HR:</strong> admin@workpulse.com | admin123<br>
-      <strong>Employee:</strong> employee@workpulse.com | emp123
+    <div class="login-hero">
+      <div class="login-hero-grid"></div>
+      <div class="login-balloon balloon-a"></div>
+      <div class="login-balloon balloon-b"></div>
+      <div class="login-balloon balloon-c"></div>
+      <div class="login-cityline">
+        <div class="city-tower tower-a"></div>
+        <div class="city-tower tower-b"></div>
+        <div class="city-tower tower-c"></div>
+        <div class="city-wheel"></div>
+        <div class="city-arch"></div>
+      </div>
+      <div class="login-hero-copy">
+        <span class="login-hero-kicker">People Operations</span>
+        <h2>One calmer place for HR, attendance, leave, and daily team visibility.</h2>
+        <p>Designed for clean workflows, quick approvals, and better focus across your organization.</p>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- MAIN APP -->
 <div id="app">
-  <aside class="sidebar" id="sidebar">
-    <div class="sb-logo">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <button class="sidebar-toggle" type="button" id="sidebar-toggle" onclick="window.toggleSidebarCollapse && window.toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3.5L5.5 8l5 4.5"></path></svg>
+      </button>
       <div class="sb-brand-mark">
         <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
       </div>
@@ -32,30 +71,7 @@
         <p>People operations workspace</p>
       </div>
     </div>
-
-    <div class="sb-user">
-      <div class="av av-32" id="sb-avatar" style="background:var(--accent);color:#fff;">AK</div>
-      <div class="sb-user-info">
-        <div class="name" id="sb-name">Ahmed Karim</div>
-        <div class="role" id="sb-role">Administrator</div>
-      </div>
-    </div>
-
-    <div id="sidebar-nav"></div>
-
-    <div class="sb-footer">
-      <div class="sb-promo">
-        <div class="sb-promo-title">Built for fast HR decisions</div>
-        <div class="sb-promo-copy">Track attendance, approvals, team health, and company updates from one clean workspace.</div>
-      </div>
-      <p>WorkPulse v2.4.1</p>
-      <p style="margin-top:2px;">Backup: Today 03:00 AM</p>
-      <button class="btn btn-sm" style="margin-top:10px;width:100%;justify-content:center;color:var(--red);border-color:rgba(255,255,255,.1);background:transparent;font-size:12px;" onclick="window.doLogout()">Sign Out</button>
-    </div>
-  </aside>
-
-  <div class="main">
-    <div class="topbar">
+    <div class="topbar-main">
       <div class="topbar-title-block">
         <div class="topbar-kicker">Workspace</div>
         <div class="topbar-title" id="page-title">Dashboard</div>
@@ -81,6 +97,23 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <aside class="sidebar" id="sidebar">
+    <div id="sidebar-nav"></div>
+
+    <div class="sb-footer">
+      <div class="sb-promo">
+        <div class="sb-promo-title">Built for fast HR decisions</div>
+        <div class="sb-promo-copy">Track attendance, approvals, team health, and company updates from one clean workspace.</div>
+      </div>
+      <p>WorkPulse v2.4.1</p>
+      <p style="margin-top:2px;">Backup: Today 03:00 AM</p>
+      <button class="btn btn-sm" style="margin-top:10px;width:100%;justify-content:center;color:var(--red);border-color:rgba(255,255,255,.1);background:transparent;font-size:12px;" onclick="window.doLogout()">Sign Out</button>
+    </div>
+  </aside>
+
+  <div class="main">
 
     <div class="content" id="main-content"></div>
   </div>
