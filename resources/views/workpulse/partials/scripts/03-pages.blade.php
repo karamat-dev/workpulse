@@ -2796,6 +2796,43 @@ function getCalendarEventFeed(){
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
+function getCalendarEventLabelMeta(item){
+  const rawType = String(item.type || '').toLowerCase();
+  const rawLabel = String(item.label || '').toLowerCase();
+  const rawDescription = String(item.description || '').toLowerCase();
+
+  if(rawType === 'announcement'){
+    if(rawLabel.includes('policy') || rawDescription.includes('policy')){
+      return { tag:'Policy', icon:'✓', helper:'Policy update' };
+    }
+    if(rawLabel.includes('holiday') || rawDescription.includes('holiday') || rawLabel.includes('eid')){
+      return { tag:'Holiday', icon:'🎉', helper:'Holiday notice' };
+    }
+    return { tag:'Announcement', icon:'📢', helper:'Announcement' };
+  }
+
+  if(rawType === 'event'){
+    if(rawLabel.includes('meeting') || rawLabel.includes('town hall')){
+      return { tag:'Event', icon:'📅', helper:'Company event' };
+    }
+    return { tag:'Reminder', icon:'⏰', helper:'Reminder' };
+  }
+
+  return { tag:'Update', icon:'•', helper:'Update' };
+}
+
+function formatEventCardDate(dateValue){
+  if(!dateValue) return '—';
+  const raw = String(dateValue).trim();
+  if(!raw) return '—';
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? `${raw}T00:00:00`
+    : raw.replace(' ', 'T');
+  const parsed = new Date(normalized);
+  if(Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+
 function pageCalendar(empView=false){
   const today=new Date();
   const month=today.getMonth(), year=today.getFullYear();
@@ -2846,8 +2883,18 @@ function pageCalendar(empView=false){
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Events & Reminders</div>${!empView?`<button class="btn btn-sm btn-primary">+ Event</button>`:''}</div>
-      ${events.slice(0,6).map(ev=>`
-      <div class="irow"><div><strong style="font-size:13px;">${ev.label}</strong><div style="font-size:11px;color:var(--muted);margin-top:3px;">${ev.description || (ev.type==='announcement'?'Audience announcement':'Company event')}</div></div><span class="badge ${ev.badge}">${formatDate(ev.date)}</span></div>`).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
+      ${events.slice(0,6).map(ev=>{
+        const meta = getCalendarEventLabelMeta(ev);
+        return `
+      <div class="event-feed-item">
+        <div class="event-feed-main">
+          <div class="event-feed-tag"><span class="event-feed-icon">${meta.icon}</span><span>${meta.tag}</span></div>
+          <strong class="event-feed-title">${ev.label}</strong>
+          <div class="event-feed-desc">${ev.description || meta.helper}</div>
+        </div>
+        <span class="badge ${ev.badge}">${formatEventCardDate(ev.date)}</span>
+      </div>`;
+      }).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
       <div style="margin-top:14px;">
         <div class="card-title" style="margin-bottom:10px;">National Holidays</div>
         ${DB.holidays.slice(0,5).map(h=>`

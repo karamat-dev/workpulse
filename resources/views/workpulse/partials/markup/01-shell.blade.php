@@ -60,9 +60,6 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-brand">
-      <button class="sidebar-toggle" type="button" id="sidebar-toggle" onclick="window.toggleSidebarCollapse && window.toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3.5L5.5 8l5 4.5"></path></svg>
-      </button>
       <div class="sb-brand-mark">
         <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
       </div>
@@ -77,9 +74,6 @@
         <div class="topbar-title" id="page-title">Dashboard</div>
       </div>
       <div class="topbar-tools">
-        <button class="topbar-icon-btn" type="button" title="Search">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.8"></circle><path d="M10.8 10.8L14 14"></path></svg>
-        </button>
         <div class="tb-clock" id="tb-clock">00:00:00</div>
         <div id="topbar-actions"></div>
         <div class="notif-wrap">
@@ -103,6 +97,11 @@
     <div id="sidebar-nav"></div>
 
     <div class="sb-footer">
+      <div class="sidebar-toggle-row">
+        <button class="sidebar-toggle" type="button" id="sidebar-toggle" onclick="window.toggleSidebarCollapse && window.toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3.5L5.5 8l5 4.5"></path></svg>
+        </button>
+      </div>
       <div class="sb-promo">
         <div class="sb-promo-title">Built for fast HR decisions</div>
         <div class="sb-promo-copy">Track attendance, approvals, team health, and company updates from one clean workspace.</div>
