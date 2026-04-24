@@ -226,6 +226,7 @@ class WorkpulseBootstrapController extends Controller
             'users.employee_code',
             'users.name',
             'users.email',
+            'users.role',
             'departments.name as dept',
             'employee_profiles.designation as desg',
             'employee_profiles.date_of_joining as doj',
@@ -289,8 +290,16 @@ class WorkpulseBootstrapController extends Controller
 
         if ($user->role === 'employee') {
             $teamUserIds = DB::table('reporting_lines')->where('manager_user_id', $user->id)->pluck('user_id');
-            $employeesQuery->where(function ($q) use ($user, $teamUserIds) {
-                $q->where('users.id', $user->id)->orWhereIn('users.id', $teamUserIds);
+            $currentDepartment = $profile?->dept_name;
+
+            $employeesQuery->where(function ($q) use ($user, $teamUserIds, $currentDepartment) {
+                $q->where('users.id', $user->id)
+                    ->orWhere('users.role', 'hr')
+                    ->orWhereIn('users.id', $teamUserIds);
+
+                if ($currentDepartment) {
+                    $q->orWhere('departments.name', $currentDepartment);
+                }
             });
         }
 
@@ -306,6 +315,7 @@ class WorkpulseBootstrapController extends Controller
                 'userId' => $employee->user_id,
                 'fname' => $fn,
                 'lname' => $ln,
+                'role' => $employee->role ?? 'employee',
                 'dept' => $employee->dept ?? '-',
                 'desg' => $employee->desg ?? '-',
                 'doj' => $employee->doj,

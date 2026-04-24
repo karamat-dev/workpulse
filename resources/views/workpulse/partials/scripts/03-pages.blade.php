@@ -87,6 +87,9 @@ async function refreshEmployeeWorkspaceSnapshot(pageId){
 
   try{
     const data = await wpApi('/api/bootstrap', {method:'GET', headers:{}});
+    DB.employees = data.employees || DB.employees || [];
+    DB.liveAttendance = data.liveAttendance || DB.liveAttendance || [];
+    DB.leaves = data.leaves || DB.leaves || [];
     DB.leaveBalances = data.leaveBalances || [];
     DB.announcements = data.announcements || [];
     DB.events = data.events || [];
@@ -2072,16 +2075,31 @@ function cancelRegulation(id){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
+function getRealtimeMonitorTeamOptions(selectedTeam=''){
+  const teams = [
+    ...((Array.isArray(DB.departments) ? DB.departments : []).map(department => department?.name)),
+    ...((Array.isArray(DB.liveAttendance) ? DB.liveAttendance : []).map(entry => entry?.dept)),
+  ]
+    .filter(team => team && team !== '-');
+
+  if(selectedTeam && !teams.includes(selectedTeam)){
+    teams.push(selectedTeam);
+  }
+
+  return [...new Set(teams)].sort();
+}
+
 function pageRealtime(){
-  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', search:''};
+  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', team:'', search:''};
   const inCount=DB.liveAttendance.filter(l=>l.status==='in').length;
   const breakCount=DB.liveAttendance.filter(l=>l.status==='break').length;
   const outCount=DB.liveAttendance.filter(l=>l.status==='out').length;
   const leaveCount=DB.liveAttendance.filter(l=>l.status==='leave').length;
+  const teamOptions = getRealtimeMonitorTeamOptions(realtimeFilters.team);
   const cards=DB.liveAttendance.map(e=>{
     const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[e.status]||'md-out';
     const lbl={in:'In since '+e.since,break:'On Break â€” '+e.since,out:'Clocked Out '+e.since,leave:'On Leave â€” '+e.since}[e.status];
-    return`<div class="mon-card" data-status="${e.status || 'out'}"><div class="mon-dot ${dot}"></div>
+    return`<div class="mon-card" data-status="${e.status || 'out'}" data-team="${e.dept || ''}"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
       <div style="font-size:11px;color:var(--muted);">${e.dept} Â· ${lbl}</div></div></div>`;
   }).join('');
@@ -2104,6 +2122,10 @@ function pageRealtime(){
           <option value="out" ${realtimeFilters.status === 'out' ? 'selected' : ''}>Clocked Out</option>
           <option value="leave" ${realtimeFilters.status === 'leave' ? 'selected' : ''}>On Leave</option>
         </select>
+        <select class="fi" id="rt-team-filter" onchange="filterMonitor()" style="width:180px;">
+          <option value="" ${!realtimeFilters.team ? 'selected' : ''}>All Teams</option>
+          ${teamOptions.map(team => `<option value="${team}" ${realtimeFilters.team === team ? 'selected' : ''}>${team}</option>`).join('')}
+        </select>
         <input class="search-input" id="rt-search" placeholder="Search..." value="${realtimeFilters.search || ''}" oninput="filterMonitor()" style="width:200px;">
       </div>
     </div>
@@ -2120,11 +2142,13 @@ function pageRealtime(){
 function filterMonitor(){
   const searchText = (document.getElementById('rt-search')?.value || '').toLowerCase();
   const statusFilter = document.getElementById('rt-status-filter')?.value || '';
-  window.__realtimeMonitorFilters = {status: statusFilter, search: searchText};
+  const teamFilter = document.getElementById('rt-team-filter')?.value || '';
+  window.__realtimeMonitorFilters = {status: statusFilter, team: teamFilter, search: searchText};
   document.querySelectorAll('#monitor-grid .mon-card').forEach(card=>{
     const matchesText = card.textContent.toLowerCase().includes(searchText);
     const matchesStatus = !statusFilter || (card.dataset.status || '') === statusFilter;
-    card.style.display = matchesText && matchesStatus ? '' : 'none';
+    const matchesTeam = !teamFilter || (card.dataset.team || '') === teamFilter;
+    card.style.display = matchesText && matchesStatus && matchesTeam ? '' : 'none';
   });
 }
 
@@ -3637,6 +3661,45 @@ function renderEmployeeWorkspaceTabs(activePage){
   </div>`;
 }
 
+function getEmployeeDashboardTeamPeople(user){
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  const userId = String(user?.id || '');
+  const userDept = String(user?.dept || '');
+
+  return employees.filter(employee => {
+    if(!employee || String(employee.id || '') === userId) return false;
+    const role = String(employee.role || '').toLowerCase();
+    const dept = String(employee.dept || '');
+    const designation = String(employee.desg || '').toLowerCase();
+    const isHr = role === 'hr' || dept.toLowerCase() === 'human resources' || designation.includes('hr');
+    const isTeam = userDept && dept === userDept;
+    return isHr || isTeam;
+  });
+}
+
+function getEmployeeDashboardInitials(name){
+  const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '--';
+  return `${parts[0][0] || ''}${(parts[1] || parts[0])[0] || ''}`.toUpperCase();
+}
+
+function renderEmployeeDashboardStatusList(items, emptyText){
+  if(!items.length){
+    return `<div class="emp-pp-empty">${emptyText}</div>`;
+  }
+
+  return `<div class="team-mini-list">${items.slice(0, 5).map(item => `
+    <div class="team-mini-item">
+      <div class="av av-32" style="background:${item.avatarColor || 'var(--accent)'}22;color:${item.avatarColor || 'var(--accent)'};">${item.avatar || getEmployeeDashboardInitials(item.name || item.empName || '')}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name || item.empName}</div>
+        <div style="font-size:11px;color:var(--muted);">${item.detail || item.dept || '-'}</div>
+      </div>
+      ${item.badge || ''}
+    </div>
+  `).join('')}</div>`;
+}
+
 function pageEmpDashboard(){
   try{
     const u=DB.currentUser || {};
@@ -3671,7 +3734,38 @@ function pageEmpDashboard(){
       used: Number(balance.used ?? Math.max(0, Number(balance.allocated ?? 0) - Number(balance.remaining ?? 0))),
       left: Number(balance.remaining ?? 0),
     }));
-    const whoOff = leaves.filter(l=>l.status==='Approved' && l.from<=today && l.to>=today).length;
+    const teamPeople = getEmployeeDashboardTeamPeople(u);
+    const teamPeopleById = new Map(teamPeople.map(employee => [String(employee.id), employee]));
+    const sameTeamIds = new Set(teamPeople
+      .filter(employee => String(employee.dept || '') === String(u.dept || ''))
+      .map(employee => String(employee.id)));
+    const peopleOfInterestIds = new Set(teamPeople.map(employee => String(employee.id)));
+    const teamOnLeave = leaves
+      .filter(l=>l.status==='Approved' && l.from<=today && l.to>=today && peopleOfInterestIds.has(String(l.empId)))
+      .map(leave => {
+        const employee = teamPeopleById.get(String(leave.empId)) || {};
+        return {
+          name: leave.empName,
+          empName: leave.empName,
+          avatar: employee.avatar,
+          avatarColor: employee.avatarColor,
+          detail: `${leave.type || 'Leave'} - ${leave.dept || employee.dept || '-'}`,
+          badge: `<span class="badge bg-purple">${formatLeaveDuration(leave)}</span>`,
+        };
+      });
+    const liveByEmployeeId = new Map((Array.isArray(DB.liveAttendance) ? DB.liveAttendance : []).map(entry => [String(entry.empId || ''), entry]));
+    const teamNotClockedIn = teamPeople
+      .filter(employee => sameTeamIds.has(String(employee.id)))
+      .map(employee => ({employee, live: liveByEmployeeId.get(String(employee.id))}))
+      .filter(({live}) => !live || live.status === 'not_checked_in')
+      .map(({employee}) => ({
+        name: `${employee.fname || ''} ${employee.lname || ''}`.trim(),
+        avatar: employee.avatar,
+        avatarColor: employee.avatarColor,
+        detail: `${employee.desg || 'Employee'} - ${employee.dept || '-'}`,
+        badge: '<span class="badge bg-red">Not In</span>',
+      }));
+    const whoOff = teamOnLeave.length;
     const myLogs = attendance.filter(a=>a.empId===u.id).slice(0,5);
     const latestAnnouncements = (Array.isArray(DB.announcements) ? DB.announcements : []).slice(0,3);
     const upcomingItems = dashboardUpcomingItems();
@@ -3755,7 +3849,11 @@ function pageEmpDashboard(){
     <div class="emp-pp-right">
       <div class="emp-pp-card">
         <div class="card-hdr"><div class="emp-pp-title">Who is Off</div><span class="badge bg-purple">${whoOff}</span></div>
-        <div class="emp-pp-empty">${whoOff ? `${whoOff} employee(s) on leave today` : 'No employee is leave or off'}</div>
+        ${renderEmployeeDashboardStatusList(teamOnLeave, 'No HR or team member is on leave today')}
+      </div>
+      <div class="emp-pp-card">
+        <div class="card-hdr"><div class="emp-pp-title">Not Clocked In Yet</div><span class="badge bg-red">${teamNotClockedIn.length}</span></div>
+        ${renderEmployeeDashboardStatusList(teamNotClockedIn, 'Everyone from your team has clocked in or is on leave')}
       </div>
       <div class="emp-pp-card">
         <div class="card-hdr"><div class="emp-pp-title">Upcoming Birthday</div></div>
@@ -4401,12 +4499,13 @@ function setupLiveAttendanceRefresh(pageId){
 }
 
 function pageRealtimeLive(){
-  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', search:''};
+  const realtimeFilters = window.__realtimeMonitorFilters || {status:'', team:'', search:''};
   const liveAttendance = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
   const inCount = liveAttendance.filter(l => l.status === 'in').length;
   const breakCount = liveAttendance.filter(l => l.status === 'break').length;
   const notCheckedInCount = liveAttendance.filter(l => l.status === 'not_checked_in').length;
   const leaveCount = liveAttendance.filter(l => l.status === 'leave').length;
+  const teamOptions = getRealtimeMonitorTeamOptions(realtimeFilters.team);
   const cards = liveAttendance.map(e=>{
     const dot = {in:'md-in',break:'md-break',out:'md-out',leave:'md-leave',not_checked_in:'md-out'}[e.status] || 'md-out';
     const lbl = {
@@ -4417,7 +4516,7 @@ function pageRealtimeLive(){
       not_checked_in:'Not Checked In Today'
     }[e.status] || 'Status unavailable';
 
-    return `<div class="mon-card" data-status="${e.status || 'out'}"><div class="mon-dot ${dot}"></div>
+    return `<div class="mon-card" data-status="${e.status || 'out'}" data-team="${e.dept || ''}"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
       <div style="font-size:11px;color:var(--muted);">${e.dept} - ${lbl}</div></div></div>`;
   }).join('');
@@ -4432,7 +4531,7 @@ function pageRealtimeLive(){
   <div class="card">
     <div class="card-hdr">
       <div class="card-title"><span class="live-dot" style="margin-right:6px;"></span>Live Employee Status</div>
-      <div style="display:flex;gap:8px;align-items:center;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <select class="fi" id="rt-status-filter" onchange="filterMonitor()" style="width:180px;">
           <option value="" ${!realtimeFilters.status ? 'selected' : ''}>All Statuses</option>
           <option value="in" ${realtimeFilters.status === 'in' ? 'selected' : ''}>Clocked In</option>
@@ -4440,6 +4539,10 @@ function pageRealtimeLive(){
           <option value="out" ${realtimeFilters.status === 'out' ? 'selected' : ''}>Clocked Out</option>
           <option value="not_checked_in" ${realtimeFilters.status === 'not_checked_in' ? 'selected' : ''}>Not Checked In</option>
           <option value="leave" ${realtimeFilters.status === 'leave' ? 'selected' : ''}>On Leave</option>
+        </select>
+        <select class="fi" id="rt-team-filter" onchange="filterMonitor()" style="width:180px;">
+          <option value="" ${!realtimeFilters.team ? 'selected' : ''}>All Teams</option>
+          ${teamOptions.map(team => `<option value="${team}" ${realtimeFilters.team === team ? 'selected' : ''}>${team}</option>`).join('')}
         </select>
         <input class="search-input" id="rt-search" placeholder="Search..." value="${realtimeFilters.search || ''}" oninput="filterMonitor()" style="width:200px;">
         <button class="btn btn-sm" onclick="window.wpReload().then(() => window.showPage('realtime'))">Refresh</button>
