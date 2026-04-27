@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -27,9 +27,16 @@ class EmployeesController extends Controller
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
         }
 
+        if (!$this->canViewEmployeeRecord($user, $record)) {
+            abort(403);
+        }
+
+        $includeSensitiveProfile = in_array($user->role, ['admin', 'hr'], true)
+            || (int) $record->user_id === (int) $user->id;
+
         return response()->json([
             'ok' => true,
-            'employee' => $this->formatEmployeeRecord($record, $includeConfidential),
+            'employee' => $this->formatEmployeeRecord($record, $includeConfidential, $includeSensitiveProfile),
         ]);
     }
 
@@ -53,7 +60,7 @@ class EmployeesController extends Controller
             'manager' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])], // default employee
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
-            'cnic_document' => ['nullable', 'file', 'max:10240'],
+            'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
@@ -100,7 +107,7 @@ class EmployeesController extends Controller
 
         $managerUserId = null;
         if (!empty($validated['manager'])) {
-            $managerUserId = DB::table('users')->where('name', $validated['manager'])->value('id');
+            $managerUserId = $this->resolveManagerUserId($validated['manager']);
         }
 
         $employeeCode = $this->nextEmployeeCodeForTeam($validated['dept']);
@@ -246,7 +253,7 @@ class EmployeesController extends Controller
             'gender' => ['nullable', 'string', 'max:20'],
             'cnic' => ['nullable', 'string', 'max:30'],
             'passport_no' => ['nullable', 'string', 'max:50'],
-            'cnic_document' => ['nullable', 'file', 'max:10240'],
+            'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
             'address' => ['nullable', 'string', 'max:255'],
             'marital_status' => ['nullable', 'string', 'max:30'],
             'blood' => ['nullable', 'string', 'max:10'],
@@ -284,7 +291,7 @@ class EmployeesController extends Controller
 
         $managerUserId = null;
         if (!empty($validated['manager'])) {
-            $managerUserId = DB::table('users')->where('name', $validated['manager'])->value('id');
+            $managerUserId = $this->resolveManagerUserId($validated['manager']);
         }
 
         $currentUser = DB::table('users')->where('id', $userId)->first(['employee_code']);
@@ -407,10 +414,7 @@ class EmployeesController extends Controller
         }
 
         if ($profile->cnic_document_path) {
-            $absolutePath = public_path($profile->cnic_document_path);
-            if (File::exists($absolutePath)) {
-                File::delete($absolutePath);
-            }
+            $this->deleteStoredFile((string) $profile->cnic_document_path);
         }
 
         DB::table('employee_profiles')
@@ -422,6 +426,51 @@ class EmployeesController extends Controller
             ]);
 
         return response()->json(['ok' => true]);
+    }
+
+    public function downloadCnicDocument(Request $request, string $employeeCode)
+    {
+        $user = $request->user();
+        $includeConfidential = $user->role === 'admin';
+        $record = $this->employeeQuery($includeConfidential)
+            ->where('users.employee_code', $employeeCode)
+            ->first();
+
+        if (!$record) {
+            abort(404);
+        }
+
+        if (!$this->canViewEmployeeRecord($user, $record)) {
+            abort(403);
+        }
+
+        if (!$record->cnic_document_path) {
+            abort(404);
+        }
+
+        return $this->downloadPrivateFile((string) $record->cnic_document_path, (string) ($record->cnic_document_name ?: 'employee-document'));
+    }
+
+    public function downloadProfilePhoto(Request $request, string $employeeCode)
+    {
+        $user = $request->user();
+        $record = $this->employeeQuery(false)
+            ->where('users.employee_code', $employeeCode)
+            ->first();
+
+        if (!$record) {
+            abort(404);
+        }
+
+        if (!$this->canViewEmployeeRecord($user, $record)) {
+            abort(403);
+        }
+
+        if (!$record->profile_photo_path) {
+            abort(404);
+        }
+
+        return $this->downloadPrivateFile((string) $record->profile_photo_path, (string) ($record->profile_photo_name ?: 'profile-photo'));
     }
 
     public function destroy(Request $request, string $employeeCode): JsonResponse
@@ -492,12 +541,16 @@ class EmployeesController extends Controller
             'employee_profiles.passport_no',
             'employee_profiles.cnic_document_path',
             'employee_profiles.cnic_document_name',
+            'employee_profiles.profile_photo_path',
+            'employee_profiles.profile_photo_name',
             'employee_profiles.address',
             'employee_profiles.marital_status',
             'employee_profiles.blood_group',
             'employee_profiles.next_of_kin_name',
             'employee_profiles.next_of_kin_relationship',
             'employee_profiles.next_of_kin_phone',
+            'employee_profiles.department_id',
+            'employee_profiles.manager_user_id',
             'shifts.id as shift_id',
             'shifts.code as shift_code',
             'shifts.name as shift_name',
@@ -532,7 +585,7 @@ class EmployeesController extends Controller
             ->select($select);
     }
 
-    private function formatEmployeeRecord(object $record, bool $includeConfidential): array
+    private function formatEmployeeRecord(object $record, bool $includeConfidential, bool $includeSensitiveProfile = false): array
     {
         $parts = preg_split('/\s+/', trim((string) $record->name)) ?: [];
         $fname = $parts[0] ?? $record->name;
@@ -554,22 +607,25 @@ class EmployeesController extends Controller
             'type' => $record->employment_type,
             'workLocation' => $record->work_location,
             'confirmationDate' => $record->confirmation_date,
-            'phone' => $record->personal_phone,
-            'personalEmail' => $record->personal_email,
+            'phone' => $includeSensitiveProfile ? $record->personal_phone : null,
+            'personalEmail' => $includeSensitiveProfile ? $record->personal_email : null,
             'manager' => $record->manager_name ?? '-',
-            'dob' => $record->date_of_birth,
-            'gender' => $record->gender,
-            'cnic' => $record->cnic,
-            'passportNo' => $record->passport_no,
-            'cnicDocumentPath' => $record->cnic_document_path,
-            'cnicDocumentName' => $record->cnic_document_name,
-            'cnicDocumentUrl' => $record->cnic_document_path ? asset($record->cnic_document_path) : null,
-            'address' => $record->address,
-            'maritalStatus' => $record->marital_status,
-            'blood' => $record->blood_group,
-            'kin' => $record->next_of_kin_name,
-            'kinRel' => $record->next_of_kin_relationship,
-            'kinPhone' => $record->next_of_kin_phone,
+            'dob' => $includeSensitiveProfile ? $record->date_of_birth : null,
+            'gender' => $includeSensitiveProfile ? $record->gender : null,
+            'cnic' => $includeSensitiveProfile ? $record->cnic : null,
+            'passportNo' => $includeSensitiveProfile ? $record->passport_no : null,
+            'cnicDocumentPath' => $includeSensitiveProfile ? $record->cnic_document_path : null,
+            'cnicDocumentName' => $includeSensitiveProfile ? $record->cnic_document_name : null,
+            'cnicDocumentUrl' => ($includeSensitiveProfile && $record->cnic_document_path) ? url('/api/employees/'.$record->employee_code.'/cnic-document') : null,
+            'profilePhotoPath' => $record->profile_photo_path,
+            'profilePhotoName' => $record->profile_photo_name,
+            'profilePhotoUrl' => $record->profile_photo_path ? url('/api/employees/'.$record->employee_code.'/profile-photo') : null,
+            'address' => $includeSensitiveProfile ? $record->address : null,
+            'maritalStatus' => $includeSensitiveProfile ? $record->marital_status : null,
+            'blood' => $includeSensitiveProfile ? $record->blood_group : null,
+            'kin' => $includeSensitiveProfile ? $record->next_of_kin_name : null,
+            'kinRel' => $includeSensitiveProfile ? $record->next_of_kin_relationship : null,
+            'kinPhone' => $includeSensitiveProfile ? $record->next_of_kin_phone : null,
             'shiftId' => $record->shift_id,
             'shiftCode' => $record->shift_code,
             'shiftName' => $record->shift_name,
@@ -604,20 +660,70 @@ class EmployeesController extends Controller
             return ['path' => null, 'name' => null];
         }
 
-        $directory = public_path('uploads/employee-documents');
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
-
         $extension = strtolower((string) $file->getClientOriginalExtension());
         $filename = sprintf('cnic-%s-%s.%s', $employeeCode ?: $userId, Str::lower(Str::random(8)), $extension);
+        $path = 'employee-documents/'.$filename;
 
-        $file->move($directory, $filename);
+        Storage::putFileAs('employee-documents', $file, $filename);
 
         return [
-            'path' => 'uploads/employee-documents/'.$filename,
+            'path' => $path,
             'name' => $file->getClientOriginalName(),
         ];
+    }
+
+    private function canViewEmployeeRecord(object $viewer, object $record): bool
+    {
+        if (in_array($viewer->role, ['admin', 'hr'], true)) {
+            return true;
+        }
+
+        if ((int) $record->user_id === (int) $viewer->id) {
+            return true;
+        }
+
+        if (($record->role ?? null) === 'hr') {
+            return true;
+        }
+
+        if (!empty($record->manager_user_id) && (int) $record->manager_user_id === (int) $viewer->id) {
+            return true;
+        }
+
+        $viewerDepartmentId = DB::table('employee_profiles')
+            ->where('user_id', $viewer->id)
+            ->value('department_id');
+
+        return $viewerDepartmentId !== null
+            && (int) $viewerDepartmentId === (int) ($record->department_id ?? 0);
+    }
+
+    private function downloadPrivateFile(string $relativePath, string $downloadName)
+    {
+        $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        if (Storage::exists($normalizedPath)) {
+            return response()->download(Storage::path($normalizedPath), $downloadName);
+        }
+
+        $legacyPublicPath = public_path($normalizedPath);
+        abort_unless(is_file($legacyPublicPath), 404);
+
+        return response()->download($legacyPublicPath, $downloadName);
+    }
+
+    private function deleteStoredFile(string $relativePath): void
+    {
+        $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (Storage::exists($normalizedPath)) {
+            Storage::delete($normalizedPath);
+            return;
+        }
+
+        $legacyPublicPath = public_path($normalizedPath);
+        if (is_file($legacyPublicPath)) {
+            @unlink($legacyPublicPath);
+        }
     }
 
     private function nextEmployeeCodeForTeam(string $teamName, ?int $ignoreUserId = null): string
@@ -682,5 +788,27 @@ class EmployeesController extends Controller
 
         $base = ucfirst(substr($normalized ?: 'team', 0, 3));
         return strlen($base) >= 2 ? $base : 'Tem';
+    }
+
+    private function resolveManagerUserId(string $managerIdentifier): ?int
+    {
+        $normalized = trim($managerIdentifier);
+        if ($normalized === '') {
+            return null;
+        }
+
+        $byEmployeeCode = DB::table('users')
+            ->where('employee_code', $normalized)
+            ->value('id');
+
+        if ($byEmployeeCode) {
+            return (int) $byEmployeeCode;
+        }
+
+        $byExactName = DB::table('users')
+            ->where('name', $normalized)
+            ->value('id');
+
+        return $byExactName ? (int) $byExactName : null;
     }
 }

@@ -4,9 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class MeController extends Controller
@@ -137,6 +137,12 @@ class MeController extends Controller
             ->select($select)
             ->first();
 
+        if ($row) {
+            $row->profilePhotoUrl = $row->profile_photo_path
+                ? url('/api/employees/'.$row->employee_code.'/profile-photo')
+                : null;
+        }
+
         return response()->json(['ok' => true, 'profile' => $row]);
     }
 
@@ -173,10 +179,7 @@ class MeController extends Controller
                 $photoMeta = $this->storeProfilePhoto($request->file('profile_photo'), $user->employee_code ?? (string) $user->id);
 
                 if ($profile?->profile_photo_path) {
-                    $absolutePath = public_path($profile->profile_photo_path);
-                    if (File::exists($absolutePath)) {
-                        File::delete($absolutePath);
-                    }
+                    $this->deleteStoredProfilePhoto((string) $profile->profile_photo_path);
                 }
 
                 DB::table('employee_profiles')->updateOrInsert(
@@ -199,19 +202,29 @@ class MeController extends Controller
 
     private function storeProfilePhoto($file, string $employeeCode): array
     {
-        $directory = public_path('uploads/profile-photos');
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
-
         $extension = strtolower((string) $file->getClientOriginalExtension());
         $filename = sprintf('profile-%s-%s.%s', $employeeCode, Str::lower(Str::random(8)), $extension);
 
-        $file->move($directory, $filename);
+        Storage::putFileAs('profile-photos', $file, $filename);
 
         return [
-            'path' => 'uploads/profile-photos/'.$filename,
+            'path' => 'profile-photos/'.$filename,
             'name' => $file->getClientOriginalName(),
         ];
+    }
+
+    private function deleteStoredProfilePhoto(string $relativePath): void
+    {
+        $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (Storage::exists($normalizedPath)) {
+            Storage::delete($normalizedPath);
+            return;
+        }
+
+        $legacyPublicPath = public_path($normalizedPath);
+        if (is_file($legacyPublicPath)) {
+            @unlink($legacyPublicPath);
+        }
     }
 }

@@ -15,6 +15,12 @@
 .env.testing
 .env.staging
 .env.development.local
+# Sensitive local artifacts
+*.sql
+*-cookie.txt
+cookie.txt
+storage/app/private/*
+!storage/app/private/.gitignore
 # Built distribution
 dist/
 

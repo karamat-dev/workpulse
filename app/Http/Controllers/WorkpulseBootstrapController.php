@@ -211,10 +211,14 @@ class WorkpulseBootstrapController extends Controller
             'iban' => $profile?->bank_iban,
             'cnicDocumentPath' => $profile?->cnic_document_path,
             'cnicDocumentName' => $profile?->cnic_document_name,
-            'cnicDocumentUrl' => $profile?->cnic_document_path ? asset($profile->cnic_document_path) : null,
+            'cnicDocumentUrl' => ($profile?->cnic_document_path && $user->employee_code)
+                ? url('/api/employees/'.$user->employee_code.'/cnic-document')
+                : null,
             'profilePhotoPath' => $profile?->profile_photo_path,
             'profilePhotoName' => $profile?->profile_photo_name,
-            'profilePhotoUrl' => $profile?->profile_photo_path ? asset($profile->profile_photo_path) : null,
+            'profilePhotoUrl' => ($profile?->profile_photo_path && $user->employee_code)
+                ? url('/api/employees/'.$user->employee_code.'/profile-photo')
+                : null,
             'avatar' => $avatar,
             'avatarColor' => $avatarColor,
             'status' => $profile?->status ?? 'Active',
@@ -322,8 +326,8 @@ class WorkpulseBootstrapController extends Controller
                 'dop' => $employee->dop,
                 'lwd' => $employee->lwd,
                 'manager' => $employee->manager ?? '-',
-                'phone' => $employee->phone,
-                'email' => $employee->email,
+                'phone' => $user->role === 'admin' ? $employee->phone : null,
+                'email' => $user->role === 'admin' ? $employee->email : null,
                 'workLocation' => $employee->work_location,
                 'confirmationDate' => $employee->confirmation_date,
                 'shiftId' => $employee->shift_id,
@@ -334,12 +338,16 @@ class WorkpulseBootstrapController extends Controller
                 'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : null,
                 'shiftBreak' => $employee->break_minutes !== null ? (int) $employee->break_minutes : 60,
                 'shiftWorkingDays' => $employee->working_days,
-                'cnicDocumentPath' => $employee->cnic_document_path,
-                'cnicDocumentName' => $employee->cnic_document_name,
-                'cnicDocumentUrl' => $employee->cnic_document_path ? asset($employee->cnic_document_path) : null,
+                'cnicDocumentPath' => $user->role === 'admin' ? $employee->cnic_document_path : null,
+                'cnicDocumentName' => $user->role === 'admin' ? $employee->cnic_document_name : null,
+                'cnicDocumentUrl' => ($user->role === 'admin' && $employee->cnic_document_path)
+                    ? url('/api/employees/'.$employee->employee_code.'/cnic-document')
+                    : null,
                 'profilePhotoPath' => $employee->profile_photo_path,
                 'profilePhotoName' => $employee->profile_photo_name,
-                'profilePhotoUrl' => $employee->profile_photo_path ? asset($employee->profile_photo_path) : null,
+                'profilePhotoUrl' => $employee->profile_photo_path
+                    ? url('/api/employees/'.$employee->employee_code.'/profile-photo')
+                    : null,
                 'avatar' => $av,
                 'avatarColor' => $color,
                 'status' => $employee->status ?? 'Active',
@@ -800,7 +808,7 @@ class WorkpulseBootstrapController extends Controller
                 'title' => $policy->title,
                 'fileName' => $policy->file_name,
                 'fileSize' => (int) ($policy->file_size ?? 0),
-                'fileUrl' => $policy->file_path ? asset($policy->file_path) : null,
+                'fileUrl' => $policy->file_path ? url('/api/policies/'.$policy->id.'/file') : null,
                 'uploadedBy' => $policy->uploaded_by_name ?: 'Admin',
                 'uploadedAt' => $policy->created_at ? (string) $policy->created_at : null,
             ])

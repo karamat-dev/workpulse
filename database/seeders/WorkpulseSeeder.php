@@ -64,89 +64,93 @@ class WorkpulseSeeder extends Seeder
 
     private function seedUsers(): void
     {
+        $employeePassword = (string) env('WORKPULSE_DEMO_EMPLOYEE_PASSWORD', Str::random(20));
+        $hrPassword = (string) env('WORKPULSE_DEMO_HR_PASSWORD', Str::random(20));
+        $adminPassword = (string) env('WORKPULSE_DEMO_ADMIN_PASSWORD', Str::random(20));
+
         $users = [
             [
                 'employee_code' => 'EMP-001',
                 'name' => 'Ali Raza',
                 'email' => 'employee1@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'HR-001',
                 'name' => 'Sara Ahmed',
                 'email' => 'hr@workpulse.com',
-                'password' => 'hr123',
+                'password' => $hrPassword,
                 'role' => 'hr',
             ],
             [
                 'employee_code' => 'EMP-002',
                 'name' => 'Ayesha Khan',
                 'email' => 'employee2@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-003',
                 'name' => 'Hamza Siddiqui',
                 'email' => 'employee3@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-004',
                 'name' => 'Fatima Noor',
                 'email' => 'employee4@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-005',
                 'name' => 'Usman Tariq',
                 'email' => 'employee5@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-006',
                 'name' => 'Hira Malik',
                 'email' => 'employee6@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-007',
                 'name' => 'Bilal Javed',
                 'email' => 'employee7@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-008',
                 'name' => 'Maham Iqbal',
                 'email' => 'employee8@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-009',
                 'name' => 'Danish Saleem',
                 'email' => 'employee9@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'EMP-010',
                 'name' => 'Zoya Ahmed',
                 'email' => 'employee10@workpulse.com',
-                'password' => 'emp123',
+                'password' => $employeePassword,
                 'role' => 'employee',
             ],
             [
                 'employee_code' => 'ADM-001',
                 'name' => 'Zainab Hussain',
                 'email' => 'admin@workpulse.com',
-                'password' => 'admin123',
+                'password' => $adminPassword,
                 'role' => 'admin',
             ],
         ];

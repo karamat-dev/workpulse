@@ -52,7 +52,7 @@ class ReportsController extends Controller
         ];
     }
 
-    private function buildAttendanceStatusMap(string $start, string $end, ?string $employeeCode = null)
+    private function buildAttendanceStatusMap(object $viewer, string $start, string $end, ?string $employeeCode = null)
     {
         $usersQuery = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
@@ -75,6 +75,8 @@ class ReportsController extends Controller
                 'attendance_days.overtime_minutes',
             ])
             ->orderBy('users.employee_code');
+
+        $this->applyViewerScope($usersQuery, $viewer);
 
         $dayRows = $usersQuery->get();
         $userIds = $dayRows->pluck('user_id')->unique()->filter()->values();
@@ -126,7 +128,7 @@ class ReportsController extends Controller
         $start = $filters['start'];
         $end = $filters['end'];
 
-        [$days, $groupedRows, $leaveByUserDate] = $this->buildAttendanceStatusMap($start, $end, $filters['employee_code']);
+        [$days, $groupedRows, $leaveByUserDate] = $this->buildAttendanceStatusMap($request->user(), $start, $end, $filters['employee_code']);
 
         $rows = $groupedRows->map(function ($records, $userId) use ($days, $leaveByUserDate) {
             $first = $records->first();
@@ -186,13 +188,16 @@ class ReportsController extends Controller
     public function monthlyAttendanceCsv(Request $request): StreamedResponse
     {
         $filters = $this->validateAttendanceReportFilters($request);
-        $payload = $this->monthlyAttendance(new Request([
+        $proxyRequest = new Request([
             'year' => $filters['year'] ?? null,
             'month' => $filters['month'] ?? null,
             'start_date' => $filters['mode'] === 'custom' ? $filters['start'] : null,
             'end_date' => $filters['mode'] === 'custom' ? $filters['end'] : null,
             'employee_code' => $filters['employee_code'],
-        ]))->getData(true);
+        ]);
+        $proxyRequest->setUserResolver(fn () => $request->user());
+
+        $payload = $this->monthlyAttendance($proxyRequest)->getData(true);
         $dates = $payload['dates'] ?? [];
         $rows = $payload['rows'] ?? [];
 
@@ -275,8 +280,11 @@ class ReportsController extends Controller
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->select($select)
-            ->orderBy('users.employee_code')
-            ->get();
+            ->orderBy('users.employee_code');
+
+        $this->applyViewerScope($rows, $request->user());
+
+        $rows = $rows->get();
 
         return response()->json(['ok' => true, 'employees' => $rows]);
     }
@@ -321,8 +329,11 @@ class ReportsController extends Controller
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->select($select)
-            ->orderBy('users.employee_code')
-            ->cursor();
+            ->orderBy('users.employee_code');
+
+        $this->applyViewerScope($rows, $request->user());
+
+        $rows = $rows->cursor();
 
         $filename = 'employees.csv';
 
@@ -372,5 +383,28 @@ class ReportsController extends Controller
         }, $filename, [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    private function applyViewerScope($query, object $viewer): void
+    {
+        if (in_array($viewer->role, ['admin', 'hr'], true)) {
+            return;
+        }
+
+        $viewerDepartmentId = DB::table('employee_profiles')
+            ->where('user_id', $viewer->id)
+            ->value('department_id');
+
+        $query->where(function ($scoped) use ($viewer, $viewerDepartmentId) {
+            $scoped->where('users.id', $viewer->id);
+
+            if ($viewerDepartmentId !== null) {
+                $scoped->orWhere('employee_profiles.department_id', $viewerDepartmentId);
+            }
+
+            if ($viewer->role === 'manager') {
+                $scoped->orWhere('employee_profiles.manager_user_id', $viewer->id);
+            }
+        });
     }
 }

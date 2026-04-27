@@ -165,7 +165,9 @@ class ReportsMonthlyAttendanceTest extends TestCase
         $response->assertOk();
         $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
         $response->assertHeader('content-disposition', 'attachment; filename=attendance-2026-04-10-to-2026-04-10.csv');
-        $response->assertSee('Employee ID,Name,Department,Designation,2026-04-10,Present,Absent,Leave,Late,Overtime (min)', false);
-        $response->assertSee('EMP-200,"Sara Noor",People,"Software Engineer",P,1,0,0,0,30', false);
+        $content = $response->streamedContent();
+
+        $this->assertStringContainsString('"Employee ID",Name,Department,Designation,2026-04-10,Present,Absent,Leave,Late,"Overtime (min)"', $content);
+        $this->assertStringContainsString('EMP-200,"Sara Noor",People,"Software Engineer",P,1,0,0,0,30', $content);
     }
 }

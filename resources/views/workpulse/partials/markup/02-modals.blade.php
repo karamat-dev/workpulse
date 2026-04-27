@@ -2,7 +2,7 @@
 
 <!-- Leave Modal -->
 <div class="modal-overlay" id="leaveModal">
-  <div class="modal" style="width:min(1220px,96vw);">
+  <div class="modal modal-xl">
     <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
     <div class="fg"><label class="fl">Leave Type <span class="req-star">*</span></label>
       <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select></div>
@@ -37,7 +37,7 @@
     <div id="lv-calc" style="background:var(--accent-bg);border-radius:7px;padding:10px 12px;font-size:13px;color:var(--accent-dark);margin-bottom:12px;display:none;">
       <strong id="lv-days">0</strong> working day(s) requested
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('leaveModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitLeave()"">Submit Request</button>
     </div>
@@ -46,7 +46,7 @@
 
 <!-- Regulation Modal -->
 <div class="modal-overlay" id="regulationModal">
-  <div class="modal" style="width:min(1220px,96vw);">
+  <div class="modal modal-xl">
     <div class="modal-hdr"><div class="modal-title">Attendance Regulation Request</div><button class="modal-close" onclick="window.closeModal('regulationModal')">×</button></div>
     <div class="g3" style="grid-template-columns:1.2fr 1fr 1fr;align-items:end;">
       <div class="fg"><label class="fl">Employee</label><input type="text" class="fi" id="reg-employee" readonly></div>
@@ -79,7 +79,7 @@
         </tbody>
       </table>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('regulationModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitRegulation()">Submit Selected</button>
     </div>
@@ -98,7 +98,7 @@
       <div class="fg" id="ntf-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ntf-targets" multiple size="6"></select></div>
     </div>
     <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ntf-msg" rows="4" placeholder="Type your notification..."></textarea></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('notificationModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitNotification()">Save Notification</button>
     </div>
@@ -118,7 +118,7 @@
     </div>
     <div class="fg" id="ann-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ann-targets" multiple size="6"></select></div>
     <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
       <button class="btn btn-primary" id="announcement-submit-btn" onclick="window.submitAnnouncement()">Publish</button>
     </div>
@@ -232,7 +232,7 @@
     <div class="fg"><label class="fl">Date <span class="req-star">*</span></label><input type="date" class="fi" id="hol-date"></div>
     <div class="fg"><label class="fl">Type</label>
       <select class="fi" id="hol-type"><option>National</option><option>Religious</option><option>Optional</option></select></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('holidayModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitHoliday()"">Add Holiday</button>
     </div>
@@ -249,7 +249,7 @@
       <div class="fg"><label class="fl">Color</label><input type="color" class="fi" id="dept-color" value="#2447D0" style="height:44px;padding:6px;"></div>
       <div class="fg"><label class="fl">Team Lead</label><select class="fi" id="dept-head"></select></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('departmentModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveDepartment()">Save Team</button>
     </div>
@@ -272,7 +272,7 @@
 
 <!-- Edit Employee Modal -->
 <div class="modal-overlay" id="editEmpModal">
-  <div class="modal" style="width:600px;">
+  <div class="modal modal-wide">
     <div class="modal-hdr"><div class="modal-title">Edit Employee</div><button class="modal-close" onclick="window.closeModal('editEmpModal')">×</button></div>
     <div class="tabs" style="margin-bottom:16px;" id="edit-emp-tabs">
       <div class="tab active" onclick="window.switchEditTab('personal')">Personal</div>
@@ -378,7 +378,7 @@
       </div>
       <div class="fg"><label class="fl">IBAN</label><input type="text" class="fi" id="ee-iban"></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+    <div class="modal-actions" style="margin-top:16px;">
       <button class="btn" onclick="window.closeModal('editEmpModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveEditEmployee()">Save Changes</button>
     </div>
@@ -404,7 +404,7 @@
       <div class="fg"><label class="fl">Working Days</label><input type="text" class="fi" id="shift-days" value="Mon-Fri"></div>
       <div class="fg"><label class="fl">Status</label><select class="fi" id="shift-active"><option value="1">Active</option><option value="0">Inactive</option></select></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('shiftModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveShift()">Save Shift</button>
     </div>
@@ -430,7 +430,7 @@
     <div style="font-size:12px;color:var(--muted);margin-top:8px;">
       Use "Set exact balance" to replace values directly, or "Adjust balance (+/-)" to increase/decrease from current values.
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('editLeaveModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveLeaveBalance()">Save Balance</button>
     </div>
@@ -439,7 +439,7 @@
 
 <!-- Edit Leave Policy Modal (Admin/HR) -->
 <div class="modal-overlay" id="editLeavePolicyModal">
-  <div class="modal" style="max-width:760px;">
+  <div class="modal modal-wide">
     <div class="modal-hdr"><div class="modal-title">Edit Leave Policy</div><button class="modal-close" onclick="window.closeModal('editLeavePolicyModal')">×</button></div>
     <div class="g2">
       <div class="fg">
@@ -452,7 +452,7 @@
       </div>
     </div>
     <div id="edit-leave-policy-grid" style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:10px;"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+    <div class="modal-actions" style="margin-top:16px;">
       <button class="btn" onclick="window.closeModal('editLeavePolicyModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveLeavePolicy()">Save Policy</button>
     </div>
@@ -471,7 +471,7 @@
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
       Employees can update only their own password and profile picture here. Profile, team, type, salary, and other HR details stay managed by admin.
     </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('accountSettingsModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitAccountSettings()">Save Account</button>
     </div>
@@ -493,7 +493,7 @@
       </select>
     </div>
     <div id="lt-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('leaveTypeModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.saveLeaveType()">Save Leave Type</button>
     </div>
@@ -508,7 +508,7 @@
     <div class="fg"><label class="fl">New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"></div>
     <div class="fg"><label class="fl">Confirm New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"></div>
     <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
+    <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('changePassModal')">Cancel</button>
       <button class="btn btn-primary" onclick="window.submitChangePassword()">Update Password</button>
     </div>
@@ -521,7 +521,7 @@
     <div style="font-size:32px;margin-bottom:12px;" id="confirm-icon">⚠️</div>
     <div class="modal-title" id="confirm-title" style="margin-bottom:8px;">Are you sure?</div>
     <div style="font-size:13px;color:var(--muted);margin-bottom:20px;" id="confirm-msg"></div>
-    <div style="display:flex;gap:8px;justify-content:center;">
+    <div class="modal-actions" style="justify-content:center;">
       <button class="btn" onclick="window.closeModal('confirmModal')">Cancel</button>
       <button class="btn btn-danger" id="confirm-ok-btn">Confirm</button>
     </div>

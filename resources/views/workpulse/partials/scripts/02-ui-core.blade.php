@@ -250,6 +250,31 @@ function doLogout(){
   });
 }
 
+function closeTopbarUserMenu(){
+  const menu = document.getElementById('topbar-user-menu');
+  const trigger = document.getElementById('topbar-user-trigger');
+  if(menu) menu.classList.remove('open');
+  if(trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleTopbarUserMenu(forceOpen){
+  const menu = document.getElementById('topbar-user-menu');
+  const trigger = document.getElementById('topbar-user-trigger');
+  if(!menu) return;
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !menu.classList.contains('open');
+  menu.classList.toggle('open', shouldOpen);
+  if(trigger) trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+document.addEventListener('click', function(e){
+  const menu = document.getElementById('topbar-user-menu');
+  if(menu && !menu.contains(e.target)) closeTopbarUserMenu();
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.key === 'Escape') closeTopbarUserMenu();
+});
+
 function savePunchState(empId){
   try{
     const ps = DB.punchState;
@@ -819,6 +844,7 @@ const pageTitles = {
 };
 
 function showPage(id){
+  closeTopbarUserMenu();
   if(!canAccessPage(id) && id!=='emp-profile-detail'){
     id = getDefaultPageForRole(DB.currentRole);
   }

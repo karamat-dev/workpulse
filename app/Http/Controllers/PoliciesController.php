@@ -5,7 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class PoliciesController extends Controller
 {
@@ -35,12 +35,6 @@ class PoliciesController extends Controller
         ]);
 
         $file = $request->file('policy_file');
-        $directory = public_path('uploads/company-policies');
-
-        if (!File::exists($directory)) {
-            File::makeDirectory($directory, 0755, true);
-        }
-
         $filename = sprintf(
             'policy-%s-%s.pdf',
             now()->format('YmdHis'),
@@ -48,11 +42,11 @@ class PoliciesController extends Controller
         );
 
         $fileSize = (int) $file->getSize();
-        $file->move($directory, $filename);
+        Storage::putFileAs('company-policies', $file, $filename);
 
         $id = DB::table('company_policies')->insertGetId([
             'title' => $validated['title'],
-            'file_path' => 'uploads/company-policies/'.$filename,
+            'file_path' => 'company-policies/'.$filename,
             'file_name' => $file->getClientOriginalName(),
             'file_size' => $fileSize,
             'uploaded_by' => $request->user()->id,
@@ -85,15 +79,22 @@ class PoliciesController extends Controller
         }
 
         if ($policy->file_path) {
-            $absolutePath = public_path((string) $policy->file_path);
-            if (File::exists($absolutePath)) {
-                File::delete($absolutePath);
-            }
+            $this->deleteStoredPolicyFile((string) $policy->file_path);
         }
 
         DB::table('company_policies')->where('id', $policyId)->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    public function download(Request $request, int $policyId)
+    {
+        $policy = DB::table('company_policies')->where('id', $policyId)->first();
+        if (!$policy || !$policy->file_path) {
+            abort(404);
+        }
+
+        return $this->downloadStoredPolicyFile((string) $policy->file_path, (string) ($policy->file_name ?: 'policy.pdf'));
     }
 
     private function policiesQuery()
@@ -118,9 +119,38 @@ class PoliciesController extends Controller
             'title' => $policy->title,
             'fileName' => $policy->file_name,
             'fileSize' => (int) ($policy->file_size ?? 0),
-            'fileUrl' => $policy->file_path ? asset($policy->file_path) : null,
+            'fileUrl' => $policy->file_path ? url('/api/policies/'.$policy->id.'/file') : null,
             'uploadedBy' => $policy->uploaded_by_name ?: 'Admin',
             'uploadedAt' => $policy->created_at ? (string) $policy->created_at : null,
         ];
+    }
+
+    private function downloadStoredPolicyFile(string $relativePath, string $downloadName)
+    {
+        $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (Storage::exists($normalizedPath)) {
+            return response()->download(Storage::path($normalizedPath), $downloadName);
+        }
+
+        $legacyPublicPath = public_path($normalizedPath);
+        abort_unless(is_file($legacyPublicPath), 404);
+
+        return response()->download($legacyPublicPath, $downloadName);
+    }
+
+    private function deleteStoredPolicyFile(string $relativePath): void
+    {
+        $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+        if (Storage::exists($normalizedPath)) {
+            Storage::delete($normalizedPath);
+            return;
+        }
+
+        $legacyPublicPath = public_path($normalizedPath);
+        if (is_file($legacyPublicPath)) {
+            @unlink($legacyPublicPath);
+        }
     }
 }

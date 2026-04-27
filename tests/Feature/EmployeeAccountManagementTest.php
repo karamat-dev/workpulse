@@ -116,6 +116,8 @@ class EmployeeAccountManagementTest extends TestCase
 
     public function test_future_last_working_date_moves_employee_to_offboarding_status(): void
     {
+        $futureDate = now()->addDay()->toDateString();
+
         $admin = User::factory()->create([
             'role' => 'admin',
             'employee_code' => 'ADM-100',
@@ -156,7 +158,7 @@ class EmployeeAccountManagementTest extends TestCase
                 'dept' => 'Operations',
                 'desg' => 'Coordinator',
                 'doj' => '2026-01-10',
-                'lwd' => '2026-04-23',
+                'lwd' => $futureDate,
                 'status' => 'Active',
                 'type' => 'Permanent',
                 'role' => 'employee',
@@ -166,13 +168,15 @@ class EmployeeAccountManagementTest extends TestCase
 
         $this->assertDatabaseHas('employee_profiles', [
             'user_id' => $employee->id,
-            'last_working_date' => '2026-04-23',
+            'last_working_date' => $futureDate,
             'status' => 'Offboarding',
         ]);
     }
 
     public function test_past_last_working_date_moves_employee_to_ex_employee_status(): void
     {
+        $pastDate = now()->subDay()->toDateString();
+
         $admin = User::factory()->create([
             'role' => 'admin',
             'employee_code' => 'ADM-100',
@@ -213,7 +217,7 @@ class EmployeeAccountManagementTest extends TestCase
                 'dept' => 'Operations',
                 'desg' => 'Coordinator',
                 'doj' => '2026-01-10',
-                'lwd' => '2026-04-22',
+                'lwd' => $pastDate,
                 'status' => 'Active',
                 'type' => 'Permanent',
                 'role' => 'employee',
@@ -223,7 +227,7 @@ class EmployeeAccountManagementTest extends TestCase
 
         $this->assertDatabaseHas('employee_profiles', [
             'user_id' => $employee->id,
-            'last_working_date' => '2026-04-22',
+            'last_working_date' => $pastDate,
             'status' => 'Inactive',
         ]);
     }

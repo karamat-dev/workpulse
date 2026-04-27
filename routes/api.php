@@ -24,7 +24,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/apply', [LeaveController::class, 'apply'])->middleware('perm:leave.apply');
 
         Route::get('/pending', [LeaveController::class, 'pendingForReview'])->middleware('perm:leave.apply');
-        Route::patch('/{code}/review', [LeaveController::class, 'review'])->middleware('perm:leave.apply');
+        Route::patch('/{code}/review', [LeaveController::class, 'review'])->middleware('perm:leave.approve_hr');
     });
 
     Route::prefix('reports')->group(function () {

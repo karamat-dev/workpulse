@@ -62,7 +62,7 @@ class CompanyPoliciesTest extends TestCase
 
         DB::table('company_policies')->insert([
             'title' => 'Leave Policy',
-            'file_path' => 'uploads/company-policies/leave-policy.pdf',
+            'file_path' => 'company-policies/leave-policy.pdf',
             'file_name' => 'leave-policy.pdf',
             'file_size' => 4096,
             'uploaded_by' => $admin->id,

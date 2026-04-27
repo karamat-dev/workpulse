@@ -82,38 +82,49 @@
           </button>
           <div class="notif-dot" id="notif-dot"></div>
         </div>
-        <div class="topbar-user-chip">
-          <div class="av av-32 topbar-user-avatar" id="tb-avatar" style="background:var(--accent);color:#fff;">AK</div>
-          <div class="topbar-user-copy">
-            <strong id="tb-name">Ahmed Karim</strong>
-            <span id="tb-email">hello@workpulse.com</span>
+        <div class="topbar-user-menu" id="topbar-user-menu">
+          <button class="topbar-user-chip topbar-user-trigger" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu()" aria-haspopup="menu" aria-expanded="false" id="topbar-user-trigger">
+            <div class="av av-32 topbar-user-avatar" id="tb-avatar" style="background:var(--accent);color:#fff;">AK</div>
+            <div class="topbar-user-copy">
+              <strong id="tb-name">Ahmed Karim</strong>
+              <span id="tb-email">hello@workpulse.com</span>
+            </div>
+            <svg class="topbar-user-caret" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6l4 4 4-4"></path></svg>
+          </button>
+          <div class="topbar-user-dropdown" id="topbar-user-dropdown" role="menu">
+            <button class="topbar-user-dropdown-item" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu(false); window.openAccountSettings && window.openAccountSettings()">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2.5"></circle><path d="M8 1.5l1 .4.8 1.7 1.9.3 1.1 1.6-.8 1.7.8 1.8-1.1 1.5-1.9.4-.8 1.7-1 .4-1-.4-.8-1.7-1.9-.4-1.1-1.5.8-1.8-.8-1.7 1.1-1.6 1.9-.3.8-1.7 1-.4z"></path></svg>
+              <span>Account Settings</span>
+            </button>
+            <button class="topbar-user-dropdown-item danger" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu(false); window.doLogout && window.doLogout()">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 2.5H3.8A1.3 1.3 0 002.5 3.8v8.4a1.3 1.3 0 001.3 1.3H6"></path><path d="M9.5 11.5l3.5-3.5-3.5-3.5"></path><path d="M13 8H5.5"></path></svg>
+              <span>Logout</span>
+            </button>
           </div>
         </div>
       </div>
     </div>
   </div>
 
-  <aside class="sidebar" id="sidebar">
-    <div id="sidebar-nav"></div>
+  <div class="workspace-shell">
+    <aside class="sidebar" id="sidebar">
+      <div id="sidebar-nav"></div>
 
-    <div class="sb-footer">
-      <div class="sidebar-toggle-row">
-        <button class="sidebar-toggle" type="button" id="sidebar-toggle" onclick="window.toggleSidebarCollapse && window.toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3.5L5.5 8l5 4.5"></path></svg>
-        </button>
+      <div class="sb-footer">
+        <div class="sidebar-toggle-row">
+          <button class="sidebar-toggle" type="button" id="sidebar-toggle" onclick="window.toggleSidebarCollapse && window.toggleSidebarCollapse()" title="Collapse sidebar" aria-label="Collapse sidebar">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.5 3.5L5.5 8l5 4.5"></path></svg>
+          </button>
+        </div>
+        <div class="sb-footer-meta">
+          <p>WorkPulse v2.4.1</p>
+          <p style="margin-top:2px;">Backup: Today 03:00 AM</p>
+        </div>
       </div>
-      <div class="sb-promo">
-        <div class="sb-promo-title">Built for fast HR decisions</div>
-        <div class="sb-promo-copy">Track attendance, approvals, team health, and company updates from one clean workspace.</div>
-      </div>
-      <p>WorkPulse v2.4.1</p>
-      <p style="margin-top:2px;">Backup: Today 03:00 AM</p>
-      <button class="btn btn-sm" style="margin-top:10px;width:100%;justify-content:center;color:var(--red);border-color:rgba(255,255,255,.1);background:transparent;font-size:12px;" onclick="window.doLogout()">Sign Out</button>
+    </aside>
+
+    <div class="main">
+      <div class="content" id="main-content"></div>
     </div>
-  </aside>
-
-  <div class="main">
-
-    <div class="content" id="main-content"></div>
   </div>
 </div>

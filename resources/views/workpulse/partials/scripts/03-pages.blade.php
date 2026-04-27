@@ -1686,17 +1686,21 @@ function dashboardUpcomingItems(){
 }
 
 function pageAdminDashboard(){
-  const today=new Date().toISOString().split('T')[0];
-  const currentUser = DB.currentUser || {};
-  const todayAtt=DB.attendance.filter(a=>a.date===today);
-  const liveStatus = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
-  const present=liveStatus.filter(l=>l.status==='in'||l.status==='break').length || todayAtt.filter(a=>a.status==='Present').length;
-  const absent=liveStatus.filter(l=>l.status==='not_checked_in').length || todayAtt.filter(a=>a.status==='Absent').length;
-  const onLeave=liveStatus.filter(l=>l.status==='leave').length || DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
-    const pendingLeaves=DB.leaves.filter(l=>l.status==='Pending').length;
-    const lateToday=todayAtt.filter(a=>a.late).length;
-    const newJoiners=DB.employees.filter(e=>e.doj===today).length;
-    const approvedTodayLeaves = DB.leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today);
+  try{
+    const today=new Date().toISOString().split('T')[0];
+    const currentUser = DB.currentUser || {};
+    const attendance = Array.isArray(DB.attendance) ? DB.attendance : [];
+    const leaves = Array.isArray(DB.leaves) ? DB.leaves : [];
+    const employees = Array.isArray(DB.employees) ? DB.employees : [];
+    const departments = Array.isArray(DB.departments) ? DB.departments : [];
+    const todayAtt=attendance.filter(a=>a.date===today);
+    const liveStatus = Array.isArray(DB.liveAttendance) ? DB.liveAttendance : [];
+    const present=liveStatus.filter(l=>l.status==='in'||l.status==='break').length || todayAtt.filter(a=>a.status==='Present').length;
+    const absent=liveStatus.filter(l=>l.status==='not_checked_in').length || todayAtt.filter(a=>a.status==='Absent').length;
+    const onLeave=liveStatus.filter(l=>l.status==='leave').length || leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today).length;
+    const pendingLeaves=leaves.filter(l=>l.status==='Pending').length;
+    const newJoiners=employees.filter(e=>e.doj===today).length;
+    const approvedTodayLeaves = leaves.filter(l=>l.status==='Approved'&&l.from<=today&&l.to>=today);
     const sickLeaveCount = approvedTodayLeaves.filter(l=>String(l.type||'').toLowerCase().includes('sick')).length;
     const otherLeaveCount = Math.max(0, approvedTodayLeaves.length - sickLeaveCount);
     const attendanceSegmentsTotal = Math.max(1, absent + present + otherLeaveCount + sickLeaveCount);
@@ -1707,25 +1711,31 @@ function pageAdminDashboard(){
       .filter(l=>l.status==='not_checked_in')
       .slice(0,5);
     const deptPalette = ['#BDEFD9', '#6E83D9', '#4058E2', '#D6DBFF', '#A7B2F3', '#C9CCF4'];
-    const deptAttendanceItems = (DB.departments || []).map((d, index)=>{
-      const totalEmployees = Number(d.count || 0);
-      const markedAttendance = Number(d.present || 0);
-      return {
-        name: d.name,
-        color: deptPalette[index % deptPalette.length],
-        totalEmployees,
-        markedAttendance
-      };
-    });
-    const week = dashboardWeekDays().map(d=>({
-      label: d.toLocaleDateString('en-GB',{weekday:'short'}),
-      pct: dashboardAttendancePctForDate(d),
+    const deptAttendanceItems = departments.map((d, index)=>({
+      name: d.name,
+      color: deptPalette[index % deptPalette.length],
+      totalEmployees: Number(d.count || 0),
+      markedAttendance: Number(d.present || 0)
     }));
-  const recent = dashboardRecentActivity();
-  const recentRows = dashboardRecentRows();
-  const upcoming = dashboardUpcomingItems();
+    const pendingLeaveRequests = leaves
+      .filter(l => l.status === 'Pending')
+      .slice(0, 4)
+      .map(l => {
+        const emp = employees.find(e => String(e.id) === String(l.empId));
+        const parts = String(l.empName || '').trim().split(/\s+/);
+        return {
+          id: l.id,
+          name: l.empName || (emp ? `${emp.fname} ${emp.lname}`.trim() : 'Unknown Employee'),
+          avatar: emp?.avatar || initials(parts[0] || 'U', parts.slice(1).join(' ') || 'N'),
+          avatarColor: emp?.avatarColor || 'var(--purple)',
+          range: `${formatDate(l.from)} - ${formatDate(l.to)}`,
+          type: l.type || 'Leave'
+        };
+      });
+    const recentRows = dashboardRecentRows();
+    const upcoming = dashboardUpcomingItems();
 
-  return `
+    return `
   <div class="card dash-welcome-card" style="margin-bottom:14px;">
     <div class="dash-welcome-copy">
       <div class="dash-kicker">Operations Overview</div>
@@ -1739,13 +1749,13 @@ function pageAdminDashboard(){
     </div>
   </div>
     <div class="g4 dash-stat-grid" style="margin-bottom:14px;">
-    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${DB.employees.length}</div><div class="stat-sub" style="color:var(--green);">+ ${newJoiners} new today</div></div>
+    <div class="stat-card"><div class="stat-label">Total Employees</div><div class="stat-val">${employees.length}</div><div class="stat-sub" style="color:var(--green);">+ ${newJoiners} new today</div></div>
     <div class="stat-card"><div class="stat-label">Present Today</div><div class="stat-val" style="color:var(--green);">${present}</div><div class="stat-sub">Checked in now</div></div>
     <div class="stat-card"><div class="stat-label">On Leave Today</div><div class="stat-val" style="color:var(--purple);">${onLeave}</div><div class="stat-sub">Approved leave</div></div>
     <div class="stat-card"><div class="stat-label">Pending Approvals</div><div class="stat-val" style="color:var(--amber);">${pendingLeaves}</div><div class="stat-sub" onclick="window.showPage('leave')" style="cursor:pointer;color:var(--accent);">View requests -></div></div>
   </div>
 
-    <div class="g2" style="margin-bottom:14px;">
+    <div class="g3 dashboard-trio-grid" style="margin-bottom:14px;">
       <div class="card">
         <div class="card-hdr"><div class="card-title">Attendance</div><span class="badge bg-blue">Live Today</span></div>
         <div class="attendance-mini-card">
@@ -1787,13 +1797,31 @@ function pageAdminDashboard(){
               <div class="dept-summary-meta">
                 <span class="dept-summary-dot" style="background:${item.color};"></span>
                 <div class="dept-summary-copy">
-                  <span>${item.name}</span>
+                  <span>${item.name} <strong>${item.markedAttendance}/${item.totalEmployees}</strong></span>
                   <small>${item.markedAttendance} of ${item.totalEmployees} marked</small>
                 </div>
               </div>
-              <strong>${item.markedAttendance}/${item.totalEmployees}</strong>
             </div>`).join('')}
           </div>
+        </div>
+      </div>
+      <div class="card dashboard-leave-card dashboard-leave-card-compact">
+        <div class="card-hdr">
+          <div class="card-title">Leave Requests</div>
+          <button class="dashboard-filter-btn" type="button" onclick="window.showPage('leave')">View All</button>
+        </div>
+        <div class="dashboard-leave-requests compact">
+          ${pendingLeaveRequests.map(item=>`
+          <button class="dashboard-leave-request compact" type="button" onclick="window.showPage('leave')">
+            <div class="dashboard-leave-request-user">
+              <div class="av av-32" style="background:${item.avatarColor}22;color:${item.avatarColor};">${item.avatar}</div>
+              <div class="dashboard-leave-request-copy">
+                <strong>${item.name}</strong>
+                <span>${item.range}</span>
+              </div>
+            </div>
+            <span class="dashboard-leave-request-arrow">›</span>
+          </button>`).join('') || `<div class="dashboard-leave-request-empty compact">No pending leave requests right now.</div>`}
         </div>
       </div>
     </div>
@@ -1813,7 +1841,6 @@ function pageAdminDashboard(){
         <div class="dashboard-recent-table">
           <div class="dashboard-recent-thead">
             <span>Date</span>
-            <span>Employee ID</span>
             <span>Name</span>
             <span>Role</span>
             <span>Status</span>
@@ -1822,7 +1849,6 @@ function pageAdminDashboard(){
             ${recentRows.map(row=>`
             <div class="dashboard-recent-row" data-dashboard-recent-row data-search="${[row.date,row.empId,row.name,row.role,row.dept,row.status].join(' ')}">
               <span>${formatDate(row.date)}</span>
-              <span>${row.empId}</span>
               <span>
                 <div class="dashboard-recent-user">
                   <div class="av av-28" style="background:${row.avatarColor};color:#fff;">${row.avatar}</div>
@@ -1870,6 +1896,10 @@ function pageAdminDashboard(){
       </div>`).join('') || `<p style="color:var(--muted);">Everyone has already checked in or is on leave.</p>`}
     </div>
   </div>`;
+  }catch(e){
+    console.error('pageAdminDashboard render error', e);
+    return `<div class="card"><div class="card-title">Dashboard</div><p style="margin-top:8px;color:var(--muted);">Could not render dashboard. Please refresh.</p><p style="margin-top:6px;color:var(--red);font-size:12px;">${String(e?.message || e)}</p></div>`;
+  }
 }
 
 function pageHrDashboard(){
@@ -2012,9 +2042,12 @@ function pageAttendance(){
       </div>
     </div>
     <div class="admin-att-summary card">
-      <div class="card-hdr" style="margin-bottom:10px;">
-        <div class="card-title">Today's Summary</div>
-        <span class="badge bg-blue">Attendance</span>
+      <div class="att-summary-top">
+        <div>
+          <div class="card-title">Today's Summary</div>
+          <div class="att-summary-subtitle">Live attendance snapshot for today</div>
+        </div>
+        <span class="att-summary-pill">Attendance</span>
       </div>
       <div class="admin-att-summary-grid">
         <div class="admin-att-stat">
@@ -2029,15 +2062,24 @@ function pageAttendance(){
           <span class="admin-att-stat-label">Break Time</span>
           <strong class="admin-att-stat-value">${todayRec.breakOut&&todayRec.breakIn?'30 min':'-'}</strong>
         </div>
-        <div class="admin-att-stat">
+        <div class="admin-att-stat admin-att-stat-highlight">
           <span class="admin-att-stat-label">Working Hours Today</span>
           <strong class="admin-att-stat-value" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</strong>
         </div>
       </div>
       <div class="admin-att-details">
-        <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
-        <div class="irow"><span class="ikey">Status</span><span class="ival">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</span></div>
-        <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">11:00 - 20:00</span></div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Calculation</span>
+          <strong class="att-summary-detail-value">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</strong>
+        </div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Status</span>
+          <div class="att-summary-detail-badge">${ps.punchedIn?(todayRec.late?statusBadge('Late'):statusBadge('Present')):statusBadge(todayRec.status||'Not Clocked In')}</div>
+        </div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Shift Policy</span>
+          <strong class="att-summary-detail-value">11:00 - 20:00</strong>
+        </div>
       </div>
     </div>
   </div>
@@ -2743,28 +2785,30 @@ function pageDepartments(){
     <button class="btn btn-sm btn-primary" onclick="window.openCreateDepartment()">+ Add Team</button>
   </div>
   <div class="g3">
-    ${DB.departments.map(d=>`
-    <div class="dept-card" style="${focusedDepartment && focusedDepartment.name===d.name ? 'box-shadow:0 0 0 3px rgba(38,134,147,.12);border-color:rgba(38,134,147,.38);' : ''}">
-      <div class="dc-bar" style="background:${d.color};"></div>
-      <div class="dc-body">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
-          <div><div class="dc-name">${d.name}</div><div style="font-size:12px;color:var(--muted);">Head: ${d.head}</div></div>
-          <span class="badge bg-blue">${d.count} emp</span>
+      ${DB.departments.map(d=>{
+        const attendanceRate = d.count ? Math.round((d.present / d.count) * 100) : 0;
+        return `
+      <div class="dept-card" style="${focusedDepartment && focusedDepartment.name===d.name ? 'box-shadow:0 0 0 3px rgba(38,134,147,.12);border-color:rgba(38,134,147,.38);' : ''}">
+        <div class="dc-bar" style="background:${d.color};"></div>
+        <div class="dc-body">
+          <div class="dc-head">
+          <div><div class="dc-name">${d.name}</div><div class="dc-sub">Head: ${d.head}</div></div>
+            <span class="badge bg-blue">${d.count} emp</span>
+          </div>
+          <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${d.present}</span></div>
+          <div class="irow"><span class="ikey">On Leave</span><span class="ival" style="color:var(--purple);">${d.leave}</span></div>
+          <div class="irow"><span class="ikey">Absent</span><span class="ival" style="color:var(--red);">${d.absent}</span></div>
+          <div class="prog-bar dept-progress"><div class="prog-fill" style="width:${attendanceRate}%;background:${d.color};"></div></div>
+          <div class="dc-rate">${attendanceRate}% attendance rate</div>
+          <div class="dc-actions">
+            <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="window.openDepartmentView('${d.name.replace(/'/g,"\\'")}')">View Team</button>
+            <button class="btn btn-sm" onclick="window.openEditDepartment('${d.name.replace(/'/g,"\\'")}')">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="window.deleteDepartment('${d.name.replace(/'/g,"\\'")}')">Delete</button>
+          </div>
         </div>
-        <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${d.present}</span></div>
-        <div class="irow"><span class="ikey">On Leave</span><span class="ival" style="color:var(--purple);">${d.leave}</span></div>
-        <div class="irow"><span class="ikey">Absent</span><span class="ival" style="color:var(--red);">${d.absent}</span></div>
-        <div class="prog-bar" style="margin-top:10px;"><div class="prog-fill" style="width:${Math.round(d.present/d.count*100)}%;background:${d.color};"></div></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px;">${Math.round(d.present/d.count*100)}% attendance rate</div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="btn btn-sm" style="flex:1;justify-content:center;" onclick="window.openDepartmentView('${d.name.replace(/'/g,"\\'")}')">View Team</button>
-          <button class="btn btn-sm" onclick="window.openEditDepartment('${d.name.replace(/'/g,"\\'")}')">Edit</button>
-          <button class="btn btn-sm btn-danger" onclick="window.deleteDepartment('${d.name.replace(/'/g,"\\'")}')">Delete</button>
-        </div>
-      </div>
-    </div>`).join('')}
-  </div>`;
-}
+      </div>`;}).join('')}
+    </div>`;
+  }
 
 function pageOrgChart(){
   return `
@@ -2790,7 +2834,7 @@ function pageOrgChart(){
         </div>
       </div>
     </div>
-    <div class="alert al-info" style="margin-top:14px;"><span>â„¹ï¸</span><div>Click any node to view team employees. The chart supports up to 6 levels of hierarchy.</div></div>
+    <div class="alert al-info" style="margin-top:14px;"><span>Info</span><div>Click any node to view team employees. The chart supports up to 6 levels of hierarchy.</div></div>
   </div>`;
 }
 
@@ -3867,7 +3911,7 @@ function pageEmpDashboard(){
               <div style="font-size:13px;font-weight:600;">${item.title}</div>
               <div style="font-size:11px;color:var(--muted);margin-top:3px;">${item.msg}</div>
             </div>
-            <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatDate(item.date)}</span>
+            <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatEventCardDate(item.date)}</span>
           </div>
         `).join('') || `<div class="emp-pp-empty">No announcements for your audience right now</div>`}
       </div>
@@ -3948,9 +3992,12 @@ function pageEmpAttendance(){
       </div>
     </div>
     <div class="admin-att-summary card">
-      <div class="card-hdr" style="margin-bottom:10px;">
-        <div class="card-title">Today's Summary</div>
-        <span class="badge bg-blue">Employee View</span>
+      <div class="att-summary-top">
+        <div>
+          <div class="card-title">Today's Summary</div>
+          <div class="att-summary-subtitle">Your live attendance overview for today</div>
+        </div>
+        <span class="att-summary-pill">Employee View</span>
       </div>
       <div class="admin-att-summary-grid">
         <div class="admin-att-stat">
@@ -3965,15 +4012,24 @@ function pageEmpAttendance(){
           <span class="admin-att-stat-label">Break Time</span>
           <strong class="admin-att-stat-value">${todayRec.breakOut&&todayRec.breakIn?'30 min':'-'}</strong>
         </div>
-        <div class="admin-att-stat">
+        <div class="admin-att-stat admin-att-stat-highlight">
           <span class="admin-att-stat-label">Working Hours Today</span>
           <strong class="admin-att-stat-value" data-work-hours-live data-work-hours-format="standard">${getLiveWorkedTimeLabel()}</strong>
         </div>
       </div>
       <div class="admin-att-details">
-        <div class="irow"><span class="ikey">Calculation</span><span class="ival">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</span></div>
-        <div class="irow"><span class="ikey">Status</span><span class="ival">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</span></div>
-        <div class="irow"><span class="ikey">Shift Policy</span><span class="ival">${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</span></div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Calculation</span>
+          <strong class="att-summary-detail-value">${workedBreakdown.completedLabel} + ${workedBreakdown.currentSessionLabel} = ${workedBreakdown.totalLabel}</strong>
+        </div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Status</span>
+          <div class="att-summary-detail-badge">${todayRec.late?statusBadge('Late'):statusBadge(todayRec.status||'Not Started')}</div>
+        </div>
+        <div class="att-summary-detail">
+          <span class="att-summary-detail-label">Shift Policy</span>
+          <strong class="att-summary-detail-value">${u.shiftStart||'11:00'} - ${u.shiftEnd||'20:00'}</strong>
+        </div>
       </div>
     </div>
   </div>
@@ -4466,7 +4522,10 @@ async function refreshLiveAttendanceSnapshot(pageId){
     const data = await wpApi('/api/attendance/live', {method:'GET', headers:{}});
     DB.liveAttendance = data.liveAttendance || [];
     if(window.__workpulseCurrentPage === pageId){
-      if(pageId === 'dashboard' && document.activeElement && document.activeElement.id === 'dashboard-recent-search-input'){
+      if(pageId === 'dashboard'){
+        if(document.activeElement && document.activeElement.id === 'dashboard-recent-search-input'){
+          return;
+        }
         return;
       }
       showPage(pageId);

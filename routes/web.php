@@ -44,6 +44,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/me/notifications/read-all', [MeController::class, 'markNotificationsRead']);
         Route::get('/policies', [PoliciesController::class, 'index']);
         Route::post('/policies', [PoliciesController::class, 'store']);
+        Route::get('/policies/{policyId}/file', [PoliciesController::class, 'download']);
         Route::delete('/policies/{policyId}', [PoliciesController::class, 'destroy']);
         Route::post('/notifications', [NotificationsController::class, 'store'])->middleware('perm:announcements.manage');
         Route::patch('/notifications/{referenceCode}', [NotificationsController::class, 'update'])->middleware('perm:announcements.manage');
@@ -52,6 +53,8 @@ Route::middleware('auth')->group(function () {
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');
             Route::get('/{employeeCode}', [EmployeesController::class, 'show'])->middleware('perm:employees.view');
+            Route::get('/{employeeCode}/cnic-document', [EmployeesController::class, 'downloadCnicDocument']);
+            Route::get('/{employeeCode}/profile-photo', [EmployeesController::class, 'downloadProfilePhoto']);
             Route::patch('/{employeeCode}', [EmployeesController::class, 'update'])->middleware('perm:employees.manage');
             Route::delete('/{employeeCode}/cnic-document', [EmployeesController::class, 'deleteCnicDocument'])->middleware('perm:employees.manage');
             Route::delete('/{employeeCode}', [EmployeesController::class, 'destroy'])->middleware('perm:employees.manage');
@@ -109,7 +112,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/balances/{employeeCode}', [LeaveController::class, 'employeeBalance'])->middleware('perm:leave.manage');
             Route::put('/balances/{employeeCode}', [LeaveController::class, 'updateEmployeeBalance'])->middleware('perm:leave.manage');
             Route::put('/policies', [LeaveController::class, 'updatePolicies'])->middleware('perm:leave.manage');
-            Route::patch('/{code}/review', [LeaveController::class, 'review'])->middleware('perm:leave.apply');
+            Route::patch('/{code}/review', [LeaveController::class, 'review'])->middleware('perm:leave.approve_hr');
         });
 
         Route::prefix('reports')->group(function () {
