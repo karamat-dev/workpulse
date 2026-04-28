@@ -297,10 +297,54 @@ function closeTopbarUserMenu(){
   if(trigger) trigger.setAttribute('aria-expanded', 'false');
 }
 
+function isMobileViewport(){
+  return window.innerWidth <= 760;
+}
+
+function applyMobileViewportState(){
+  const app = document.getElementById('app');
+  if(!app) return;
+  app.classList.toggle('is-mobile', isMobileViewport());
+  if(!isMobileViewport()){
+    app.classList.remove('mobile-nav-open');
+    const backdrop = document.getElementById('mobile-sidebar-backdrop');
+    if(backdrop) backdrop.classList.remove('show');
+  }
+}
+
+function toggleMobileNav(forceOpen){
+  const app = document.getElementById('app');
+  const backdrop = document.getElementById('mobile-sidebar-backdrop');
+  if(!app || !isMobileViewport()) return;
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !app.classList.contains('mobile-nav-open');
+  app.classList.toggle('mobile-nav-open', shouldOpen);
+  if(backdrop) backdrop.classList.toggle('show', shouldOpen);
+}
+
+window.addEventListener('resize', applyMobileViewportState);
+
 function toggleTopbarUserMenu(forceOpen){
   const menu = document.getElementById('topbar-user-menu');
   const trigger = document.getElementById('topbar-user-trigger');
   if(!menu) return;
+  toggleTopbarQuickActions(false);
+  const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !menu.classList.contains('open');
+  menu.classList.toggle('open', shouldOpen);
+  if(trigger) trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function closeTopbarQuickActions(){
+  const menu = document.getElementById('topbar-quick-actions');
+  const trigger = document.getElementById('topbar-quick-actions-trigger');
+  if(menu) menu.classList.remove('open');
+  if(trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+
+function toggleTopbarQuickActions(forceOpen){
+  const menu = document.getElementById('topbar-quick-actions');
+  const trigger = document.getElementById('topbar-quick-actions-trigger');
+  if(!menu) return;
+  closeTopbarUserMenu();
   const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !menu.classList.contains('open');
   menu.classList.toggle('open', shouldOpen);
   if(trigger) trigger.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
@@ -309,10 +353,16 @@ function toggleTopbarUserMenu(forceOpen){
 document.addEventListener('click', function(e){
   const menu = document.getElementById('topbar-user-menu');
   if(menu && !menu.contains(e.target)) closeTopbarUserMenu();
+  const quickMenu = document.getElementById('topbar-quick-actions');
+  if(quickMenu && !quickMenu.contains(e.target)) closeTopbarQuickActions();
 });
 
 document.addEventListener('keydown', function(e){
-  if(e.key === 'Escape') closeTopbarUserMenu();
+  if(e.key === 'Escape'){
+    closeTopbarUserMenu();
+    closeTopbarQuickActions();
+    toggleMobileNav(false);
+  }
 });
 
 function savePunchState(empId){
@@ -579,8 +629,12 @@ function initApp(){
     : 'Employee';
   const tbName = document.getElementById('tb-name');
   const tbEmail = document.getElementById('tb-email');
+  const tbNameMenu = document.getElementById('tb-name-menu');
+  const tbEmailMenu = document.getElementById('tb-email-menu');
   if(tbName) tbName.textContent = fullName;
   if(tbEmail) tbEmail.textContent = u.email || '';
+  if(tbNameMenu) tbNameMenu.textContent = fullName;
+  if(tbEmailMenu) tbEmailMenu.textContent = u.email || '';
   if(u.profilePhotoUrl){
     if(sbAvatar){
       sbAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
@@ -590,6 +644,11 @@ function initApp(){
     if(tbAvatar){
       tbAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
       tbAvatar.style.background = 'transparent';
+    }
+    const tbDropdownAvatar = document.getElementById('tb-dropdown-avatar');
+    if(tbDropdownAvatar){
+      tbDropdownAvatar.innerHTML = `<img src="${u.profilePhotoUrl}" alt="Profile photo" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;">`;
+      tbDropdownAvatar.style.background = 'transparent';
     }
   }else{
     if(sbAvatar){
@@ -601,6 +660,11 @@ function initApp(){
       tbAvatar.textContent = u.avatar;
       tbAvatar.style.background = u.avatarColor;
     }
+    const tbDropdownAvatar = document.getElementById('tb-dropdown-avatar');
+    if(tbDropdownAvatar){
+      tbDropdownAvatar.textContent = u.avatar;
+      tbDropdownAvatar.style.background = u.avatarColor;
+    }
   }
 
   // Always reset punchState to clean defaults first, then restore from storage
@@ -609,6 +673,7 @@ function initApp(){
   loadPunchState(u.id);
   syncPunchStateFromBootstrap();
 
+  applyMobileViewportState();
   hydrateSidebarCollapseState();
   buildNav();
   updateNotificationUI();
@@ -655,6 +720,8 @@ function updateNotificationUI(){
   document.querySelectorAll('.notif-wrap button').forEach(button => {
     button.title = getUnreadNotificationCount() > 0 ? `Notifications (${getUnreadNotificationCount()} unread)` : 'Notifications';
   });
+
+  buildMobileBottomNav();
 }
 
 function openNotificationsPage(){
@@ -725,23 +792,120 @@ function scheduleMidnightReset(){
 
 function buildTopbarActions(){
   const el = document.getElementById('topbar-actions');
+  const mobile = isMobileViewport();
   if(DB.currentRole==='employee'){
-    el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
-    <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
+    if(mobile){
+      el.innerHTML=`<div class="topbar-quick-actions" id="topbar-quick-actions">
+        <button class="topbar-icon-btn topbar-plus-btn" type="button" id="topbar-quick-actions-trigger" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions()" aria-haspopup="menu" aria-expanded="false" title="Quick actions">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"></path></svg>
+        </button>
+        <div class="topbar-quick-actions-menu" role="menu">
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openModal('leaveModal')">
+            <span>Apply Leave</span>
+          </button>
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openRegulationModal()">
+            <span>Regulation</span>
+          </button>
+        </div>
+      </div>`;
+    } else {
+      el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
+      <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
+    }
   } else if(DB.currentRole==='manager'){
-    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
-    <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>
-    <button class="btn btn-sm btn-ghost" onclick="window.showPage('backups')">Recovery</button>`;
+    if(mobile){
+      el.innerHTML=`<div class="topbar-quick-actions" id="topbar-quick-actions">
+        <button class="topbar-icon-btn topbar-plus-btn" type="button" id="topbar-quick-actions-trigger" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions()" aria-haspopup="menu" aria-expanded="false" title="Quick actions">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"></path></svg>
+        </button>
+        <div class="topbar-quick-actions-menu" role="menu">
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openAnnouncementModal()">
+            <span>Announcement</span>
+          </button>
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openModal('addEmpModal')">
+            <span>Employee</span>
+          </button>
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.showPage('backups')">
+            <span>Recovery</span>
+          </button>
+        </div>
+      </div>`;
+    } else {
+      el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
+      <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>
+      <button class="btn btn-sm btn-ghost" onclick="window.showPage('backups')">Recovery</button>`;
+    }
   } else {
-    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
-    <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
+    if(mobile){
+      el.innerHTML=`<div class="topbar-quick-actions" id="topbar-quick-actions">
+        <button class="topbar-icon-btn topbar-plus-btn" type="button" id="topbar-quick-actions-trigger" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions()" aria-haspopup="menu" aria-expanded="false" title="Quick actions">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"></path></svg>
+        </button>
+        <div class="topbar-quick-actions-menu" role="menu">
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openAnnouncementModal()">
+            <span>Announcement</span>
+          </button>
+          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openModal('addEmpModal')">
+            <span>Employee</span>
+          </button>
+        </div>
+      </div>`;
+    } else {
+      el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
+      <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
+    }
   }
+}
+
+function getMobilePrimaryNavItems(role){
+  if(role === 'employee' || role === 'hr'){
+    return [
+      {label:'Home', page:'emp-dashboard', icon:'grid'},
+      {label:'Attend', page:'emp-attendance', icon:'clock'},
+      {label:'Leaves', page:'emp-leaves', icon:'calendar'},
+      {label:'Alerts', page:'emp-notifications', icon:'bell'},
+    ];
+  }
+
+  return [
+    {label:'Home', page:'dashboard', icon:'grid'},
+    {label:'Attend', page:'attendance', icon:'clock'},
+    {label:'Leaves', page:'leave', icon:'calendar'},
+    {label:'People', page:'employees', icon:'users'},
+  ];
+}
+
+function buildMobileBottomNav(){
+  const navEl = document.getElementById('mobile-bottom-nav');
+  if(!navEl) return;
+
+  const items = getMobilePrimaryNavItems(DB.currentRole);
+  const pendingLeaveCount = Array.isArray(DB.leaves)
+    ? DB.leaves.filter(leave => leave && leave.status === 'Pending').length
+    : 0;
+
+  navEl.innerHTML = items.map(item => {
+    let extra = '';
+    if(item.page === 'emp-notifications' && getUnreadNotificationCount() > 0){
+      extra = `<span class="mobile-nav-badge">${getUnreadNotificationCount()}</span>`;
+    } else if(item.page === 'leave' && pendingLeaveCount > 0){
+      extra = `<span class="mobile-nav-badge">${pendingLeaveCount}</span>`;
+    } else if(item.page === 'attendance' && items.some(entry => entry.page === 'attendance')){
+      extra = '';
+    }
+
+    return `<button type="button" class="mobile-nav-item" id="mnav-${item.page}" onclick="window.showPage('${item.page}')">${icons[item.icon] || ''}<span>${item.label}</span>${extra}</button>`;
+  }).join('');
 }
 
 function applySidebarCollapseState(){
   const app = document.getElementById('app');
   const toggle = document.getElementById('sidebar-toggle');
   const collapsed = !!window.__sidebarCollapsed;
+  if(isMobileViewport()){
+    if(app) app.classList.remove('sidebar-collapsed');
+    return;
+  }
   if(app){
     app.classList.toggle('sidebar-collapsed', collapsed);
   }
@@ -851,6 +1015,7 @@ function buildNav(){
     });
   });
   document.getElementById('sidebar-nav').innerHTML = html;
+  buildMobileBottomNav();
 }
 
 // ══════════════════════════════════════════════════
@@ -870,14 +1035,18 @@ const pageTitles = {
 
 function showPage(id){
   closeTopbarUserMenu();
+  toggleMobileNav(false);
   if(!canAccessPage(id) && id!=='emp-profile-detail'){
     id = getDefaultPageForRole(DB.currentRole);
   }
   window.__workpulseCurrentPage = id;
   document.getElementById('page-title').textContent = pageTitles[id]||id;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.querySelectorAll('.mobile-nav-item').forEach(n=>n.classList.remove('active'));
   const navEl = document.getElementById('nav-'+id);
   if(navEl) navEl.classList.add('active');
+  const mobileNavEl = document.getElementById('mnav-'+id);
+  if(mobileNavEl) mobileNavEl.classList.add('active');
   updateNotificationUI();
   const main = document.getElementById('main-content');
   try{

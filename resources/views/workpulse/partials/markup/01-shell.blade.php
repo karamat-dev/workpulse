@@ -61,6 +61,9 @@
 <div id="app">
   <div class="topbar">
     <div class="topbar-brand">
+      <button class="mobile-menu-btn" type="button" onclick="window.toggleMobileNav && window.toggleMobileNav()" aria-label="Open navigation">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 4h12M2 8h12M2 12h12"></path></svg>
+      </button>
       <div class="sb-brand-mark">
         <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
       </div>
@@ -74,6 +77,8 @@
         <div class="topbar-kicker">Workspace</div>
         <div class="topbar-title" id="page-title">Dashboard</div>
       </div>
+      <div class="tb-clock-mobile" id="tb-clock-mobile">00:00:00</div>
+      <div class="topbar-mobile-spacer" aria-hidden="true"></div>
       <div class="topbar-tools">
         <div class="tb-clock" id="tb-clock">00:00:00</div>
         <div id="topbar-actions"></div>
@@ -84,7 +89,7 @@
           <div class="notif-dot" id="notif-dot"></div>
         </div>
         <div class="topbar-user-menu" id="topbar-user-menu">
-          <button class="topbar-user-chip topbar-user-trigger" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu()" aria-haspopup="menu" aria-expanded="false" id="topbar-user-trigger">
+          <button class="topbar-user-chip topbar-user-trigger" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu()" aria-haspopup="menu" aria-expanded="false" id="topbar-user-trigger" aria-label="Open profile menu">
             <div class="av av-32 topbar-user-avatar" id="tb-avatar" style="background:var(--accent);color:#fff;">AK</div>
             <div class="topbar-user-copy">
               <strong id="tb-name">Ahmed Karim</strong>
@@ -93,6 +98,13 @@
             <svg class="topbar-user-caret" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6l4 4 4-4"></path></svg>
           </button>
           <div class="topbar-user-dropdown" id="topbar-user-dropdown" role="menu">
+            <div class="topbar-user-dropdown-head">
+              <div class="av av-40 topbar-user-dropdown-avatar" id="tb-dropdown-avatar" style="background:var(--accent);color:#fff;">AK</div>
+              <div class="topbar-user-dropdown-copy">
+                <strong id="tb-name-menu">Ahmed Karim</strong>
+                <span id="tb-email-menu">hello@workpulse.com</span>
+              </div>
+            </div>
             <button class="topbar-user-dropdown-item" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu(false); window.openAccountSettings && window.openAccountSettings()">
               <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2.5"></circle><path d="M8 1.5l1 .4.8 1.7 1.9.3 1.1 1.6-.8 1.7.8 1.8-1.1 1.5-1.9.4-.8 1.7-1 .4-1-.4-.8-1.7-1.9-.4-1.1-1.5.8-1.8-.8-1.7 1.1-1.6 1.9-.3.8-1.7 1-.4z"></path></svg>
               <span>Account Settings</span>
@@ -108,6 +120,7 @@
   </div>
 
   <div class="workspace-shell">
+    <button class="mobile-sidebar-backdrop" type="button" id="mobile-sidebar-backdrop" onclick="window.toggleMobileNav && window.toggleMobileNav(false)" aria-label="Close navigation"></button>
     <aside class="sidebar" id="sidebar">
       <div id="sidebar-nav"></div>
 
@@ -128,4 +141,6 @@
       <div class="content" id="main-content"></div>
     </div>
   </div>
+
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile navigation"></nav>
 </div>

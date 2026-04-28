@@ -3,6 +3,8 @@
 window.doLogin = doLogin;
 window.doLogout = doLogout;
 window.showPage = showPage;
+window.toggleMobileNav = toggleMobileNav;
+window.toggleTopbarQuickActions = toggleTopbarQuickActions;
 window.sendForgotPassword = sendForgotPassword;
 window.setNewEmployeePasswordMode = setNewEmployeePasswordMode;
 window.generateNewEmployeePassword = generateNewEmployeePassword;

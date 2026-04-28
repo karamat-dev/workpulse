@@ -162,9 +162,11 @@ function startClock(){
     const now = new Date();
     const t = now.toLocaleTimeString('en-GB');
     const el = document.getElementById('tb-clock');
+    const mobileEl = document.getElementById('tb-clock-mobile');
     const ecwEl = document.getElementById('ecw-time-display');
     const cwEl = document.getElementById('cw-time-display');
     if(el) el.textContent = t;
+    if(mobileEl) mobileEl.textContent = t;
     if(ecwEl) ecwEl.textContent = t;
     if(cwEl) cwEl.textContent = t;
 
