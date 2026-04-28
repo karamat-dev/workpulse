@@ -185,6 +185,11 @@ if(!window.__managerPickerOutsideClickBound){
 }
 
 async function openEditEmployee(id){
+  const target = (DB.employees || []).find(employee => employee.id === id);
+  if(target?.role === 'manager' && DB.currentRole !== 'manager'){
+    showToast('Only a Super-Admin can change Super-Admin accounts','red');
+    return;
+  }
   _editEmpId = id;
   _editTab = 'personal';
   try{
@@ -363,7 +368,12 @@ async function saveEditEmployee(){
   if(document.getElementById('ee-cnic').value.trim()) formData.append('cnic', document.getElementById('ee-cnic').value.trim());
   if(document.getElementById('ee-passport-no').value.trim()) formData.append('passport_no', document.getElementById('ee-passport-no').value.trim());
   if(document.getElementById('ee-phone').value.trim()) formData.append('phone', document.getElementById('ee-phone').value.trim());
-  if(document.getElementById('ee-personal-email').value.trim()) formData.append('personal_email', document.getElementById('ee-personal-email').value.trim());
+  const personalEmail = document.getElementById('ee-personal-email').value.trim();
+  if(!personalEmail){
+    showToast('Personal email is required','red');
+    return;
+  }
+  formData.append('personal_email', personalEmail);
   if(document.getElementById('ee-address').value.trim()) formData.append('address', document.getElementById('ee-address').value.trim());
   formData.append('blood', document.getElementById('ee-blood').value);
   if(document.getElementById('ee-marital-status').value) formData.append('marital_status', document.getElementById('ee-marital-status').value);

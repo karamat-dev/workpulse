@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use App\Services\DeletionRecoveryService;
 use Illuminate\Support\Str;
 
 class NotificationsController extends Controller
@@ -152,8 +153,21 @@ class NotificationsController extends Controller
         ]);
     }
 
-    public function destroy(string $referenceCode): JsonResponse
+    public function destroy(Request $request, string $referenceCode): JsonResponse
     {
+        $rows = DB::table('employee_notifications')
+            ->where('reference_type', 'admin_custom_notification')
+            ->where('reference_code', $referenceCode)
+            ->get()
+            ->map(fn ($row) => (array) $row)
+            ->all();
+
+        if ($rows !== []) {
+            app(DeletionRecoveryService::class)->record('notification', 'Notification '.$referenceCode, [
+                'rows' => $rows,
+            ], (int) $request->user()->id);
+        }
+
         $deleted = DB::table('employee_notifications')
             ->where('reference_type', 'admin_custom_notification')
             ->where('reference_code', $referenceCode)

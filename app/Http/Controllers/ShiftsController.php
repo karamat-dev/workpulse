@@ -6,12 +6,13 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\DeletionRecoveryService;
 
 class ShiftsController extends Controller
 {
     private function ensureAdmin(Request $request): void
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
     }
@@ -136,6 +137,15 @@ class ShiftsController extends Controller
         if (!$shift) {
             return response()->json(['ok' => false, 'message' => 'Shift not found'], 404);
         }
+
+        $affectedProfileIds = DB::table('employee_profiles')
+            ->where('shift_id', $shiftId)
+            ->pluck('id')
+            ->all();
+
+        app(DeletionRecoveryService::class)->captureTableRow('shifts', 'shift', (string) $shift->name, 'id', $shift->id, (int) $request->user()->id, [
+            'affectedProfileIds' => $affectedProfileIds,
+        ]);
 
         DB::table('employee_profiles')
             ->where('shift_id', $shiftId)

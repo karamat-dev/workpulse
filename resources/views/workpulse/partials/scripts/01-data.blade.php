@@ -60,6 +60,8 @@ const DB = {
 
   companyPolicies: [],
   backups: [],
+  deletedBackups: [],
+  recoveryItems: [],
 
   events: [],
 

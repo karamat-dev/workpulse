@@ -101,6 +101,9 @@ function openModal(id){
   if(id === 'addEmpModal' && typeof syncEmployeeManagerOptions === 'function'){
     syncEmployeeManagerOptions('ne-manager', '');
   }
+  if(id === 'addEmpModal' && typeof initializeNewEmployeePassword === 'function'){
+    initializeNewEmployeePassword();
+  }
   if(id === 'announcementModal'){
     if(typeof syncAnnouncementAudienceOptions === 'function') syncAnnouncementAudienceOptions();
     if(typeof syncAnnouncementRecipientOptions === 'function') syncAnnouncementRecipientOptions();
@@ -225,6 +228,43 @@ function doLogin(){
     .catch((e)=>{
       err.textContent = e?.message || 'Invalid credentials. Please try again.';
       err.style.display='block';
+    });
+}
+
+function sendForgotPassword(){
+  const email = document.getElementById('l-email').value.trim();
+  const msg = document.getElementById('forgot-msg');
+  if(!msg) return;
+  if(!email){
+    msg.textContent = 'Enter your official email first.';
+    msg.style.display = 'block';
+    return;
+  }
+
+  const csrf = getCsrfToken();
+  msg.textContent = 'Sending reset link...';
+  msg.style.color = 'var(--muted)';
+  msg.style.display = 'block';
+
+  fetchWithCsrfRetry('/forgot-password', {
+    method:'POST',
+    credentials:'same-origin',
+    headers:{
+      'Content-Type':'application/json',
+      'Accept':'application/json',
+      ...(csrf ? {'X-CSRF-TOKEN': csrf, 'X-XSRF-TOKEN': csrf} : {})
+    },
+    body: JSON.stringify({email})
+  })
+    .then(async (res)=>{
+      const data = await res.json().catch(()=>null);
+      if(!res.ok) throw new Error(data?.message || 'Unable to send reset link.');
+      msg.textContent = data?.message || 'Password reset link sent to your official email.';
+      msg.style.color = 'var(--green-dark)';
+    })
+    .catch((e)=>{
+      msg.textContent = e?.message || 'Unable to send reset link.';
+      msg.style.color = 'var(--red)';
     });
 }
 
@@ -535,8 +575,7 @@ function initApp(){
   if(sbName) sbName.textContent = u.fname+' '+u.lname;
   if(sbRole) sbRole.textContent =
     DB.currentRole==='admin' ? 'Administrator'
-    : DB.currentRole==='hr' ? 'HR Manager'
-    : DB.currentRole==='manager' ? 'Manager'
+    : DB.currentRole==='manager' ? 'Super-Admin'
     : 'Employee';
   const tbName = document.getElementById('tb-name');
   const tbEmail = document.getElementById('tb-email');
@@ -586,15 +625,17 @@ function initApp(){
 }
 
 function getDefaultPageForRole(role){
-  if(role==='employee') return 'emp-dashboard';
-  if(role==='hr' || role==='manager') return 'hr-dashboard';
+  if(role==='employee' || role==='hr') return 'emp-dashboard';
   return 'dashboard';
 }
 
 function getNavForRole(role){
-  if(role==='employee') return empNav;
-  if(role==='hr' || role==='manager') return hrNav;
+  if(role==='employee' || role==='hr') return empNav;
   return adminNav;
+}
+
+function isSuperAdminRole(){
+  return DB.currentRole === 'admin' || DB.currentRole === 'manager';
 }
 
 function getNotificationPageForRole(){
@@ -688,8 +729,9 @@ function buildTopbarActions(){
     el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
     <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
   } else if(DB.currentRole==='manager'){
-    el.innerHTML=`<button class="btn btn-sm" onclick="window.showPage('leave')">Review Leaves</button>
-    <button class="btn btn-sm btn-ghost" onclick="window.showPage('reports')">Team Reports</button>`;
+    el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
+    <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>
+    <button class="btn btn-sm btn-ghost" onclick="window.showPage('backups')">Recovery</button>`;
   } else {
     el.innerHTML=`<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ Announce</button>
     <button class="btn btn-sm" onclick="window.openModal('addEmpModal')">+ Employee</button>`;
@@ -751,23 +793,6 @@ const adminNav = [
     {label:'Policies',page:'policies',icon:'doc'},
     {label:'Backups',page:'backups',icon:'building'},
     {label:'Company Details',page:'company',icon:'building'},
-  ]},
-];
-
-const hrNav = [
-  {sect:'Overview', items:[{label:'HR Dashboard',page:'hr-dashboard',icon:'grid'}]},
-  {sect:'People', items:[
-    {label:'Employees',page:'employees',icon:'users'},
-    {label:'Teams',page:'departments',icon:'chart'},
-  ]},
-  {sect:'Leave & Reports', items:[
-    {label:'Leave Management',page:'leave',icon:'calendar'},
-    {label:'Reports',page:'reports',icon:'report'},
-  ]},
-  {sect:'Communication', items:[
-    {label:'Announcements',page:'announcements',icon:'megaphone'},
-    {label:'Policies',page:'policies',icon:'doc'},
-    {label:'Calendar & Events',page:'calendar',icon:'cal'},
   ]},
 ];
 
@@ -837,7 +862,6 @@ const pageTitles = {
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
   announcements:'Announcements',policies:'Company Policies',backups:'Backups & Restore',company:'Company Details',
   notifications:'Notifications',
-  'hr-dashboard':'HR Dashboard',
   'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
   'emp-leaves':'My Leaves','emp-notifications':'Notifications','emp-profile':'My Profile',
   'emp-team':'My Team','emp-announcements':'Announcements','emp-policies':'Company Policies','emp-calendar':'Events & Calendar',
@@ -888,7 +912,6 @@ function renderPage(id){
   try{
     switch(id){
       case 'dashboard': return pageAdminDashboard();
-      case 'hr-dashboard': return pageHrDashboard();
       case 'attendance': return pageAttendance();
       case 'realtime': return typeof pageRealtimeLive === 'function' ? pageRealtimeLive() : pageRealtime();
       case 'leave': return pageLeave();

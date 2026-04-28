@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\DeletionRecoveryService;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -360,7 +361,7 @@ class LeaveController extends Controller
 
     private function ensureAdmin(Request $request): void
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
     }
@@ -632,6 +633,8 @@ class LeaveController extends Controller
                 'message' => 'This leave type is already in use and cannot be deleted.',
             ], 422);
         }
+
+        app(DeletionRecoveryService::class)->captureTableRow('leave_types', 'leave_type', (string) $leaveType->name, 'id', $leaveType->id, (int) $request->user()->id);
 
         DB::table('leave_types')->where('id', $leaveType->id)->delete();
 

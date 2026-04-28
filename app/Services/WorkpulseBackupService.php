@@ -14,6 +14,7 @@ class WorkpulseBackupService
     public function list(int $limit = 10): array
     {
         $this->ensureBackupDir();
+        $this->pruneDeletedBackups();
 
         return collect(File::files($this->backupDir()))
             ->filter(fn ($file) => $file->getExtension() === 'zip')
@@ -23,6 +24,29 @@ class WorkpulseBackupService
                 'id' => $file->getFilename(),
                 'name' => $file->getFilename(),
                 'createdAt' => Carbon::createFromTimestamp($file->getMTime())->toDateTimeString(),
+                'size' => $file->getSize(),
+                'sizeLabel' => $this->formatBytes($file->getSize()),
+                'path' => $file->getPathname(),
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function listDeleted(int $days = 4, int $limit = 20): array
+    {
+        $this->ensureDeletedDir();
+        $this->pruneDeletedBackups();
+        $cutoff = now()->subDays($days)->getTimestamp();
+
+        return collect(File::files($this->deletedDir()))
+            ->filter(fn ($file) => $file->getExtension() === 'zip' && $file->getMTime() >= $cutoff)
+            ->sortByDesc(fn ($file) => $file->getMTime())
+            ->take($limit)
+            ->map(fn ($file) => [
+                'id' => $file->getFilename(),
+                'name' => $file->getFilename(),
+                'deletedAt' => Carbon::createFromTimestamp($file->getMTime())->toDateTimeString(),
+                'recoverableUntil' => Carbon::createFromTimestamp($file->getMTime())->addDays($days)->toDateTimeString(),
                 'size' => $file->getSize(),
                 'sizeLabel' => $this->formatBytes($file->getSize()),
                 'path' => $file->getPathname(),
@@ -70,6 +94,9 @@ class WorkpulseBackupService
             $this->addIncludedFiles($zip);
             $zip->close();
 
+            if ($reason !== 'pre-restore') {
+                $this->pruneSameDayBackups($zipPath, $timestamp);
+            }
             $this->pruneOldBackups();
 
             return collect($this->list(100))
@@ -85,7 +112,15 @@ class WorkpulseBackupService
     public function delete(string $backupName): void
     {
         $path = $this->resolveBackupPath($backupName);
-        File::delete($path);
+        $this->ensureDeletedDir();
+
+        $target = $this->deletedDir().DIRECTORY_SEPARATOR.basename($path);
+        if (File::exists($target)) {
+            $target = $this->deletedDir().DIRECTORY_SEPARATOR.now()->format('Ymd-His').'-'.basename($path);
+        }
+
+        File::move($path, $target);
+        touch($target);
     }
 
     public function restore(string $backupName): void
@@ -94,7 +129,7 @@ class WorkpulseBackupService
             throw new RuntimeException('PHP Zip extension is required to restore WorkPulse backups.');
         }
 
-        $backupPath = $this->resolveBackupPath($backupName);
+        $backupPath = $this->resolveBackupPath($backupName, true);
 
         $restoreDir = storage_path('app/backups/tmp/restore-'.now()->format('Ymd-His'));
         File::ensureDirectoryExists($restoreDir);
@@ -132,6 +167,7 @@ class WorkpulseBackupService
                 $this->mysqlBinary('mysqldump.exe'),
                 '--host='.$config['host'],
                 '--port='.(string) $config['port'],
+                '--protocol=TCP',
                 '--user='.$config['username'],
                 '--databases',
                 $config['database'],
@@ -173,6 +209,7 @@ class WorkpulseBackupService
                 $this->mysqlBinary('mysql.exe'),
                 '--host='.$config['host'],
                 '--port='.(string) $config['port'],
+                '--protocol=TCP',
                 '--user='.$config['username'],
             ];
 
@@ -181,6 +218,7 @@ class WorkpulseBackupService
             }
 
             $process = new Process($command);
+            $process->setEnv($this->processEnvironment());
             $process->setInput(File::get($sqlPath));
             $process->setTimeout(600);
             $process->run();
@@ -253,6 +291,38 @@ class WorkpulseBackupService
         }
     }
 
+    private function pruneSameDayBackups(string $keepPath, string $timestamp): void
+    {
+        $dayPrefix = 'workpulse-'.substr($timestamp, 0, 8).'-';
+        $keepPath = $this->normalizePath($keepPath);
+
+        foreach (File::files($this->backupDir()) as $file) {
+            $path = $this->normalizePath($file->getPathname());
+            if ($path === $keepPath) {
+                continue;
+            }
+
+            if ($file->getExtension() === 'zip' && str_starts_with($file->getFilename(), $dayPrefix)) {
+                File::delete($file->getPathname());
+            }
+        }
+    }
+
+    private function pruneDeletedBackups(): void
+    {
+        $deletedDir = $this->deletedDir();
+        if (!File::exists($deletedDir)) {
+            return;
+        }
+
+        $cutoff = now()->subDays(4)->getTimestamp();
+        foreach (File::files($deletedDir) as $file) {
+            if ($file->getExtension() === 'zip' && $file->getMTime() < $cutoff) {
+                File::delete($file->getPathname());
+            }
+        }
+    }
+
     private function runProcessToFile(array $command, string $outputPath): void
     {
         $handle = fopen($outputPath, 'wb');
@@ -262,6 +332,7 @@ class WorkpulseBackupService
 
         try {
             $process = new Process($command);
+            $process->setEnv($this->processEnvironment());
             $process->setTimeout(600);
             $process->run(function ($type, $buffer) use ($handle) {
                 if ($type === Process::OUT) {
@@ -277,22 +348,29 @@ class WorkpulseBackupService
         }
     }
 
-    private function resolveBackupPath(string $backupName): string
+    private function resolveBackupPath(string $backupName, bool $includeDeleted = false): string
     {
         $name = basename($backupName);
         if (!str_ends_with($name, '.zip')) {
             throw new RuntimeException('Invalid backup file.');
         }
 
-        $path = $this->backupDir().DIRECTORY_SEPARATOR.$name;
-        $realBackupDir = realpath($this->backupDir());
-        $realPath = realpath($path);
-
-        if (!$realBackupDir || !$realPath || !str_starts_with($this->normalizePath($realPath), $this->normalizePath($realBackupDir))) {
-            throw new RuntimeException('Backup file was not found.');
+        $directories = [$this->backupDir()];
+        if ($includeDeleted) {
+            $directories[] = $this->deletedDir();
         }
 
-        return $realPath;
+        foreach ($directories as $directory) {
+            $path = $directory.DIRECTORY_SEPARATOR.$name;
+            $realBackupDir = realpath($directory);
+            $realPath = realpath($path);
+
+            if ($realBackupDir && $realPath && str_starts_with($this->normalizePath($realPath), $this->normalizePath($realBackupDir))) {
+                return $realPath;
+            }
+        }
+
+        throw new RuntimeException('Backup file was not found.');
     }
 
     private function mysqlBinary(string $binary): string
@@ -305,14 +383,38 @@ class WorkpulseBackupService
         return $path;
     }
 
+    private function processEnvironment(): array
+    {
+        $systemRoot = getenv('SystemRoot') ?: getenv('WINDIR') ?: 'C:\\Windows';
+        $path = getenv('PATH') ?: getenv('Path') ?: '';
+        $mysqlBin = rtrim((string) Config::get('workpulse_backup.mysql_bin'), '\\/');
+
+        return [
+            'SystemRoot' => $systemRoot,
+            'WINDIR' => $systemRoot,
+            'PATH' => $mysqlBin.PATH_SEPARATOR.$path,
+            'Path' => $mysqlBin.PATH_SEPARATOR.$path,
+        ];
+    }
+
     private function backupDir(): string
     {
         return (string) Config::get('workpulse_backup.disk_path');
     }
 
+    private function deletedDir(): string
+    {
+        return $this->backupDir().DIRECTORY_SEPARATOR.'deleted';
+    }
+
     private function ensureBackupDir(): void
     {
         File::ensureDirectoryExists($this->backupDir());
+    }
+
+    private function ensureDeletedDir(): void
+    {
+        File::ensureDirectoryExists($this->deletedDir());
     }
 
     private function normalizePath(string $path): string

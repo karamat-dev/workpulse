@@ -14,6 +14,7 @@ use App\Http\Controllers\HolidaysController;
 use App\Http\Controllers\MeController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\PoliciesController;
+use App\Http\Controllers\RecoveryController;
 use App\Http\Controllers\ShiftsController;
 use App\Http\Controllers\TransferController;
 use Illuminate\Http\Request;
@@ -123,11 +124,16 @@ Route::middleware('auth')->group(function () {
             Route::get('/employees.csv', [ReportsController::class, 'employeesCsv'])->middleware('perm:employees.view');
         });
 
-        Route::prefix('backups')->middleware('role:admin')->group(function () {
+        Route::prefix('backups')->middleware('role:admin,manager')->group(function () {
             Route::get('/', [BackupsController::class, 'index']);
             Route::post('/', [BackupsController::class, 'store']);
             Route::post('/{backup}/restore', [BackupsController::class, 'restore']);
             Route::delete('/{backup}', [BackupsController::class, 'destroy']);
+        });
+
+        Route::prefix('recovery')->middleware('role:manager')->group(function () {
+            Route::get('/', [RecoveryController::class, 'index']);
+            Route::post('/{item}/restore', [RecoveryController::class, 'restore']);
         });
     });
 

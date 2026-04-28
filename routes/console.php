@@ -15,5 +15,5 @@ Artisan::command('workpulse:generate-events', function () {
 })->purpose('Generate WorkPulse automated events');
 
 app(Schedule::class)->command('workpulse:generate-events')->dailyAt('00:10');
-app(Schedule::class)->command('workpulse:attendance:remind-missed-clockin')->weekdays()->dailyAt('11:30');
+app(Schedule::class)->command('workpulse:attendance:remind-missed-clockin')->everyFiveMinutes()->withoutOverlapping();
 app(Schedule::class)->command('workpulse:backup')->dailyAt('01:00')->withoutOverlapping();

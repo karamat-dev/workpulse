@@ -134,11 +134,21 @@
       <div class="fg"><label class="fl">Last Name <span class="req-star">*</span></label><input type="text" class="fi" id="ne-lname" placeholder="Last name"></div>
     </div>
     <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ne-email" placeholder="name@company.com"></div>
-    <div class="fg"><label class="fl">Login Password</label><input type="password" class="fi" id="ne-password" placeholder="Set employee password"></div>
+    <div class="fg">
+      <label class="fl">Login Password <span class="req-star">*</span></label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" class="fi" id="ne-password" placeholder="Auto generated password" style="flex:1;">
+        <button type="button" class="btn btn-sm" onclick="window.generateNewEmployeePassword && window.generateNewEmployeePassword()">Regenerate</button>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><input type="radio" name="ne-password-mode" value="auto" id="ne-password-auto" checked onchange="window.setNewEmployeePasswordMode && window.setNewEmployeePasswordMode('auto')"> Use recommended auto password</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);"><input type="radio" name="ne-password-mode" value="manual" id="ne-password-manual" onchange="window.setNewEmployeePasswordMode && window.setNewEmployeePasswordMode('manual')"> Manually create password</label>
+      </div>
+    </div>
     <div class="fg"><label class="fl">Profile Document <span class="req-star">*</span></label><input type="file" class="fi" id="ne-cnic-document"></div>
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
-      <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
+      <div class="fg"><label class="fl">Personal Email <span class="req-star">*</span></label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
       <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ne-work-location" placeholder="Main Office"></div>
     </div>
     <div class="g2">
@@ -150,8 +160,7 @@
     <div class="fg"><label class="fl">User Role</label>
       <select class="fi" id="ne-role">
         <option value="employee">Employee</option>
-        <option value="manager">Manager</option>
-        <option value="hr">HR</option>
+        <option value="manager">Super-Admin</option>
         <option value="admin">Admin</option>
       </select>
     </div>
@@ -294,7 +303,7 @@
         <div class="fg"><label class="fl">Passport No</label><input type="text" class="fi" id="ee-passport-no"></div>
       </div>
       <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ee-phone"></div>
-      <div class="fg"><label class="fl">Personal Email</label><input type="email" class="fi" id="ee-personal-email"></div>
+      <div class="fg"><label class="fl">Personal Email <span class="req-star">*</span></label><input type="email" class="fi" id="ee-personal-email"></div>
       <div class="fg"><label class="fl">Address</label><input type="text" class="fi" id="ee-address"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Blood Group</label><select class="fi" id="ee-blood"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>O+</option><option>O-</option><option>AB+</option><option>AB-</option></select></div>
@@ -330,7 +339,7 @@
         <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
         <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Offboarding</option><option>Inactive</option><option>Resigned</option></select></div>
       </div>
-      <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>
+      <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Super-Admin</option><option value="admin">Admin</option></select></div>
       <div class="fg">
         <label class="fl">Reporting Manager</label>
         <div class="manager-field" id="ee-manager-field">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\DeletionRecoveryService;
 
 class HolidaysController extends Controller
 {
@@ -29,8 +30,10 @@ class HolidaysController extends Controller
         return response()->json(['ok' => true], 201);
     }
 
-    public function destroy(string $date): JsonResponse
+    public function destroy(Request $request, string $date): JsonResponse
     {
+        app(DeletionRecoveryService::class)->captureTableRow('holidays', 'holiday', $date, 'date', $date, (int) $request->user()->id);
+
         $deleted = DB::table('holidays')
             ->where('date', $date)
             ->delete();
@@ -45,4 +48,3 @@ class HolidaysController extends Controller
         return response()->json(['ok' => true]);
     }
 }
-

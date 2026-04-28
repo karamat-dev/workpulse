@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\DeletionRecoveryService;
 
 class DepartmentsController extends Controller
 {
     private function ensureAdmin(Request $request): void
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
     }
@@ -81,6 +82,15 @@ class DepartmentsController extends Controller
         if (!$department) {
             return response()->json(['ok' => false, 'message' => 'Department not found'], 404);
         }
+
+        $affectedProfileIds = DB::table('employee_profiles')
+            ->where('department_id', $department->id)
+            ->pluck('id')
+            ->all();
+
+        app(DeletionRecoveryService::class)->captureTableRow('departments', 'department', (string) $department->name, 'id', $department->id, (int) $request->user()->id, [
+            'affectedProfileIds' => $affectedProfileIds,
+        ]);
 
         DB::table('employee_profiles')
             ->where('department_id', $department->id)
