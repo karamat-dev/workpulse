@@ -749,6 +749,7 @@ const adminNav = [
     {label:'Reports',page:'reports',icon:'report'},
     {label:'Announcements',page:'announcements',icon:'megaphone'},
     {label:'Policies',page:'policies',icon:'doc'},
+    {label:'Backups',page:'backups',icon:'building'},
     {label:'Company Details',page:'company',icon:'building'},
   ]},
 ];
@@ -834,7 +835,7 @@ const pageTitles = {
   dashboard:'Dashboard',attendance:'Attendance',realtime:'Real-Time Monitor',
   leave:'Leave Management',employees:'Employees',roles:'Roles & Permissions',departments:'Teams',
   orgchart:'Organization Chart',calendar:'Calendar & Events',reports:'Reports',
-  announcements:'Announcements',policies:'Company Policies',company:'Company Details',
+  announcements:'Announcements',policies:'Company Policies',backups:'Backups & Restore',company:'Company Details',
   notifications:'Notifications',
   'hr-dashboard':'HR Dashboard',
   'emp-dashboard':'My Dashboard','emp-attendance':'My Attendance',
@@ -899,6 +900,7 @@ function renderPage(id){
       case 'reports': return pageReports();
       case 'announcements': return pageAnnouncements();
       case 'policies': return pagePolicies();
+      case 'backups': return pageBackups();
       case 'company': return pageCompany();
       case 'notifications': return pageNotifications();
       // Employee pages

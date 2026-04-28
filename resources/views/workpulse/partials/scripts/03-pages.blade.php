@@ -54,6 +54,7 @@ async function wpReload(){
       DB.customNotifications = data.customNotifications || [];
       DB.company = data.company || {};
       DB.companyPolicies = data.companyPolicies || [];
+      DB.backups = data.backups || [];
       if(typeof handleBrowserNotifications === 'function'){
         handleBrowserNotifications(DB.notifications);
       }
@@ -3617,6 +3618,108 @@ function pagePolicies(isEmployee=false){
   </div>`;
 }
 
+function pageBackups(){
+  const backups = Array.isArray(DB.backups) ? DB.backups : [];
+  const latest = backups[0] || null;
+  const rows = backups.map((backup, index) => `
+    <tr>
+      <td>
+        <div style="font-weight:800;">${backup.name || backup.id}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${index === 0 ? 'Latest restore point' : 'Daily restore point'}</div>
+      </td>
+      <td>${backup.createdAt || '-'}</td>
+      <td>${backup.sizeLabel || '-'}</td>
+      <td><span class="badge ${index === 0 ? 'bg-green' : 'bg-blue'}">${index === 0 ? 'Last Night' : 'Available'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="window.restoreBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Restore</button>
+          <button class="btn btn-sm btn-danger" onclick="window.deleteBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Saved Backups</div><div class="stat-val">${backups.length}</div><div class="stat-sub">Showing latest 10 days</div></div>
+    <div class="stat-card"><div class="stat-label">Schedule</div><div class="stat-val">01:00</div><div class="stat-sub">Runs every night</div></div>
+    <div class="stat-card"><div class="stat-label">Latest Backup</div><div class="stat-val" style="font-size:24px;">${latest ? latest.createdAt.split(' ')[0] : '-'}</div><div class="stat-sub">${latest ? latest.sizeLabel : 'No backup yet'}</div></div>
+    <div class="stat-card"><div class="stat-label">Backup Type</div><div class="stat-val" style="font-size:24px;">Full</div><div class="stat-sub">Database and local files</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">Backups & Restore</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Restore employees, admins, reports data, events, announcements, policies, attendance, leave, and uploaded documents from a previous nightly backup.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="window.refreshBackups()">Refresh</button>
+        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
+      </div>
+    </div>
+    <div class="alert al-info"><span>Info</span><div><strong>Restore replaces current database data.</strong> WorkPulse creates one pre-restore backup automatically before rolling back, then restores files from the selected package.</div></div>
+    <div class="soft-table" style="margin-top:14px;"><div class="table-wrap"><table>
+      <thead><tr><th>Backup</th><th>Created</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:26px;">No backups found yet. Use Run Backup Now or wait for the 01:00 scheduled backup.</td></tr>`}</tbody>
+    </table></div></div>
+  </div>`;
+}
+
+async function refreshBackups(){
+  try{
+    const data = await wpApi('/api/backups', {method:'GET', headers:{}});
+    DB.backups = data.backups || [];
+    if(window.__workpulseCurrentPage === 'backups') showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Unable to load backups','red');
+  }
+}
+
+async function runBackupNow(){
+  if(!confirm('Create a full backup now?')) return;
+  showToast('Creating backup. This can take a minute...','green');
+  try{
+    const data = await wpApi('/api/backups', {method:'POST', body: JSON.stringify({})});
+    DB.backups = data.backups || [];
+    showToast('Backup created successfully','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Backup failed','red');
+  }
+}
+
+async function restoreBackup(id){
+  if(!confirm('Restore this backup? Current database data will be replaced. A pre-restore backup will be created first.')) return;
+  showToast('Restoring backup. Please keep this page open...','amber');
+  try{
+    const data = await wpApi('/api/backups/'+encodeURIComponent(id)+'/restore', {method:'POST', body: JSON.stringify({})});
+    DB.backups = data.backups || [];
+    await wpReload();
+    showToast('Backup restored successfully','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Restore failed','red');
+  }
+}
+
+async function deleteBackup(id){
+  if(!confirm('Delete this backup file permanently?')) return;
+  try{
+    const data = await wpApi('/api/backups/'+encodeURIComponent(id), {method:'DELETE'});
+    DB.backups = data.backups || [];
+    showToast('Backup deleted','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Delete failed','red');
+  }
+}
+
+window.refreshBackups = refreshBackups;
+window.runBackupNow = runBackupNow;
+window.restoreBackup = restoreBackup;
+window.deleteBackup = deleteBackup;
+
 function pageCompany(){
   const company = DB.company || {};
   const companyName = company.company_name || 'WorkPulse Technologies Pvt. Ltd.';
@@ -3625,6 +3728,7 @@ function pageCompany(){
   const officialContact = company.official_contact_no || '+92 42 35761234';
   const officeLocation = company.office_location || '12 Tech City, Arfa Software Park, Lahore';
   const linkedin = company.linkedin_page || 'linkedin.com/company/workpulse';
+  const latestBackup = Array.isArray(DB.backups) && DB.backups.length ? DB.backups[0] : null;
 
   return `
   <div class="g2">
@@ -3642,16 +3746,16 @@ function pageCompany(){
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:14px;">Backup & Disaster Recovery</div>
-      <div class="alert al-success"><span>âœ…</span><div><strong>Last Backup:</strong> Today 03:00 AM â€” Successful</div></div>
-      <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 3:00 AM</span></div>
-      <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full + Incremental</span></div>
-      <div class="irow"><span class="ikey">Retention</span><span class="ival">90 days</span></div>
-      <div class="irow"><span class="ikey">Storage</span><span class="ival">AWS S3 (AES-256)</span></div>
+      <div class="alert ${latestBackup ? 'al-success' : 'al-info'}"><span>Info</span><div><strong>Last Backup:</strong> ${latestBackup ? `${latestBackup.createdAt} - ${latestBackup.sizeLabel}` : 'No backup found yet'}</div></div>
+      <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 01:00 AM</span></div>
+      <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full database + local files</span></div>
+      <div class="irow"><span class="ikey">Retention</span><span class="ival">10 days</span></div>
+      <div class="irow"><span class="ikey">Storage</span><span class="ival">Local server storage/app/backups/workpulse</span></div>
       <div class="irow"><span class="ikey">RTO</span><span class="ival">&lt; 4 hours</span></div>
       <div class="irow"><span class="ikey">RPO</span><span class="ival">&lt; 24 hours</span></div>
       <div style="margin-top:14px;display:flex;gap:8px;">
-        <button class="btn btn-sm btn-primary" onclick="showToast('Backup initiated...','green')">Run Backup Now</button>
-        <button class="btn btn-sm">Download Log</button>
+        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
+        <button class="btn btn-sm" onclick="window.showPage('backups')">Open Backups</button>
       </div>
     </div>
   </div>

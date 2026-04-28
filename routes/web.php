@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\BackupsController;
 use App\Http\Controllers\LeaveController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\WorkpulseBootstrapController;
@@ -120,6 +121,13 @@ Route::middleware('auth')->group(function () {
             Route::get('/attendance/monthly.csv', [ReportsController::class, 'monthlyAttendanceCsv'])->middleware('perm:reports.view');
             Route::get('/employees', [ReportsController::class, 'employees'])->middleware('perm:employees.view');
             Route::get('/employees.csv', [ReportsController::class, 'employeesCsv'])->middleware('perm:employees.view');
+        });
+
+        Route::prefix('backups')->middleware('role:admin')->group(function () {
+            Route::get('/', [BackupsController::class, 'index']);
+            Route::post('/', [BackupsController::class, 'store']);
+            Route::post('/{backup}/restore', [BackupsController::class, 'restore']);
+            Route::delete('/{backup}', [BackupsController::class, 'destroy']);
         });
     });
 

@@ -59,6 +59,7 @@ const DB = {
   },
 
   companyPolicies: [],
+  backups: [],
 
   events: [],
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\WorkpulseBackupService;
 
 class WorkpulseBootstrapController extends Controller
 {
@@ -839,6 +840,9 @@ class WorkpulseBootstrapController extends Controller
             : collect();
 
         $company = DB::table('company_settings')->where('id', 1)->first();
+        $backups = $user->role === 'admin'
+            ? app(WorkpulseBackupService::class)->list(10)
+            : [];
 
         return response()->json([
             'ok' => true,
@@ -862,6 +866,7 @@ class WorkpulseBootstrapController extends Controller
             'notificationCount' => $notificationCount,
             'customNotifications' => $customNotifications,
             'company' => $company,
+            'backups' => $backups,
         ]);
     }
 }
