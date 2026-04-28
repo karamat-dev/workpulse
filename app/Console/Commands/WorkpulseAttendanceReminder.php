@@ -2,14 +2,17 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\ClockInReminderMail;
+use Illuminate\Support\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class WorkpulseAttendanceReminder extends Command
 {
     protected $signature = 'workpulse:attendance:remind-missed-clockin';
 
-    protected $description = 'Notify employees who have not clocked in by 11:30 AM on working weekdays';
+    protected $description = 'Email employees who have not clocked in within 30 minutes after shift start';
 
     public function handle(): int
     {
@@ -23,16 +26,19 @@ class WorkpulseAttendanceReminder extends Command
 
         $today = $now->toDateString();
         $notificationType = 'attendance_clock_in_reminder';
-        $summaryNotificationType = 'attendance_clock_in_summary';
 
         $employees = DB::table('users')
             ->join('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
-            ->where('users.role', 'employee')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
+            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
             ->whereIn('employee_profiles.status', ['Active', 'Probation'])
             ->select([
                 'users.id',
                 'users.name',
+                'users.email',
                 'users.employee_code',
+                'shifts.start_time',
+                'shifts.working_days',
             ])
             ->get();
 
@@ -55,71 +61,94 @@ class WorkpulseAttendanceReminder extends Command
             ->pluck('user_id')
             ->all();
 
-        $skipUserIds = array_unique(array_merge($clockedInUserIds, $leaveUserIds, $alreadyNotifiedUserIds));
+        $skipUserIds = array_unique(array_map('intval', array_merge($clockedInUserIds, $leaveUserIds, $alreadyNotifiedUserIds)));
 
-        $targets = $employees->filter(fn ($employee) => !in_array($employee->id, $skipUserIds, true))->values();
+        $targets = $employees
+            ->filter(function ($employee) use ($now, $today, $skipUserIds) {
+                if (in_array((int) $employee->id, $skipUserIds, true)) {
+                    return false;
+                }
+
+                if (!$this->isWorkingDay($now, (string) ($employee->working_days ?? 'Mon-Fri'))) {
+                    return false;
+                }
+
+                $shiftStartTime = $employee->start_time ?: '11:00:00';
+                $reminderAt = Carbon::parse($today.' '.$shiftStartTime)->addMinutes(30);
+
+                return $now->greaterThanOrEqualTo($reminderAt);
+            })
+            ->values();
 
         foreach ($targets as $employee) {
+            $shiftStartTime = substr((string) ($employee->start_time ?: '11:00:00'), 0, 5);
+
             DB::table('employee_notifications')->insert([
                 'user_id' => $employee->id,
                 'type' => $notificationType,
                 'title' => 'Clock-in reminder',
-                'message' => 'You have not clocked in yet. Please mark your attendance if you are working today.',
+                'message' => 'Your shift started at '.$shiftStartTime.'. Please clock in if you are working today.',
                 'reference_type' => 'attendance',
                 'reference_code' => $today,
                 'meta' => json_encode([
                     'date' => $today,
                     'sent_at' => $now->toDateTimeString(),
                     'employee_code' => $employee->employee_code,
+                    'shift_start' => $shiftStartTime,
                 ]),
                 'is_read' => false,
                 'read_at' => null,
                 'created_at' => $now,
                 'updated_at' => $now,
             ]);
-        }
 
-        $summaryRecipients = DB::table('users')
-            ->whereIn('role', ['admin', 'hr'])
-            ->select(['id', 'role'])
-            ->get();
-
-        $alreadySummarizedUserIds = DB::table('employee_notifications')
-            ->where('type', $summaryNotificationType)
-            ->whereDate('created_at', $today)
-            ->pluck('user_id')
-            ->all();
-
-        $summaryCount = $targets->count();
-
-        foreach ($summaryRecipients as $recipient) {
-            if (in_array($recipient->id, $alreadySummarizedUserIds, true)) {
-                continue;
+            if ($employee->email) {
+                try {
+                    Mail::to($employee->email)->send(new ClockInReminderMail(
+                        employeeName: (string) $employee->name,
+                        shiftStart: $shiftStartTime,
+                        date: $today,
+                        loginUrl: url('/workpulse'),
+                    ));
+                } catch (\Throwable $e) {
+                    report($e);
+                }
             }
-
-            DB::table('employee_notifications')->insert([
-                'user_id' => $recipient->id,
-                'type' => $summaryNotificationType,
-                'title' => 'Attendance summary',
-                'message' => $summaryCount > 0
-                    ? $summaryCount.' employees have not clocked in by 11:30 AM.'
-                    : 'All employees have clocked in by 11:30 AM.',
-                'reference_type' => 'attendance',
-                'reference_code' => $today,
-                'meta' => json_encode([
-                    'date' => $today,
-                    'missing_clock_in_count' => $summaryCount,
-                    'recipient_role' => $recipient->role,
-                ]),
-                'is_read' => false,
-                'read_at' => null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ]);
         }
 
         $this->info('Attendance reminders sent: '.$targets->count());
 
         return self::SUCCESS;
+    }
+
+    private function isWorkingDay(Carbon $date, string $workingDays): bool
+    {
+        $normalized = strtolower(trim($workingDays));
+
+        if ($normalized === '' || str_contains($normalized, 'mon-fri')) {
+            return $date->isWeekday();
+        }
+
+        if (str_contains($normalized, 'sat') && str_contains($normalized, 'sun') && str_contains($normalized, 'mon')) {
+            return true;
+        }
+
+        $map = [
+            'mon' => 1,
+            'tue' => 2,
+            'wed' => 3,
+            'thu' => 4,
+            'fri' => 5,
+            'sat' => 6,
+            'sun' => 7,
+        ];
+
+        foreach ($map as $label => $dayNumber) {
+            if (str_contains($normalized, $label) && $date->dayOfWeekIso === $dayNumber) {
+                return true;
+            }
+        }
+
+        return $date->isWeekday();
     }
 }

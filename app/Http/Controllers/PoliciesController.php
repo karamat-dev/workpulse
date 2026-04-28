@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Services\DeletionRecoveryService;
 
 class PoliciesController extends Controller
 {
@@ -25,7 +26,7 @@ class PoliciesController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
 
@@ -66,7 +67,7 @@ class PoliciesController extends Controller
 
     public function destroy(Request $request, int $policyId): JsonResponse
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
 
@@ -78,9 +79,7 @@ class PoliciesController extends Controller
             ], 404);
         }
 
-        if ($policy->file_path) {
-            $this->deleteStoredPolicyFile((string) $policy->file_path);
-        }
+        app(DeletionRecoveryService::class)->captureTableRow('company_policies', 'policy', (string) $policy->title, 'id', $policy->id, (int) $request->user()->id);
 
         DB::table('company_policies')->where('id', $policyId)->delete();
 

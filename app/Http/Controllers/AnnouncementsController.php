@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Services\DeletionRecoveryService;
 
 class AnnouncementsController extends Controller
 {
@@ -50,9 +51,27 @@ class AnnouncementsController extends Controller
         return response()->json(['ok' => true, 'id' => $announcementId]);
     }
 
-    public function destroy(int $announcementId): JsonResponse
+    public function destroy(Request $request, int $announcementId): JsonResponse
     {
-        $deleted = DB::transaction(function () use ($announcementId) {
+        $deleted = DB::transaction(function () use ($request, $announcementId) {
+            $announcement = DB::table('announcements')->where('id', $announcementId)->first();
+            if (!$announcement) {
+                return 0;
+            }
+
+            $recipients = DB::table('announcement_recipients')
+                ->where('announcement_id', $announcementId)
+                ->get()
+                ->map(fn ($row) => (array) $row)
+                ->all();
+
+            app(DeletionRecoveryService::class)->record('announcement', (string) $announcement->title, [
+                'table' => 'announcements',
+                'keyColumn' => 'id',
+                'row' => (array) $announcement,
+                'recipients' => $recipients,
+            ], (int) $request->user()->id);
+
             DB::table('announcement_recipients')
                 ->where('announcement_id', $announcementId)
                 ->delete();

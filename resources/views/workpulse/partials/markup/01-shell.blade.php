@@ -25,9 +25,10 @@
           <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
         </div>
         <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
+        <div class="lf-err" id="forgot-msg" style="display:none;"></div>
         <div class="login-form-meta">
           <span>Use your official WorkPulse account credentials</span>
-          <span>Need help? Contact HR admin</span>
+          <button type="button" onclick="window.sendForgotPassword && window.sendForgotPassword()" style="border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;padding:0;">Forgot password?</button>
         </div>
         <button class="lf-btn" onclick="window.doLogin()">Sign In</button>
       </div>

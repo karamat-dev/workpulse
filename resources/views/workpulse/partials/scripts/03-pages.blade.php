@@ -54,6 +54,9 @@ async function wpReload(){
       DB.customNotifications = data.customNotifications || [];
       DB.company = data.company || {};
       DB.companyPolicies = data.companyPolicies || [];
+      DB.backups = data.backups || [];
+      DB.deletedBackups = data.deletedBackups || [];
+      DB.recoveryItems = data.recoveryItems || [];
       if(typeof handleBrowserNotifications === 'function'){
         handleBrowserNotifications(DB.notifications);
       }
@@ -267,8 +270,7 @@ function syncAnnouncementAudienceOptions(){
   const options = [
     {value:'all', label:'All Employees'},
     {value:'role:employee', label:'Employees Only'},
-    {value:'role:manager', label:'Managers Only'},
-    {value:'role:hr', label:'HR Only'},
+    {value:'role:manager', label:'Super-Admins Only'},
     {value:'role:admin', label:'Admins Only'},
         ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Team: ${name}`})),
     {value:'specific', label:'Specific Employees'},
@@ -307,8 +309,7 @@ function syncNotificationAudienceOptions(){
   const options = [
     {value:'all', label:'All Employees'},
     {value:'role:employee', label:'Employees Only'},
-    {value:'role:manager', label:'Managers Only'},
-    {value:'role:hr', label:'HR Only'},
+    {value:'role:manager', label:'Super-Admins Only'},
     {value:'role:admin', label:'Admins Only'},
     ...getDepartmentList().map(name => ({value:`department:${name}`, label:`Team: ${name}`})),
     {value:'specific', label:'Specific Employees'},
@@ -1232,14 +1233,14 @@ function submitAddEmployee(){
   const iban=document.getElementById('ne-iban').value;
   const shiftId=document.getElementById('ne-shift').value;
   const cnicDocument=document.getElementById('ne-cnic-document').files?.[0];
-  if(!fn||!ln||!email||!dept||!desg||!doj||!cnicDocument){ showToast('Please fill all required fields, including CNIC document','red'); return; }
+  if(!fn||!ln||!email||!personalEmail||!dept||!desg||!doj||!cnicDocument){ showToast('Please fill all required fields, including official email, personal email, and CNIC document','red'); return; }
   const formData = new FormData();
   formData.append('fname', fn);
   formData.append('lname', ln);
   formData.append('email', email);
   if(password) formData.append('password', password);
   if(phone) formData.append('phone', phone);
-  if(personalEmail) formData.append('personal_email', personalEmail);
+  formData.append('personal_email', personalEmail);
   formData.append('dept', dept);
   formData.append('desg', desg);
   formData.append('doj', doj);
@@ -1287,6 +1288,59 @@ function submitAddEmployee(){
   if(typeof syncNewEmployeeManagerOptions === 'function') syncNewEmployeeManagerOptions();
   if(document.getElementById('page-title').textContent==='Employees') showPage('employees');
 }
+
+function generateEmployeePasswordValue(){
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lower = 'abcdefghijkmnopqrstuvwxyz';
+  const nums = '23456789';
+  const symbols = '@#$%';
+  const all = upper + lower + nums + symbols;
+  const pick = chars => chars[Math.floor(Math.random() * chars.length)];
+  let password = pick(upper) + pick(lower) + pick(nums) + pick(symbols);
+  for(let i=0;i<8;i++) password += pick(all);
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+function setNewEmployeePasswordMode(mode){
+  const input = document.getElementById('ne-password');
+  const auto = document.getElementById('ne-password-auto');
+  const manual = document.getElementById('ne-password-manual');
+  if(!input) return;
+
+  const isManual = mode === 'manual';
+  if(auto) auto.checked = !isManual;
+  if(manual) manual.checked = isManual;
+  input.type = isManual ? 'password' : 'text';
+  input.readOnly = !isManual;
+  input.placeholder = isManual ? 'Create employee password' : 'Auto generated password';
+  if(!isManual && !input.value){
+    input.value = generateEmployeePasswordValue();
+  }
+  if(isManual){
+    input.focus();
+    input.select();
+  }
+}
+
+function generateNewEmployeePassword(){
+  const input = document.getElementById('ne-password');
+  if(!input) return;
+  input.value = generateEmployeePasswordValue();
+  setNewEmployeePasswordMode('auto');
+}
+
+function initializeNewEmployeePassword(){
+  const input = document.getElementById('ne-password');
+  if(!input) return;
+  if(!input.value){
+    input.value = generateEmployeePasswordValue();
+  }
+  setNewEmployeePasswordMode(document.getElementById('ne-password-manual')?.checked ? 'manual' : 'auto');
+}
+
+window.setNewEmployeePasswordMode = setNewEmployeePasswordMode;
+window.generateNewEmployeePassword = generateNewEmployeePassword;
+window.initializeNewEmployeePassword = initializeNewEmployeePassword;
 
 function submitHoliday(){
   const name=document.getElementById('hol-name').value;
@@ -1366,6 +1420,11 @@ function formatNotificationAudienceLabel(audience){
 }
 
 function deleteEmployee(id){
+  const target = (DB.employees || []).find(employee => employee.id === id);
+  if(target?.role === 'manager' && DB.currentRole !== 'manager'){
+    showToast('Only a Super-Admin can delete Super-Admin accounts','red');
+    return;
+  }
   if(!confirm('Are you sure you want to remove this employee from the active directory? This will move the record to Ex-employee.')) return;
   wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'})
     .then(()=>wpReload())
@@ -2203,8 +2262,8 @@ function pageLeave(){
     ? leaveBalanceList.map(balance => [balance.name, balance.remaining, balance.allocated || balance.remaining || 1, 'var(--accent)'])
     : [['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Maternity Leave',90,90,'var(--teal)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']];
 
-  const canManageLeaveBalances = DB.currentRole === 'admin';
-  const canManageLeaveTypes = DB.currentRole === 'admin';
+  const canManageLeaveBalances = isSuperAdminRole();
+  const canManageLeaveTypes = isSuperAdminRole();
   const leavePolicies = getLeavePoliciesList();
   const leaveTypes = getLeaveTypesList();
   const employeeOptions = (DB.employees || [])
@@ -2368,6 +2427,7 @@ function pageEmployees(){
   const probationCount = currentEmployees.filter(e=>e.status==='Probation').length;
   const offboardingCount = offboardingEmployees.length;
   const exCount = exEmployees.length;
+  const canModifyEmployee = (employee) => !(employee?.role === 'manager' && DB.currentRole !== 'manager');
   const renderDirectoryRows = (items, emptyLabel, allowRemove = false) => items.map(e=>`
     <tr>
       <td>${e.id}</td>
@@ -2385,7 +2445,7 @@ function pageEmployees(){
       <td>${statusBadge(e.status)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm" onclick="viewEmpProfile('${e.id}')">Open</button>
-        ${allowRemove ? `<button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>` : ''}
+        ${allowRemove && canModifyEmployee(e) ? `<button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>` : ''}
       </div></td>
     </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">${emptyLabel}</td></tr>`;
 
@@ -2513,8 +2573,7 @@ function formatUserRole(role){
   const value = String(role || 'employee').toLowerCase();
   const labels = {
     employee: 'Employee',
-    manager: 'Manager',
-    hr: 'HR',
+    manager: 'Super-Admin',
     admin: 'Admin',
   };
   return labels[value] || 'Employee';
@@ -2525,7 +2584,6 @@ function roleBadge(role){
   const cls = {
     employee: 'bg-blue',
     manager: 'bg-amber',
-    hr: 'bg-purple',
     admin: 'bg-red',
   }[value] || 'bg-blue';
   return `<span class="badge ${cls}">${formatUserRole(value)}</span>`;
@@ -2536,7 +2594,6 @@ function getRoleCounts(){
   return {
     employee: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'employee').length,
     manager: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'manager').length,
-    hr: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'hr').length,
     admin: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'admin').length,
   };
 }
@@ -2544,7 +2601,7 @@ function getRoleCounts(){
 function pageRoles(){
   const counts = getRoleCounts();
   const employees = (Array.isArray(DB.employees) ? DB.employees : []).slice().sort((a,b)=>{
-    const roleOrder = {admin: 1, hr: 2, manager: 3, employee: 4};
+    const roleOrder = {admin: 1, manager: 2, employee: 3, hr: 4};
     const roleDiff = (roleOrder[String(a.role || 'employee').toLowerCase()] || 99) - (roleOrder[String(b.role || 'employee').toLowerCase()] || 99);
     if(roleDiff !== 0) return roleDiff;
     return `${a.fname || ''} ${a.lname || ''}`.localeCompare(`${b.fname || ''} ${b.lname || ''}`);
@@ -2562,7 +2619,7 @@ function pageRoles(){
       <td>${e.manager || '-'}</td>
       <td>${statusBadge(e.status)}</td>
       <td><div style="display:flex;gap:4px;flex-wrap:wrap;">
-        <button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Role</button>
+        ${!(e.role === 'manager' && DB.currentRole !== 'manager') ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Role</button>` : ''}
         <button class="btn btn-sm btn-ghost" onclick="window.viewEmpProfile('${e.id}')">Profile</button>
       </div></td>
     </tr>
@@ -2571,19 +2628,17 @@ function pageRoles(){
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
     <div class="hero-title">Roles & Permissions</div>
-    <div class="hero-sub">Manage who is an Admin, HR, Manager, or Employee from one place. Use this page to create higher-access accounts quickly and update role ownership without hunting through the full employee directory.</div>
+    <div class="hero-sub">Manage who is an Admin, Super-Admin, or Employee from one place. Use this page to create higher-access accounts quickly and update role ownership without hunting through the full employee directory.</div>
     <div class="hero-chip-row">
       <div class="hero-chip"><div class="k">Admins</div><div class="v">${counts.admin}</div></div>
-      <div class="hero-chip"><div class="k">HR</div><div class="v">${counts.hr}</div></div>
-      <div class="hero-chip"><div class="k">Managers</div><div class="v">${counts.manager}</div></div>
+      <div class="hero-chip"><div class="k">Super-Admins</div><div class="v">${counts.manager}</div></div>
       <div class="hero-chip"><div class="k">Employees</div><div class="v">${counts.employee}</div></div>
     </div>
   </div>
 
   <div class="directory-stats">
     <div class="directory-stat"><div class="label">Admin Access</div><div class="num">${counts.admin}</div><div class="hint">Full company control and elevated settings</div></div>
-    <div class="directory-stat"><div class="label">Manager Seats</div><div class="num">${counts.manager}</div><div class="hint">Supervisors for reporting lines and approvals</div></div>
-    <div class="directory-stat"><div class="label">HR Operators</div><div class="num">${counts.hr}</div><div class="hint">People operations and leave management users</div></div>
+    <div class="directory-stat"><div class="label">Super-Admin Seats</div><div class="num">${counts.manager}</div><div class="hint">Highest recovery and operational access</div></div>
     <div class="directory-stat"><div class="label">Total Assigned</div><div class="num">${employees.length}</div><div class="hint">Employees with visible role assignments</div></div>
   </div>
 
@@ -2593,7 +2648,7 @@ function pageRoles(){
       <div style="font-size:12px;color:var(--muted);">Create a new elevated account or jump into an existing profile to update access.</div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='manager'; }, 0);">+ New Manager</button>
+      <button class="btn btn-primary" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='manager'; }, 0);">+ New Super-Admin</button>
       <button class="btn" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='admin'; }, 0);">+ New Admin</button>
       <button class="btn btn-ghost" onclick="window.showPage('employees')">Open Employee Directory</button>
     </div>
@@ -2607,7 +2662,7 @@ function pageRoles(){
       </div>
       <div class="data-pill-row">
         <span class="data-pill">Highest access <strong>${counts.admin}</strong></span>
-        <span class="data-pill">Approvers <strong>${counts.manager + counts.hr + counts.admin}</strong></span>
+        <span class="data-pill">Approvers <strong>${counts.manager + counts.admin}</strong></span>
       </div>
     </div>
     <div class="toolbar-card" style="margin-bottom:14px;">
@@ -2619,13 +2674,13 @@ function pageRoles(){
         <div>
           <label class="fl">Open Creation Flow</label>
           <div class="data-pill-row">
-            <span class="data-pill">Manager <strong>${counts.manager}</strong></span>
+            <span class="data-pill">Super-Admin <strong>${counts.manager}</strong></span>
             <span class="data-pill">Admin <strong>${counts.admin}</strong></span>
           </div>
         </div>
         <div>
           <label class="fl">Need Team Leads?</label>
-          <div style="font-size:12px;color:var(--muted);padding-top:10px;">Create managers here, then assign them as reporting managers in employee profiles.</div>
+          <div style="font-size:12px;color:var(--muted);padding-top:10px;">Create Super-Admins here, then assign reporting managers in employee profiles.</div>
         </div>
         <div style="display:flex;align-items:end;justify-content:flex-end;">
           <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
@@ -2655,7 +2710,7 @@ async function viewEmpProfile(id){
 
 function pageEmpProfileDetail(){
   const e=DB.employees.find(emp=>emp.id===window._viewEmpId)||DB.employees[0];
-  const canSeeConfidential = DB.currentRole === 'admin';
+  const canSeeConfidential = isSuperAdminRole();
   const gross=(e.basic||0)+(e.house||0)+(e.transport||0);
   const net=gross-(e.tax||0);
 
@@ -3524,7 +3579,7 @@ function pageAnnouncements(empView=false){
         <div class="ann-title">${a.title}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:8px;">
           <span class="badge bg-blue">${a.cat}</span>
-          ${!empView && DB.currentRole === 'admin' ? `<button class="btn btn-sm" onclick="window.openAnnouncementModal('${a.id}')">Edit</button><button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteAnnouncement('${a.id}')">Delete</button>` : ''}
+          ${!empView && isSuperAdminRole() ? `<button class="btn btn-sm" onclick="window.openAnnouncementModal('${a.id}')">Edit</button><button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteAnnouncement('${a.id}')">Delete</button>` : ''}
         </div>
       </div>
       <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
@@ -3546,7 +3601,7 @@ function formatFileSize(bytes){
 
 function pagePolicies(isEmployee=false){
   const policies = Array.isArray(DB.companyPolicies) ? DB.companyPolicies : [];
-  const canManage = DB.currentRole === 'admin' && !isEmployee;
+  const canManage = isSuperAdminRole() && !isEmployee;
   const rows = policies.map(policy => `
     <tr>
       <td>
@@ -3617,6 +3672,192 @@ function pagePolicies(isEmployee=false){
   </div>`;
 }
 
+function pageBackups(){
+  const backups = Array.isArray(DB.backups) ? DB.backups : [];
+  const deletedBackups = Array.isArray(DB.deletedBackups) ? DB.deletedBackups : [];
+  const recoveryItems = Array.isArray(DB.recoveryItems) ? DB.recoveryItems : [];
+  const latest = backups[0] || null;
+  const rows = backups.map((backup, index) => `
+    <tr>
+      <td>
+        <div style="font-weight:800;">${backup.name || backup.id}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${index === 0 ? 'Latest restore point' : 'Daily restore point'}</div>
+      </td>
+      <td>${backup.createdAt || '-'}</td>
+      <td>${backup.sizeLabel || '-'}</td>
+      <td><span class="badge ${index === 0 ? 'bg-green' : 'bg-blue'}">${index === 0 ? 'Last Night' : 'Available'}</span></td>
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="window.restoreBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Restore</button>
+          <button class="btn btn-sm btn-danger" onclick="window.deleteBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Delete</button>
+        </div>
+      </td>
+    </tr>
+  `).join('');
+  const deletedRows = deletedBackups.map((backup) => `
+    <tr>
+      <td>
+        <div style="font-weight:800;">${backup.name || backup.id}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Deleted backup, manager recovery only</div>
+      </td>
+      <td>${backup.deletedAt || '-'}</td>
+      <td>${backup.recoverableUntil || '-'}</td>
+      <td>${backup.sizeLabel || '-'}</td>
+      <td><button class="btn btn-sm" onclick="window.restoreBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Restore</button></td>
+    </tr>
+  `).join('');
+  const dataRecoveryRows = recoveryItems.map((item) => `
+    <tr>
+      <td><span class="badge bg-blue">${item.type || 'data'}</span></td>
+      <td>
+        <div style="font-weight:800;">${item.label || '-'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">Deleted by ${item.deletedBy || 'Admin'}</div>
+      </td>
+      <td>${item.deletedAt || '-'}</td>
+      <td>${item.recoverableUntil || '-'}</td>
+      <td><button class="btn btn-sm" onclick="window.restoreRecoveryItem(${Number(item.id)})">Restore</button></td>
+    </tr>
+  `).join('');
+
+  return `
+  <div class="g4" style="margin-bottom:14px;">
+    <div class="stat-card"><div class="stat-label">Saved Backups</div><div class="stat-val">${backups.length}</div><div class="stat-sub">Showing latest 10 days</div></div>
+    <div class="stat-card"><div class="stat-label">Schedule</div><div class="stat-val">01:00</div><div class="stat-sub">Runs every night</div></div>
+    <div class="stat-card"><div class="stat-label">Latest Backup</div><div class="stat-val" style="font-size:24px;">${latest ? latest.createdAt.split(' ')[0] : '-'}</div><div class="stat-sub">${latest ? latest.sizeLabel : 'No backup yet'}</div></div>
+    <div class="stat-card"><div class="stat-label">Backup Type</div><div class="stat-val" style="font-size:24px;">Full</div><div class="stat-sub">Database and local files</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">Backups & Restore</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Restore employees, admins, reports data, events, announcements, policies, attendance, leave, and uploaded documents from a previous nightly backup.</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="window.refreshBackups()">Refresh</button>
+        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
+      </div>
+    </div>
+    <div class="alert al-info"><span>Info</span><div><strong>Restore replaces current database data.</strong> WorkPulse creates one pre-restore backup automatically before rolling back, then restores files from the selected package.</div></div>
+    <div class="soft-table" style="margin-top:14px;"><div class="table-wrap"><table>
+      <thead><tr><th>Backup</th><th>Created</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:26px;">No backups found yet. Use Run Backup Now or wait for the 01:00 scheduled backup.</td></tr>`}</tbody>
+    </table></div></div>
+  </div>
+
+  ${DB.currentRole === 'manager' ? `
+  <div class="card" style="margin-top:14px;">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">Super-Admin Recovery</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Backups deleted by an admin remain recoverable here for 4 days. Use Restore to roll the system back even if the backup was removed from the admin list.</div>
+      </div>
+      <span class="badge bg-amber">4 day window</span>
+    </div>
+    <div class="soft-table" style="margin-top:14px;"><div class="table-wrap"><table>
+      <thead><tr><th>Deleted Backup</th><th>Deleted</th><th>Recoverable Until</th><th>Size</th><th>Action</th></tr></thead>
+      <tbody>${deletedRows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:22px;">No deleted backups are waiting for manager recovery.</td></tr>`}</tbody>
+    </table></div></div>
+  </div>
+  <div class="card" style="margin-top:14px;">
+    <div class="card-hdr">
+      <div>
+        <div class="card-title">Deleted Data Recovery</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Employees and admin-deleted records appear here for 4 days, including announcements, holidays, policies, leave types, shifts, departments, and custom notifications.</div>
+      </div>
+      <button class="btn btn-sm" onclick="window.refreshRecoveryItems()">Refresh</button>
+    </div>
+    <div class="soft-table" style="margin-top:14px;"><div class="table-wrap"><table>
+      <thead><tr><th>Type</th><th>Item</th><th>Deleted</th><th>Recoverable Until</th><th>Action</th></tr></thead>
+      <tbody>${dataRecoveryRows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:22px;">No deleted data is waiting for manager recovery.</td></tr>`}</tbody>
+    </table></div></div>
+  </div>` : ''}`;
+}
+
+async function refreshBackups(){
+  try{
+    const data = await wpApi('/api/backups', {method:'GET', headers:{}});
+    DB.backups = data.backups || [];
+    DB.deletedBackups = data.deletedBackups || [];
+    if(window.__workpulseCurrentPage === 'backups') showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Unable to load backups','red');
+  }
+}
+
+async function refreshRecoveryItems(){
+  if(DB.currentRole !== 'manager') return;
+  try{
+    const data = await wpApi('/api/recovery', {method:'GET', headers:{}});
+    DB.recoveryItems = data.recoveryItems || [];
+    if(window.__workpulseCurrentPage === 'backups') showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Unable to load recovery items','red');
+  }
+}
+
+async function restoreRecoveryItem(id){
+  if(!confirm('Restore this deleted item?')) return;
+  try{
+    const data = await wpApi('/api/recovery/'+encodeURIComponent(id)+'/restore', {method:'POST', body: JSON.stringify({})});
+    DB.recoveryItems = data.recoveryItems || [];
+    await wpReload();
+    showToast('Deleted item restored','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Restore failed','red');
+  }
+}
+
+async function runBackupNow(){
+  if(!confirm('Create a full backup now?')) return;
+  showToast('Creating backup. This can take a minute...','green');
+  try{
+    const data = await wpApi('/api/backups', {method:'POST', body: JSON.stringify({})});
+    DB.backups = data.backups || [];
+    DB.deletedBackups = data.deletedBackups || [];
+    showToast('Backup created successfully','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Backup failed','red');
+  }
+}
+
+async function restoreBackup(id){
+  if(!confirm('Restore this backup? Current database data will be replaced. A pre-restore backup will be created first.')) return;
+  showToast('Restoring backup. Please keep this page open...','amber');
+  try{
+    const data = await wpApi('/api/backups/'+encodeURIComponent(id)+'/restore', {method:'POST', body: JSON.stringify({})});
+    DB.backups = data.backups || [];
+    DB.deletedBackups = data.deletedBackups || [];
+    await wpReload();
+    showToast('Backup restored successfully','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Restore failed','red');
+  }
+}
+
+async function deleteBackup(id){
+  if(!confirm('Delete this backup file permanently?')) return;
+  try{
+    const data = await wpApi('/api/backups/'+encodeURIComponent(id), {method:'DELETE'});
+    DB.backups = data.backups || [];
+    DB.deletedBackups = data.deletedBackups || [];
+    showToast('Backup deleted','green');
+    showPage('backups');
+  }catch(e){
+    showToast(e.message || 'Delete failed','red');
+  }
+}
+
+window.refreshBackups = refreshBackups;
+window.runBackupNow = runBackupNow;
+window.restoreBackup = restoreBackup;
+window.deleteBackup = deleteBackup;
+window.refreshRecoveryItems = refreshRecoveryItems;
+window.restoreRecoveryItem = restoreRecoveryItem;
+
 function pageCompany(){
   const company = DB.company || {};
   const companyName = company.company_name || 'WorkPulse Technologies Pvt. Ltd.';
@@ -3625,6 +3866,7 @@ function pageCompany(){
   const officialContact = company.official_contact_no || '+92 42 35761234';
   const officeLocation = company.office_location || '12 Tech City, Arfa Software Park, Lahore';
   const linkedin = company.linkedin_page || 'linkedin.com/company/workpulse';
+  const latestBackup = Array.isArray(DB.backups) && DB.backups.length ? DB.backups[0] : null;
 
   return `
   <div class="g2">
@@ -3642,16 +3884,16 @@ function pageCompany(){
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:14px;">Backup & Disaster Recovery</div>
-      <div class="alert al-success"><span>âœ…</span><div><strong>Last Backup:</strong> Today 03:00 AM â€” Successful</div></div>
-      <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 3:00 AM</span></div>
-      <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full + Incremental</span></div>
-      <div class="irow"><span class="ikey">Retention</span><span class="ival">90 days</span></div>
-      <div class="irow"><span class="ikey">Storage</span><span class="ival">AWS S3 (AES-256)</span></div>
+      <div class="alert ${latestBackup ? 'al-success' : 'al-info'}"><span>Info</span><div><strong>Last Backup:</strong> ${latestBackup ? `${latestBackup.createdAt} - ${latestBackup.sizeLabel}` : 'No backup found yet'}</div></div>
+      <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 01:00 AM</span></div>
+      <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full database + local files</span></div>
+      <div class="irow"><span class="ikey">Retention</span><span class="ival">10 days</span></div>
+      <div class="irow"><span class="ikey">Storage</span><span class="ival">Local server storage/app/backups/workpulse</span></div>
       <div class="irow"><span class="ikey">RTO</span><span class="ival">&lt; 4 hours</span></div>
       <div class="irow"><span class="ikey">RPO</span><span class="ival">&lt; 24 hours</span></div>
       <div style="margin-top:14px;display:flex;gap:8px;">
-        <button class="btn btn-sm btn-primary" onclick="showToast('Backup initiated...','green')">Run Backup Now</button>
-        <button class="btn btn-sm">Download Log</button>
+        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
+        <button class="btn btn-sm" onclick="window.showPage('backups')">Open Backups</button>
       </div>
     </div>
   </div>
@@ -4123,7 +4365,7 @@ function pageNotifications(employeeView=false){
     </div>`;
   }).join('');
 
-  const managementPanel = !employeeView && DB.currentRole === 'admin' ? `
+  const managementPanel = !employeeView && isSuperAdminRole() ? `
   <div class="card" style="margin-bottom:14px;">
     <div class="card-hdr">
       <div class="card-title">Admin Notification Manager</div>
@@ -4450,12 +4692,12 @@ function pageEmpProfileDetail(){
   return renderProfileWorkspace(e, {
     heroTitle: `${e.fname} ${e.lname}`,
     heroSub: `${profileValue(e.desg)} in ${profileValue(e.dept)} with a complete profile workspace for official records, salary visibility, reporting structure, leave history, attendance, documents, and lifecycle details.`,
-    canSeeSalary: DB.currentRole === 'admin',
-    canManageEmployeeDocs: DB.currentRole === 'admin',
+    canSeeSalary: isSuperAdminRole(),
+    canManageEmployeeDocs: isSuperAdminRole(),
     documentButtonLabel: 'Open Document',
     tabGroup: 'epdPlus',
     headerAction: `<button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>`,
-    sideAction: DB.currentRole === 'admin' ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button>` : '',
+    sideAction: isSuperAdminRole() && canModifyEmployee(e) ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button>` : '',
   });
 }
 

@@ -3,6 +3,10 @@
 window.doLogin = doLogin;
 window.doLogout = doLogout;
 window.showPage = showPage;
+window.sendForgotPassword = sendForgotPassword;
+window.setNewEmployeePasswordMode = setNewEmployeePasswordMode;
+window.generateNewEmployeePassword = generateNewEmployeePassword;
+window.initializeNewEmployeePassword = initializeNewEmployeePassword;
 window.switchTab = switchTab;
 window.openModal = openModal;
 window.closeModal = closeModal;

@@ -242,7 +242,7 @@ class ReportsController extends Controller
 
     public function employees(Request $request): JsonResponse
     {
-        $canSeeConfidential = $request->user()->role === 'admin';
+        $canSeeConfidential = $request->user()->isSuperAdmin();
 
         $select = [
             'users.employee_code',
@@ -291,7 +291,7 @@ class ReportsController extends Controller
 
     public function employeesCsv(Request $request): StreamedResponse
     {
-        $canSeeConfidential = $request->user()->role === 'admin';
+        $canSeeConfidential = $request->user()->isSuperAdmin();
 
         $select = [
             'users.employee_code',
@@ -387,7 +387,7 @@ class ReportsController extends Controller
 
     private function applyViewerScope($query, object $viewer): void
     {
-        if (in_array($viewer->role, ['admin', 'hr'], true)) {
+        if (in_array($viewer->role, ['admin', 'manager', 'hr'], true)) {
             return;
         }
 

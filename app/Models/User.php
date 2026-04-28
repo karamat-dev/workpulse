@@ -33,8 +33,8 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionKey): bool
     {
-        // Admin is implicitly allowed to do everything.
-        if (($this->role ?? null) === 'admin') {
+        // Admin and manager are full-access WorkPulse operators.
+        if ($this->isSuperAdmin()) {
             return true;
         }
 
@@ -45,5 +45,10 @@ class User extends Authenticatable
             ->value('role_permissions.allowed');
 
         return (bool) $allowed;
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return in_array($this->role ?? null, ['admin', 'manager'], true);
     }
 }

@@ -6,9 +6,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use App\Services\DeletionRecoveryService;
+use App\Mail\NewEmployeeCredentialsMail;
 
 class EmployeesController extends Controller
 {
@@ -18,7 +21,7 @@ class EmployeesController extends Controller
     public function show(Request $request, string $employeeCode): JsonResponse
     {
         $user = $request->user();
-        $includeConfidential = $user->role === 'admin';
+        $includeConfidential = $user->isSuperAdmin();
         $record = $this->employeeQuery($includeConfidential)
             ->where('users.employee_code', $employeeCode)
             ->first();
@@ -31,7 +34,7 @@ class EmployeesController extends Controller
             abort(403);
         }
 
-        $includeSensitiveProfile = in_array($user->role, ['admin', 'hr'], true)
+        $includeSensitiveProfile = in_array($user->role, ['admin', 'manager', 'hr'], true)
             || (int) $record->user_id === (int) $user->id;
 
         return response()->json([
@@ -58,7 +61,7 @@ class EmployeesController extends Controller
             'work_location' => ['nullable', 'string', 'max:255'],
             'confirmation_date' => ['nullable', 'date_format:Y-m-d'],
             'manager' => ['nullable', 'string', 'max:255'],
-            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])], // default employee
+            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'admin'])], // default employee
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'cnic_document' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:5120'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
@@ -85,12 +88,12 @@ class EmployeesController extends Controller
         ]);
 
         $requestedRole = $validated['role'] ?? 'employee';
-        $role = in_array($requestedRole, ['employee', 'manager', 'hr', 'admin'], true)
+        $role = in_array($requestedRole, ['employee', 'manager', 'admin'], true)
             ? $requestedRole
             : 'employee';
 
-        // Only admins can create elevated roles.
-        if ($request->user()->role !== 'admin' && in_array($role, ['manager', 'admin'], true)) {
+        // Only full-access operators can create elevated roles.
+        if (!$request->user()->isSuperAdmin() && in_array($role, ['manager', 'admin'], true)) {
             $role = 'employee';
         }
 
@@ -214,11 +217,29 @@ class EmployeesController extends Controller
             return $userId;
         });
 
+        if ($createdPassword) {
+            $this->sendNewEmployeeCredentials($name, $validated['email'], $createdPassword);
+        }
+
         return response()->json([
             'ok' => true,
             'user_id' => $userId,
             'temporary_password' => $createdPassword,
         ], 201);
+    }
+
+    private function sendNewEmployeeCredentials(string $name, string $email, string $password): void
+    {
+        try {
+            Mail::to($email)->send(new NewEmployeeCredentialsMail(
+                employeeName: $name,
+                email: $email,
+                password: $password,
+                loginUrl: url('/workpulse'),
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function update(Request $request, string $employeeCode): JsonResponse
@@ -247,7 +268,7 @@ class EmployeesController extends Controller
             'work_location' => ['nullable', 'string', 'max:255'],
             'confirmation_date' => ['nullable', 'date_format:Y-m-d'],
             'manager' => ['nullable', 'string', 'max:255'],
-            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'hr', 'admin'])],
+            'role' => ['nullable', 'string', Rule::in(['employee', 'manager', 'admin'])],
             'shift_id' => ['nullable', 'integer', 'exists:shifts,id'],
             'dob' => ['nullable', 'date_format:Y-m-d'],
             'gender' => ['nullable', 'string', 'max:20'],
@@ -276,6 +297,11 @@ class EmployeesController extends Controller
         $userId = DB::table('users')->where('employee_code', $employeeCode)->value('id');
         if (!$userId) {
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
+        }
+
+        $targetRole = DB::table('users')->where('id', $userId)->value('role');
+        if ($targetRole === 'manager' && $request->user()->role !== 'manager') {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can change Super-Admin accounts.'], 403);
         }
 
         $departmentId = DB::table('departments')->where('name', $validated['dept'])->value('id');
@@ -322,7 +348,7 @@ class EmployeesController extends Controller
                 $userUpdate['password'] = Hash::make($validated['password']);
             }
 
-            if ($request->user()->role === 'admin' && !empty($validated['role'])) {
+            if ($request->user()->isSuperAdmin() && !empty($validated['role'])) {
                 $userUpdate['role'] = $validated['role'];
             }
 
@@ -396,7 +422,7 @@ class EmployeesController extends Controller
 
     public function deleteCnicDocument(Request $request, string $employeeCode): JsonResponse
     {
-        if ($request->user()->role !== 'admin') {
+        if (!$request->user()->isSuperAdmin()) {
             abort(403);
         }
 
@@ -431,7 +457,7 @@ class EmployeesController extends Controller
     public function downloadCnicDocument(Request $request, string $employeeCode)
     {
         $user = $request->user();
-        $includeConfidential = $user->role === 'admin';
+        $includeConfidential = $user->isSuperAdmin();
         $record = $this->employeeQuery($includeConfidential)
             ->where('users.employee_code', $employeeCode)
             ->first();
@@ -482,6 +508,20 @@ class EmployeesController extends Controller
 
         if ($request->user()->id === $userId) {
             return response()->json(['ok' => false, 'message' => 'Cannot delete yourself'], 422);
+        }
+
+        $targetRole = DB::table('users')->where('id', $userId)->value('role');
+        if ($targetRole === 'manager' && $request->user()->role !== 'manager') {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can delete Super-Admin accounts.'], 403);
+        }
+
+        $employeeUser = DB::table('users')->where('id', $userId)->first();
+        $employeeProfile = DB::table('employee_profiles')->where('user_id', $userId)->first();
+        if ($employeeUser && $employeeProfile) {
+            app(DeletionRecoveryService::class)->record('employee', (string) ($employeeUser->name ?? $employeeCode), [
+                'user' => (array) $employeeUser,
+                'profile' => (array) $employeeProfile,
+            ], (int) $request->user()->id);
         }
 
         DB::table('employee_profiles')
@@ -674,7 +714,7 @@ class EmployeesController extends Controller
 
     private function canViewEmployeeRecord(object $viewer, object $record): bool
     {
-        if (in_array($viewer->role, ['admin', 'hr'], true)) {
+        if (in_array($viewer->role, ['admin', 'manager', 'hr'], true)) {
             return true;
         }
 

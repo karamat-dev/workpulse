@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\WorkpulseBackupService;
+use App\Services\DeletionRecoveryService;
 
 class WorkpulseBootstrapController extends Controller
 {
@@ -169,7 +171,7 @@ class WorkpulseBootstrapController extends Controller
             'desg' => $profile?->designation ?? match ($user->role) {
                 'admin' => 'Administrator',
                 'hr' => 'HR Manager',
-                'manager' => 'Manager',
+                'manager' => 'Super-Admin',
                 default => 'Employee',
             },
             'doj' => $profile?->date_of_joining,
@@ -256,7 +258,7 @@ class WorkpulseBootstrapController extends Controller
             'shifts.working_days',
         ];
 
-        if ($user->role === 'admin') {
+        if ($user->isSuperAdmin()) {
             $employeeSelect = array_merge($employeeSelect, [
                 'employee_profiles.date_of_birth as dob',
                 'employee_profiles.gender',
@@ -326,8 +328,8 @@ class WorkpulseBootstrapController extends Controller
                 'dop' => $employee->dop,
                 'lwd' => $employee->lwd,
                 'manager' => $employee->manager ?? '-',
-                'phone' => $user->role === 'admin' ? $employee->phone : null,
-                'email' => $user->role === 'admin' ? $employee->email : null,
+                'phone' => $user->isSuperAdmin() ? $employee->phone : null,
+                'email' => $user->isSuperAdmin() ? $employee->email : null,
                 'workLocation' => $employee->work_location,
                 'confirmationDate' => $employee->confirmation_date,
                 'shiftId' => $employee->shift_id,
@@ -338,9 +340,9 @@ class WorkpulseBootstrapController extends Controller
                 'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : null,
                 'shiftBreak' => $employee->break_minutes !== null ? (int) $employee->break_minutes : 60,
                 'shiftWorkingDays' => $employee->working_days,
-                'cnicDocumentPath' => $user->role === 'admin' ? $employee->cnic_document_path : null,
-                'cnicDocumentName' => $user->role === 'admin' ? $employee->cnic_document_name : null,
-                'cnicDocumentUrl' => ($user->role === 'admin' && $employee->cnic_document_path)
+                'cnicDocumentPath' => $user->isSuperAdmin() ? $employee->cnic_document_path : null,
+                'cnicDocumentName' => $user->isSuperAdmin() ? $employee->cnic_document_name : null,
+                'cnicDocumentUrl' => ($user->isSuperAdmin() && $employee->cnic_document_path)
                     ? url('/api/employees/'.$employee->employee_code.'/cnic-document')
                     : null,
                 'profilePhotoPath' => $employee->profile_photo_path,
@@ -354,7 +356,7 @@ class WorkpulseBootstrapController extends Controller
                 'type' => $employee->type ?? null,
             ];
 
-            if ($user->role === 'admin') {
+            if ($user->isSuperAdmin()) {
                 $mapped = array_merge($mapped, [
                     'personalEmail' => $employee->personal_email,
                     'dob' => $employee->dob,
@@ -697,7 +699,7 @@ class WorkpulseBootstrapController extends Controller
 
         $visibleAnnouncementIds = DB::table('announcements')
             ->leftJoin('announcement_recipients', 'announcement_recipients.announcement_id', '=', 'announcements.id')
-            ->when($user->role !== 'admin', function ($query) use ($user, $profile) {
+            ->when(!$user->isSuperAdmin(), function ($query) use ($user, $profile) {
                 $query->where(function ($audienceQuery) use ($user, $profile) {
                     $audienceQuery
                         ->where('announcements.audience', 'all')
@@ -834,11 +836,20 @@ class WorkpulseBootstrapController extends Controller
             ->values();
 
         $notificationCount = $notifications->where('isRead', false)->count();
-        $customNotifications = $user->role === 'admin'
+        $customNotifications = $user->isSuperAdmin()
             ? NotificationsController::groupedCustomNotifications()
             : collect();
 
         $company = DB::table('company_settings')->where('id', 1)->first();
+        $backups = $user->isSuperAdmin()
+            ? app(WorkpulseBackupService::class)->list(10)
+            : [];
+        $deletedBackups = $user->role === 'manager'
+            ? app(WorkpulseBackupService::class)->listDeleted(4)
+            : [];
+        $recoveryItems = $user->role === 'manager'
+            ? app(DeletionRecoveryService::class)->list(4)
+            : [];
 
         return response()->json([
             'ok' => true,
@@ -862,6 +873,9 @@ class WorkpulseBootstrapController extends Controller
             'notificationCount' => $notificationCount,
             'customNotifications' => $customNotifications,
             'company' => $company,
+            'backups' => $backups,
+            'deletedBackups' => $deletedBackups,
+            'recoveryItems' => $recoveryItems,
         ]);
     }
 }
