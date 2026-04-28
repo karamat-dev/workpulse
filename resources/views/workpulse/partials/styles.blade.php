@@ -119,7 +119,7 @@ body{
     linear-gradient(135deg, rgba(38,134,147,.05) 0%, transparent 28%),
     linear-gradient(45deg, rgba(38,134,147,.04) 0%, transparent 30%);
 }
-.login-hero-copy{position:relative;z-index:2;max-width:420px;margin-bottom:18px;}
+.login-hero-copy{position:relative;z-index:2;max-width:420px;margin-bottom:65px;}
 .login-hero-kicker{display:inline-flex;padding:8px 12px;border-radius:999px;background:rgba(38,134,147,.10);color:#268693;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px;}
 .login-hero-copy h2{font-size:34px;line-height:1.08;letter-spacing:-1.1px;color:#2B3560;margin-bottom:12px;}
 .login-hero-copy p{font-size:13px;line-height:1.65;color:#7280A4;}
