@@ -1245,6 +1245,7 @@ select.fi{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=
 }
 .modal-wide{width:min(920px,96vw);}
 .modal-xl{width:min(1220px,96vw);}
+.regulation-modal{width:min(1420px,98vw);}
 .modal-hdr{
   display:flex;
   align-items:flex-start;

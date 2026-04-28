@@ -696,7 +696,7 @@ class AttendanceController extends Controller
     {
         $validated = $request->validate([
             'date' => ['required', 'date_format:Y-m-d'],
-            'type' => ['required', 'string', 'max:50'],
+            'type' => ['nullable', 'string', 'max:50'],
             'original_value' => ['nullable', 'string', 'max:255'],
             'requested_value' => ['nullable', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:2000'],
@@ -704,12 +704,13 @@ class AttendanceController extends Controller
 
         $code = 'REG-'.Str::upper(Str::random(8));
         $requester = $request->user();
+        $type = $validated['type'] ?? 'Attendance Regulation';
 
         DB::table('attendance_regulation_requests')->insert([
             'code' => $code,
             'user_id' => $requester->id,
             'date' => $validated['date'],
-            'type' => $validated['type'],
+            'type' => $type,
             'original_value' => $validated['original_value'] ?? null,
             'requested_value' => $validated['requested_value'] ?? null,
             'reason' => $validated['reason'] ?? null,
@@ -719,7 +720,7 @@ class AttendanceController extends Controller
         ]);
 
         $reviewerIds = DB::table('users')
-            ->whereIn('role', ['admin', 'hr'])
+            ->whereIn('role', ['admin', 'manager'])
             ->where('id', '!=', $requester->id)
             ->pluck('id');
 
@@ -731,7 +732,7 @@ class AttendanceController extends Controller
                 sprintf(
                     '%s submitted a %s request for %s.',
                     (string) $requester->name,
-                    (string) $validated['type'],
+                    (string) $type,
                     (string) $validated['date'],
                 ),
                 'attendance_regulation',
@@ -740,7 +741,7 @@ class AttendanceController extends Controller
                     'employee_id' => $requester->id,
                     'employee_name' => $requester->name,
                     'date' => $validated['date'],
-                    'type' => $validated['type'],
+                    'type' => $type,
                 ],
             );
         }
@@ -763,6 +764,10 @@ class AttendanceController extends Controller
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
         }
 
+        if ($regulation->status !== 'Pending') {
+            return response()->json(['ok' => false, 'message' => 'This request has already been reviewed.'], 422);
+        }
+
         DB::transaction(function () use ($validated, $reviewer, $regulation) {
             DB::table('attendance_regulation_requests')
                 ->where('id', $regulation->id)
@@ -772,6 +777,10 @@ class AttendanceController extends Controller
                     'reviewed_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+            if ($validated['status'] === 'Approved') {
+                $this->applyApprovedRegulation($regulation);
+            }
 
             $decision = strtolower($validated['status']);
             $this->createEmployeeNotification(
@@ -797,6 +806,84 @@ class AttendanceController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    private function applyApprovedRegulation(object $regulation): void
+    {
+        $requested = (string) ($regulation->requested_value ?? '');
+        $clockInAt = $this->extractRegulationPunchAt($requested, 'In');
+        $clockOutAt = $this->extractRegulationPunchAt($requested, 'Out');
+
+        if (!$clockInAt && !$clockOutAt) {
+            return;
+        }
+
+        $date = (string) $regulation->date;
+        $userId = (int) $regulation->user_id;
+
+        if ($clockInAt) {
+            DB::table('attendance_punches')
+                ->where('user_id', $userId)
+                ->where('date', $date)
+                ->where('type', 'clock_in')
+                ->delete();
+
+            DB::table('attendance_punches')->insert([
+                'user_id' => $userId,
+                'date' => $date,
+                'type' => 'clock_in',
+                'punched_at' => $clockInAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        if ($clockOutAt) {
+            DB::table('attendance_punches')
+                ->where('user_id', $userId)
+                ->where('date', $date)
+                ->where('type', 'clock_out')
+                ->delete();
+
+            DB::table('attendance_punches')->insert([
+                'user_id' => $userId,
+                'date' => $date,
+                'type' => 'clock_out',
+                'punched_at' => $clockOutAt,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $punches = DB::table('attendance_punches')
+            ->where('user_id', $userId)
+            ->where('date', $date)
+            ->orderBy('punched_at')
+            ->get();
+
+        $summary = $this->buildAttendanceDaySummary($punches, $this->shiftForUser($userId));
+        $day = DB::table('attendance_days')->where('user_id', $userId)->where('date', $date)->first();
+
+        DB::table('attendance_days')->updateOrInsert(
+            ['user_id' => $userId, 'date' => $date],
+            [
+                'status' => $summary['status'],
+                'late' => $summary['late'],
+                'overtime_minutes' => $summary['overtime_minutes'],
+                'worked_minutes' => $summary['worked_minutes'],
+                'created_at' => $day?->created_at ?? now(),
+                'updated_at' => now(),
+            ]
+        );
+    }
+
+    private function extractRegulationPunchAt(string $requestedValue, string $label): ?string
+    {
+        if (!preg_match('/\b'.preg_quote($label, '/').'\s+(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})\b/', $requestedValue, $matches)) {
+            return null;
+        }
+
+        return now()->parse($matches[1].' '.$matches[2].':00')->toDateTimeString();
+    }
+
     public function destroyRegulation(Request $request, string $code): JsonResponse
     {
         $deleted = DB::table('attendance_regulation_requests')
@@ -812,4 +899,3 @@ class AttendanceController extends Controller
         return response()->json(['ok' => true]);
     }
 }
-

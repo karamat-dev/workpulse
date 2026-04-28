@@ -695,6 +695,14 @@ function runPageAfterRender(pageId){
       }
     }, 0);
   }
+  if(pageId === 'backups'){
+    setTimeout(() => {
+      const lastSyncedAt = Number(window.__workpulseBackupsLastSyncedAt || 0);
+      if(typeof window.refreshBackups === 'function' && Date.now() - lastSyncedAt > 3000){
+        window.refreshBackups();
+      }
+    }, 0);
+  }
 }
 
 // Auto-reset punch state at midnight (00:00) each day
