@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Symfony\Component\Process\Process;
 use ZipArchive;
@@ -23,6 +24,8 @@ class WorkpulseBackupService
             ->map(fn ($file) => [
                 'id' => $file->getFilename(),
                 'name' => $file->getFilename(),
+                'type' => $this->backupTypeFromName($file->getFilename()),
+                'typeLabel' => $this->backupTypeLabel($file->getFilename()),
                 'createdAt' => Carbon::createFromTimestamp($file->getMTime())->toDateTimeString(),
                 'size' => $file->getSize(),
                 'sizeLabel' => $this->formatBytes($file->getSize()),
@@ -45,6 +48,8 @@ class WorkpulseBackupService
             ->map(fn ($file) => [
                 'id' => $file->getFilename(),
                 'name' => $file->getFilename(),
+                'type' => $this->backupTypeFromName($file->getFilename()),
+                'typeLabel' => $this->backupTypeLabel($file->getFilename()),
                 'deletedAt' => Carbon::createFromTimestamp($file->getMTime())->toDateTimeString(),
                 'recoverableUntil' => Carbon::createFromTimestamp($file->getMTime())->addDays($days)->toDateTimeString(),
                 'size' => $file->getSize(),
@@ -57,11 +62,17 @@ class WorkpulseBackupService
 
     public function create(string $reason = 'scheduled'): array
     {
+        $reason = $this->normalizeReason($reason);
+
         if (!class_exists(ZipArchive::class)) {
             throw new RuntimeException('PHP Zip extension is required to create WorkPulse backups.');
         }
 
         $this->ensureBackupDir();
+        if ($reason === 'manual' && $this->manualBackupCountToday() >= 5) {
+            throw new RuntimeException('Manual backup limit reached. You can create maximum 5 manual backups per day.');
+        }
+
         $timestamp = now()->format('Ymd-His');
         $name = "workpulse-{$timestamp}-{$reason}.zip";
         $tempDir = storage_path("app/backups/tmp/workpulse-{$timestamp}-{$reason}");
@@ -94,14 +105,14 @@ class WorkpulseBackupService
             $this->addIncludedFiles($zip);
             $zip->close();
 
-            if ($reason !== 'pre-restore') {
-                $this->pruneSameDayBackups($zipPath, $timestamp);
+            if ($reason === 'scheduled') {
+                $this->pruneSameDayBackups($zipPath, $timestamp, 'scheduled');
             }
             $this->pruneOldBackups();
 
             return collect($this->list(100))
                 ->firstWhere('name', $name)
-                ?? ['id' => $name, 'name' => $name, 'createdAt' => now()->toDateTimeString(), 'size' => File::size($zipPath), 'sizeLabel' => $this->formatBytes(File::size($zipPath)), 'path' => $zipPath];
+                ?? ['id' => $name, 'name' => $name, 'type' => $reason, 'typeLabel' => $this->backupTypeLabel($name), 'createdAt' => now()->toDateTimeString(), 'size' => File::size($zipPath), 'sizeLabel' => $this->formatBytes(File::size($zipPath)), 'path' => $zipPath];
         } finally {
             if (File::exists($tempDir)) {
                 File::deleteDirectory($tempDir);
@@ -291,7 +302,7 @@ class WorkpulseBackupService
         }
     }
 
-    private function pruneSameDayBackups(string $keepPath, string $timestamp): void
+    private function pruneSameDayBackups(string $keepPath, string $timestamp, string $reason): void
     {
         $dayPrefix = 'workpulse-'.substr($timestamp, 0, 8).'-';
         $keepPath = $this->normalizePath($keepPath);
@@ -302,7 +313,11 @@ class WorkpulseBackupService
                 continue;
             }
 
-            if ($file->getExtension() === 'zip' && str_starts_with($file->getFilename(), $dayPrefix)) {
+            if (
+                $file->getExtension() === 'zip'
+                && str_starts_with($file->getFilename(), $dayPrefix)
+                && str_ends_with($file->getFilename(), "-{$reason}.zip")
+            ) {
                 File::delete($file->getPathname());
             }
         }
@@ -415,6 +430,43 @@ class WorkpulseBackupService
     private function ensureDeletedDir(): void
     {
         File::ensureDirectoryExists($this->deletedDir());
+    }
+
+    private function manualBackupCountToday(): int
+    {
+        $dayPrefix = 'workpulse-'.now()->format('Ymd').'-';
+
+        return collect(File::files($this->backupDir()))
+            ->filter(fn ($file) => $file->getExtension() === 'zip')
+            ->filter(fn ($file) => str_starts_with($file->getFilename(), $dayPrefix))
+            ->filter(fn ($file) => str_ends_with($file->getFilename(), '-manual.zip'))
+            ->count();
+    }
+
+    private function normalizeReason(string $reason): string
+    {
+        $reason = Str::of($reason)->lower()->replaceMatches('/[^a-z0-9_-]+/', '-')->trim('-')->toString();
+
+        return $reason !== '' ? $reason : 'scheduled';
+    }
+
+    private function backupTypeFromName(string $name): string
+    {
+        if (preg_match('/workpulse-\d{8}-\d{6}-([a-z0-9_-]+)\.zip$/i', $name, $matches)) {
+            return strtolower($matches[1]);
+        }
+
+        return 'unknown';
+    }
+
+    private function backupTypeLabel(string $name): string
+    {
+        return match ($this->backupTypeFromName($name)) {
+            'manual' => 'Manual Backup',
+            'scheduled' => 'Auto Backup',
+            'pre-restore' => 'Pre-Restore Backup',
+            default => 'Backup',
+        };
     }
 
     private function normalizePath(string $path): string

@@ -221,7 +221,6 @@ async function openEditEmployee(id){
     document.getElementById('ee-lwd').value = e.lwd||'';
     document.getElementById('ee-confirmation-date').value = e.confirmationDate||'';
     document.getElementById('ee-type').value = e.type||'Permanent';
-    document.getElementById('ee-status').value = e.status||'Active';
     document.getElementById('ee-role').value = e.role||'employee';
     document.getElementById('ee-work-location').value = e.workLocation||'';
     const managerValue = e.manager==='-' ? '' : (e.manager||'');
@@ -387,7 +386,6 @@ async function saveEditEmployee(){
   if(document.getElementById('ee-lwd').value) formData.append('lwd', document.getElementById('ee-lwd').value);
   if(document.getElementById('ee-confirmation-date').value) formData.append('confirmation_date', document.getElementById('ee-confirmation-date').value);
   formData.append('type', document.getElementById('ee-type').value);
-  formData.append('status', document.getElementById('ee-status').value);
   formData.append('role', document.getElementById('ee-role').value);
   if(document.getElementById('ee-work-location').value.trim()) formData.append('work_location', document.getElementById('ee-work-location').value.trim());
   if(document.getElementById('ee-manager').value.trim()) formData.append('manager', document.getElementById('ee-manager').value.trim());

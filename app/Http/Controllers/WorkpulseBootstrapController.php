@@ -842,7 +842,7 @@ class WorkpulseBootstrapController extends Controller
 
         $company = DB::table('company_settings')->where('id', 1)->first();
         $backups = $user->isSuperAdmin()
-            ? app(WorkpulseBackupService::class)->list(10)
+            ? app(WorkpulseBackupService::class)->list(70)
             : [];
         $deletedBackups = $user->role === 'manager'
             ? app(WorkpulseBackupService::class)->listDeleted(4)

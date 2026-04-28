@@ -372,7 +372,7 @@ class EmployeesController extends Controller
                     'last_working_date' => $validated['lwd'] ?? null,
                     'employment_type' => $validated['type'] ?? 'Permanent',
                     'status' => $this->resolveEmploymentStatus(
-                        $validated['status'] ?? 'Active',
+                        $validated['status'] ?? ($profile?->status ?? 'Active'),
                         $validated['lwd'] ?? null,
                     ),
                     'work_location' => $validated['work_location'] ?? null,

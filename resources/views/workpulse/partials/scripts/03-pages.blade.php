@@ -227,6 +227,10 @@ function getEmployeeWorkingDays(employee){
   return employee?.shiftWorkingDays || 'Mon - Fri';
 }
 
+function canModifyEmployee(employee){
+  return !(employee?.role === 'manager' && DB.currentRole !== 'manager');
+}
+
 function getBreakMinutesFromAttendanceRecord(record){
   if(!record?.breakOut || !record?.breakIn) return 0;
   const [boh,bom] = String(record.breakOut).split(':').map(Number);
@@ -871,6 +875,8 @@ function calcLeaveDays(){
 document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
 document.getElementById('lv-from')?.addEventListener('change',renderLeaveBreakdownRows);
 document.getElementById('lv-to')?.addEventListener('change',renderLeaveBreakdownRows);
+document.getElementById('reg-from')?.addEventListener('change',syncRegulationDateLimits);
+document.getElementById('reg-to')?.addEventListener('change',syncRegulationDateLimits);
 renderLeaveBreakdownRows();
 syncLeaveTypeOptions();
 syncDepartmentOptions('ne-dept');
@@ -880,24 +886,14 @@ syncShiftOptions('ee-shift');
 syncAnnouncementAudienceOptions();
 syncAnnouncementRecipientOptions();
 
-function submitRegulation(){
-  const date=document.getElementById('reg-date').value;
-  const type=document.getElementById('reg-type').value;
-  const orig=document.getElementById('reg-orig').value;
-  const req=document.getElementById('reg-req').value;
-  const reason=document.getElementById('reg-reason').value;
-  if(!date||!req||!reason){ showToast('Please fill all required fields','red'); return; }
-  wpApi('/api/attendance/regulations', {method:'POST', body: JSON.stringify({date,type,original_value:orig||'â€”',requested_value:req,reason})})
-    .then(()=>wpReload())
-    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  closeModal('regulationModal');
-  showToast('Regulation request submitted!','green');
-}
-
 function getRegulationDateRange(){
   const from = document.getElementById('reg-from')?.value;
   const to = document.getElementById('reg-to')?.value || from;
   if(!from || !to) return [];
+  if(to < from){
+    showToast('To date must be after from date','red');
+    return [];
+  }
   const dates = [];
   let cursor = new Date(from+'T00:00:00');
   const end = new Date(to+'T00:00:00');
@@ -906,6 +902,16 @@ function getRegulationDateRange(){
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+}
+
+function syncRegulationDateLimits(){
+  const fromField = document.getElementById('reg-from');
+  const toField = document.getElementById('reg-to');
+  if(!fromField || !toField) return;
+  toField.min = fromField.value || '';
+  if(fromField.value && toField.value && toField.value < fromField.value){
+    toField.value = fromField.value;
+  }
 }
 
 function openRegulationModal(){
@@ -918,6 +924,7 @@ function openRegulationModal(){
   if(employeeField) employeeField.value = `${user.fname || ''} ${user.lname || ''}`.trim() || user.name || '-';
   if(fromField) fromField.value = fromField.value || today;
   if(toField) toField.value = toField.value || today;
+  syncRegulationDateLimits();
   if(rows){
     rows.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Choose a date range and click Fetch Attendance.</td></tr>`;
   }
@@ -976,7 +983,7 @@ async function loadRegulationRows(){
       <td><input type="time" class="fi" value="${att.in || ''}" data-reg-edit="1" data-field="inTime" disabled></td>
       <td><input type="date" class="fi" value="${date}" data-reg-edit="1" data-field="outDate" disabled></td>
       <td><input type="time" class="fi" value="${att.out || ''}" data-reg-edit="1" data-field="outTime" disabled></td>
-      <td><textarea class="fi" rows="2" placeholder="Reason / remarks" data-reg-edit="1" data-field="reason" disabled></textarea></td>
+      <td><textarea class="fi" rows="2" placeholder="Write remarks / reason" data-reg-edit="1" data-field="reason" disabled></textarea></td>
       <td><button type="button" class="btn btn-sm" onclick="window.removeRegulationRow(this)">Remove</button></td>
     </tr>`;
     }).join('');
@@ -987,7 +994,7 @@ async function loadRegulationRows(){
 }
 
 async function submitRegulation(){
-  const type=document.getElementById('reg-type').value;
+  const type = 'Attendance Regulation';
   const rows = Array.from(document.querySelectorAll('#reg-rows tr[data-reg-date]'));
   const selected = rows.filter(row => row.querySelector('input[type="checkbox"]')?.checked);
   if(!selected.length){ showToast('Select at least one row to submit','red'); return; }
@@ -1398,12 +1405,78 @@ function approveLeave(decision){
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
+function reviewRegulationRequest(id, decision){
+  if(!id) return;
+  wpApi('/api/attendance/regulations/'+encodeURIComponent(id)+'/review', {method:'PATCH', body: JSON.stringify({status: decision})})
+    .then(()=>wpReload())
+    .then(()=>{
+      if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
+      showToast(`Regulation request ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
 async function markAllNotificationsRead(){
   await wpApi('/api/me/notifications/read-all', {method:'PATCH'});
   await wpReload();
   if(window.__workpulseCurrentPage === 'emp-notifications' || window.__workpulseCurrentPage === 'notifications'){
     showPage(window.__workpulseCurrentPage);
   }
+}
+
+function getNotificationTarget(notification){
+  const type = String(notification?.type || '');
+  const referenceType = String(notification?.referenceType || '');
+  const isEmployee = DB.currentRole === 'employee';
+
+  if(type === 'regulation_request_submitted' || (!isEmployee && referenceType === 'attendance_regulation')){
+    return {page:'leave', tabGroup:'lv', tab:'regulations'};
+  }
+
+  if(type === 'leave_request_submitted' || (!isEmployee && referenceType === 'leave_request')){
+    return {page:'leave', tabGroup:'lv', tab:'pending'};
+  }
+
+  if(type === 'regulation_review' || (isEmployee && referenceType === 'attendance_regulation')){
+    return {page:'emp-attendance', tabGroup:'ema', tab:'reg'};
+  }
+
+  if(type === 'leave_review' || (isEmployee && referenceType === 'leave_request')){
+    return {page:'emp-leaves'};
+  }
+
+  if(referenceType === 'announcement'){
+    return {page:isEmployee ? 'emp-announcements' : 'announcements'};
+  }
+
+  if(referenceType === 'company_policy'){
+    return {page:isEmployee ? 'emp-policies' : 'policies'};
+  }
+
+  if(referenceType === 'holiday' || referenceType === 'event'){
+    return {page:isEmployee ? 'emp-calendar' : 'calendar'};
+  }
+
+  if(referenceType === 'employee'){
+    return {page:'employees'};
+  }
+
+  return null;
+}
+
+function openNotificationTarget(notificationId){
+  const notification = (DB.notifications || []).find(item => String(item.id) === String(notificationId));
+  const target = getNotificationTarget(notification);
+  if(!target){
+    showToast('No linked page for this notification','amber');
+    return;
+  }
+
+  window.__workpulseTabState = window.__workpulseTabState || {};
+  if(target.tabGroup && target.tab){
+    window.__workpulseTabState[target.tabGroup] = target.tab;
+  }
+  showPage(target.page);
 }
 
 function formatNotificationAudienceLabel(audience){
@@ -2256,6 +2329,16 @@ function filterMonitor(){
 function pageLeave(){
   const pending=DB.leaves.filter(l=>l.status==='Pending');
   const all=DB.leaves;
+  const employeesById = new Map((DB.employees || []).map(employee => [String(employee.id), employee]));
+  const regulations = (Array.isArray(DB.regulations) ? DB.regulations : []).map(regulation => {
+    const employee = employeesById.get(String(regulation.empId)) || {};
+    return {
+      ...regulation,
+      empName: `${employee.fname || ''} ${employee.lname || ''}`.trim() || regulation.empId || '-',
+      dept: employee.dept || '-',
+    };
+  });
+  const pendingRegulations = regulations.filter(regulation => regulation.status === 'Pending');
   const onLeaveToday = getEmployeesOnLeaveToday();
   const leaveBalanceList = getLeaveBalancesList();
   const leaveBalances = leaveBalanceList.length
@@ -2294,6 +2377,21 @@ function pageLeave(){
     <tr>
       <td>${l.empName}</td><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td>
       <td>${formatLeaveDuration(l)}</td><td>${formatDate(l.applied)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td>
+    </tr>`).join('');
+
+  const regulationRows=regulations.map(r=>`
+    <tr>
+      <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${r.empName.split(' ').map(x=>x[0]).join('').slice(0,2) || 'ER'}</div>
+      <div class="ucell-info"><div class="n">${r.empName}</div><div class="s">${r.empId} | ${r.dept}</div></div></div></td>
+      <td>${formatDate(r.date)}</td>
+      <td>${r.orig || '-'}</td>
+      <td>${r.req || '-'}</td>
+      <td>${r.reason || '-'}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${r.status === 'Pending' ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">
+        <button class="btn btn-sm bg-green" onclick="window.reviewRegulationRequest('${r.id}','Approved')">Approve</button>
+        <button class="btn btn-sm bg-red" onclick="window.reviewRegulationRequest('${r.id}','Rejected')">Decline</button>
+      </div>` : '-'}</td>
     </tr>`).join('');
 
   const onLeaveTodayHTML = `
@@ -2390,6 +2488,18 @@ function pageLeave(){
       <div class="card"><div class="card-hdr"><div class="card-title">Pending Leave Requests</div></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Reason</th><th>HR</th><th>Action</th></tr></thead>
       <tbody>${pendingRows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No pending requests</td></tr>'}</tbody></table></div></div>`},
+    {id:'regulations',label:`Regulation Requests (${pendingRegulations.length})`,content:`
+      <div class="card">
+        <div class="card-hdr">
+          <div>
+            <div class="card-title">Attendance Regulation Requests</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:4px;">Approve or decline employee corrections for missing or incorrect attendance times.</div>
+          </div>
+          <span class="data-pill">Pending <strong>${pendingRegulations.length}</strong></span>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th>Current Time</th><th>Requested Time</th><th>Remarks</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>${regulationRows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No regulation requests</td></tr>'}</tbody></table></div>
+      </div>`},
     {id:'balance',label:'Leave Balances',content:balanceHTML},
     {id:'types',label:'Leave Types',content:`
       <div class="card">
@@ -2427,7 +2537,6 @@ function pageEmployees(){
   const probationCount = currentEmployees.filter(e=>e.status==='Probation').length;
   const offboardingCount = offboardingEmployees.length;
   const exCount = exEmployees.length;
-  const canModifyEmployee = (employee) => !(employee?.role === 'manager' && DB.currentRole !== 'manager');
   const renderDirectoryRows = (items, emptyLabel, allowRemove = false) => items.map(e=>`
     <tr>
       <td>${e.id}</td>
@@ -3677,15 +3786,18 @@ function pageBackups(){
   const deletedBackups = Array.isArray(DB.deletedBackups) ? DB.deletedBackups : [];
   const recoveryItems = Array.isArray(DB.recoveryItems) ? DB.recoveryItems : [];
   const latest = backups[0] || null;
+  const todayKey = getTodayLocalDate().replace(/-/g, '');
+  const manualBackupsToday = backups.filter(backup => (backup.type || '').toLowerCase() === 'manual' && String(backup.name || backup.id || '').startsWith(`workpulse-${todayKey}-`)).length;
+  const manualLimitReached = manualBackupsToday >= 5;
   const rows = backups.map((backup, index) => `
     <tr>
       <td>
         <div style="font-weight:800;">${backup.name || backup.id}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${index === 0 ? 'Latest restore point' : 'Daily restore point'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${backup.typeLabel || ((backup.type || '').toLowerCase() === 'manual' ? 'Manual Backup' : 'Auto Backup')}</div>
       </td>
       <td>${backup.createdAt || '-'}</td>
       <td>${backup.sizeLabel || '-'}</td>
-      <td><span class="badge ${index === 0 ? 'bg-green' : 'bg-blue'}">${index === 0 ? 'Last Night' : 'Available'}</span></td>
+      <td><span class="badge ${(backup.type || '').toLowerCase() === 'manual' ? 'bg-amber' : (index === 0 ? 'bg-green' : 'bg-blue')}">${index === 0 ? 'Latest' : 'Available'}</span></td>
       <td>
         <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-sm" onclick="window.restoreBackup('${String(backup.id || backup.name).replace(/'/g, "\\'")}')">Restore</button>
@@ -3724,21 +3836,21 @@ function pageBackups(){
     <div class="stat-card"><div class="stat-label">Saved Backups</div><div class="stat-val">${backups.length}</div><div class="stat-sub">Showing latest 10 days</div></div>
     <div class="stat-card"><div class="stat-label">Schedule</div><div class="stat-val">01:00</div><div class="stat-sub">Runs every night</div></div>
     <div class="stat-card"><div class="stat-label">Latest Backup</div><div class="stat-val" style="font-size:24px;">${latest ? latest.createdAt.split(' ')[0] : '-'}</div><div class="stat-sub">${latest ? latest.sizeLabel : 'No backup yet'}</div></div>
-    <div class="stat-card"><div class="stat-label">Backup Type</div><div class="stat-val" style="font-size:24px;">Full</div><div class="stat-sub">Database and local files</div></div>
+    <div class="stat-card"><div class="stat-label">Manual Today</div><div class="stat-val" style="font-size:24px;">${manualBackupsToday}/5</div><div class="stat-sub">${manualLimitReached ? 'Daily manual limit reached' : 'Manual backups remaining today'}</div></div>
   </div>
 
   <div class="card">
     <div class="card-hdr">
       <div>
         <div class="card-title">Backups & Restore</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Restore employees, admins, reports data, events, announcements, policies, attendance, leave, and uploaded documents from a previous nightly backup.</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;">Restore employees, admins, reports data, events, announcements, policies, attendance, leave, and uploaded documents from any auto or manual backup.</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-sm" onclick="window.refreshBackups()">Refresh</button>
-        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
+        <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()" ${manualLimitReached ? 'disabled style="opacity:.55;cursor:not-allowed;"' : ''}>Run Backup Now</button>
       </div>
     </div>
-    <div class="alert al-info"><span>Info</span><div><strong>Restore replaces current database data.</strong> WorkPulse creates one pre-restore backup automatically before rolling back, then restores files from the selected package.</div></div>
+    <div class="alert al-info"><span>Info</span><div><strong>Restore replaces current database data.</strong> Auto backups run nightly at 01:00. Manual backups are separate and limited to 5 per day.</div></div>
     <div class="soft-table" style="margin-top:14px;"><div class="table-wrap"><table>
       <thead><tr><th>Backup</th><th>Created</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:26px;">No backups found yet. Use Run Backup Now or wait for the 01:00 scheduled backup.</td></tr>`}</tbody>
@@ -3779,6 +3891,7 @@ async function refreshBackups(){
     const data = await wpApi('/api/backups', {method:'GET', headers:{}});
     DB.backups = data.backups || [];
     DB.deletedBackups = data.deletedBackups || [];
+    window.__workpulseBackupsLastSyncedAt = Date.now();
     if(window.__workpulseCurrentPage === 'backups') showPage('backups');
   }catch(e){
     showToast(e.message || 'Unable to load backups','red');
@@ -4351,8 +4464,10 @@ function pageNotifications(employeeView=false){
     };
     const badge = badgeMap[notification.type] || 'Update';
     const message = notification.message || 'You have a new update.';
+    const target = getNotificationTarget(notification);
+    const clickAttr = target ? ` onclick="window.openNotificationTarget(${Number(notification.id)})" title="Open linked page"` : '';
 
-    return `<div class="notif-card${toneClass}">
+    return `<div class="notif-card${toneClass}" style="${target ? 'cursor:pointer;' : ''}"${clickAttr}>
       <div class="notif-card-head">
         <div>
           <div class="notif-card-title">${notification.title || 'Notification'}</div>

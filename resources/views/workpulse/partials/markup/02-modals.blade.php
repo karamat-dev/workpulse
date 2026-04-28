@@ -46,15 +46,13 @@
 
 <!-- Regulation Modal -->
 <div class="modal-overlay" id="regulationModal">
-  <div class="modal modal-xl">
+  <div class="modal modal-xl regulation-modal">
     <div class="modal-hdr"><div class="modal-title">Attendance Regulation Request</div><button class="modal-close" onclick="window.closeModal('regulationModal')">×</button></div>
     <div class="g3" style="grid-template-columns:1.2fr 1fr 1fr;align-items:end;">
       <div class="fg"><label class="fl">Employee</label><input type="text" class="fi" id="reg-employee" readonly></div>
       <div class="fg"><label class="fl">From Date <span class="req-star">*</span></label><input type="date" class="fi" id="reg-from"></div>
       <div class="fg"><label class="fl">To Date <span class="req-star">*</span></label><input type="date" class="fi" id="reg-to"></div>
     </div>
-    <div class="fg"><label class="fl">Regulation Type <span class="req-star">*</span></label>
-      <select class="fi" id="reg-type"><option>Attendance Timeslot Adjustment</option><option>Missing Clock In</option><option>Missing Clock Out</option><option>Wrong Clock In Time</option><option>Wrong Clock Out Time</option><option>Break Adjustment</option></select></div>
     <div class="alert al-info" style="margin-bottom:14px;"><span>ℹ</span><div>Select the checkbox for each day you want to edit, update the time slots, then submit the selected rows.</div></div>
     <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
       <button class="btn btn-sm" onclick="window.loadRegulationRows()">Fetch Attendance</button>
@@ -335,10 +333,7 @@
       </div>
       <div class="fg"><label class="fl">Replace Profile Document</label><input type="file" class="fi" id="ee-cnic-document"></div>
       <div class="fg"><label class="fl">Reset Login Password</label><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
-        <div class="fg"><label class="fl">Status</label><select class="fi" id="ee-status"><option>Active</option><option>Probation</option><option>Offboarding</option><option>Inactive</option><option>Resigned</option></select></div>
-      </div>
+      <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Super-Admin</option><option value="admin">Admin</option></select></div>
       <div class="fg">
         <label class="fl">Reporting Manager</label>

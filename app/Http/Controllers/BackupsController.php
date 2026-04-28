@@ -12,11 +12,13 @@ use Throwable;
 
 class BackupsController extends Controller
 {
+    private const LIST_LIMIT = 70;
+
     public function index(Request $request, WorkpulseBackupService $backups): JsonResponse
     {
         return response()->json([
             'ok' => true,
-            'backups' => $backups->list(10),
+            'backups' => $backups->list(self::LIST_LIMIT),
             'deletedBackups' => $request->user()?->role === 'manager'
                 ? $backups->listDeleted(4)
                 : [],
@@ -29,13 +31,15 @@ class BackupsController extends Controller
             return response()->json([
                 'ok' => true,
                 'backup' => $backups->create('manual'),
-                'backups' => $backups->list(10),
+                'backups' => $backups->list(self::LIST_LIMIT),
                 'deletedBackups' => request()->user()?->role === 'manager' ? $backups->listDeleted(4) : [],
             ]);
         } catch (Throwable $e) {
             report($e);
 
-            return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
+            $status = str_contains($e->getMessage(), 'Manual backup limit reached') ? 422 : 500;
+
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], $status);
         }
     }
 
@@ -47,7 +51,7 @@ class BackupsController extends Controller
             return response()->json([
                 'ok' => true,
                 'message' => 'Backup restored successfully.',
-                'backups' => $backups->list(10),
+                'backups' => $backups->list(self::LIST_LIMIT),
                 'deletedBackups' => request()->user()?->role === 'manager' ? $backups->listDeleted(4) : [],
             ]);
         } catch (Throwable $e) {
@@ -65,7 +69,7 @@ class BackupsController extends Controller
 
             return response()->json([
                 'ok' => true,
-                'backups' => $backups->list(10),
+                'backups' => $backups->list(self::LIST_LIMIT),
                 'deletedBackups' => request()->user()?->role === 'manager' ? $backups->listDeleted(4) : [],
             ]);
         } catch (Throwable $e) {
