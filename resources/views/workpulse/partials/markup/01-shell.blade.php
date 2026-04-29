@@ -131,8 +131,7 @@
           </button>
         </div>
         <div class="sb-footer-meta">
-          <p>WorkPulse v2.4.1</p>
-          <p style="margin-top:2px;">Backup: Today 03:00 AM</p>
+          <p>WorkPulse v1.1</p>
         </div>
       </div>
     </aside>

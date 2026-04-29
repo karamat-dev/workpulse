@@ -2217,10 +2217,7 @@ function pageAttendance(){
   </div>
   ${buildTabs('att',[
     {id:'log',label:'Daily Log',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
-      <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>Clock In</th><th>Break In</th><th>Break Out</th><th>Clock Out</th><th>Hours</th><th>OT</th><th>Status</th></tr></thead>
-      <tbody>${logRows||'<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div></div>`},
+      ${buildAttendanceMonthLog('admin', u.id, 'Attendance Log', '<button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button><button class="btn btn-sm btn-primary" onclick="window.exportAttendanceCSV()">Export CSV</button>')}`},
     {id:'today',label:"Today's Log",content:`
       <div class="card"><div class="card-title" style="margin-bottom:14px;">Session Activity</div>
       <div class="tl">${logTimeline}</div></div>`},
@@ -3114,7 +3111,7 @@ function pageCalendar(empView=false){
       </div>
     </div>
     <div class="card">
-      <div class="card-hdr"><div class="card-title">Events & Reminders</div>${!empView?`<button class="btn btn-sm btn-primary">+ Event</button>`:''}</div>
+      <div class="card-hdr"><div class="card-title">Events & Reminders</div></div>
       ${events.slice(0,6).map(ev=>{
         const meta = getCalendarEventLabelMeta(ev);
         return `
@@ -4390,12 +4387,7 @@ function pageEmpAttendance(){
   </div>
   ${buildTabs('ema',[
     {id:'log',label:'My Log',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">Attendance Log</div>
-        <div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button></div>
-      </div>
-      <div class="table-wrap"><table><thead><tr><th>Date</th><th>Day</th><th>In</th><th>Break In</th><th>Break Out</th><th>Out</th><th>Hours</th><th>OT</th><th>Status</th><th>Action</th></tr></thead>
-      <tbody>${logRows||'<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:20px;">No records yet</td></tr>'}</tbody></table></div>
-    </div>`},
+      ${buildAttendanceMonthLog('employee', u.id, 'My Attendance Log', '<button class="btn btn-sm" onclick="window.openRegulationModal()">+ Regulation</button>')}`},
     {id:'reg',label:'Regulation Requests',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">My Regulation Requests</div><button class="btn btn-sm btn-primary" onclick="window.openRegulationModal()">+ New</button></div>
       <div class="table-wrap"><table><thead><tr><th>Date</th><th>Type</th><th>Original</th><th>Requested</th><th>Reason</th><th>Status</th></tr></thead>

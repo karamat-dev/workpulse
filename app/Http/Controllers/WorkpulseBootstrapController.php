@@ -844,17 +844,17 @@ class WorkpulseBootstrapController extends Controller
         $backups = $user->isSuperAdmin()
             ? app(WorkpulseBackupService::class)->list(70)
             : [];
-        $deletedBackups = $user->role === 'manager'
+        $deletedBackups = $user->canonicalRole() === 'manager'
             ? app(WorkpulseBackupService::class)->listDeleted(4)
             : [];
-        $recoveryItems = $user->role === 'manager'
+        $recoveryItems = $user->canonicalRole() === 'manager'
             ? app(DeletionRecoveryService::class)->list(4)
             : [];
 
         return response()->json([
             'ok' => true,
             'currentUser' => $currentUser,
-            'currentRole' => $user->role,
+            'currentRole' => $user->canonicalRole(),
             'employees' => $employees,
             'departments' => $departments,
             'shifts' => $shifts,

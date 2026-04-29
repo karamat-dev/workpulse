@@ -2,14 +2,27 @@
 // ══════════════════════════════════════════════════
 const __workpulseMojibakeMap = [
   ['\u00C2\u00B7', ' - '],
+  ['\u00C3\u201A\u00C2\u00B7', ' - '],
   ['\u00E2\u20AC\u201D', '-'],
   ['\u00E2\u20AC\u201C', '-'],
+  ['\u00E2\u20AC\u2122', "'"],
+  ['\u00E2\u20AC\u0153', '"'],
+  ['\u00E2\u20AC\u009D', '"'],
   ['\u00E2\u20AC\u00A2', ' - '],
   ['\u00E2\u20A0\u00B9', '<'],
   ['\u00E2\u20A0\u00BA', '>'],
   ['\u00E2\u20A0\u2122', '->'],
   ['\u00E2\u20A0\u0090', '<-'],
   ['\u00E2\u20A0\u00A9', '<-'],
+  ['\u00E2\u2020\u2019', '->'],
+  ['\u00E2\u20AC\u00BA', '>'],
+  ['\u00E2\u20AC\u00B9', '<'],
+  ['\u00E2\u20AC\u00A6', '...'],
+  ['\u00C3\u00A2\u00E2\u2020\u2019', '->'],
+  ['\u00C3\u00A2\u00E2\u20AC\u201D', '-'],
+  ['\u00C3\u00A2\u00E2\u20AC\u201C', '-'],
+  ['\u00C3\u00A2\u00E2\u20AC\u00A2', ' - '],
+  ['\u00C3\u00A2\u00E2\u20AC\u00A6', '...'],
   ['\u00E2\u0153\u201C', 'OK'],
   ['\u00E2\u0153\u2026', 'OK'],
   ['\u00E2\u20AC\u0179', 'Info'],
@@ -298,7 +311,7 @@ function closeTopbarUserMenu(){
 }
 
 function isMobileViewport(){
-  return window.innerWidth <= 760;
+  return window.innerWidth <= 1150;
 }
 
 function applyMobileViewportState(){
@@ -1292,6 +1305,450 @@ function formatDateTime(dt){
   if(Number.isNaN(parsed.getTime())) return String(dt);
   return parsed.toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
 }
+
+function getAttendanceMonthDayCount(monthValue){
+  const [year, month] = String(monthValue || '').split('-').map(Number);
+  if(!year || !month) return 31;
+  return new Date(year, month, 0).getDate();
+}
+
+function getAttendanceMonthLabel(monthValue){
+  const [year, month] = String(monthValue || '').split('-').map(Number);
+  if(!year || !month) return 'Current Month';
+  return new Date(year, month - 1, 1).toLocaleDateString('en-GB', {month:'short', year:'numeric'});
+}
+
+function getAttendanceLogMonthOptions(employeeId){
+  const currentMonth = getTodayLocalDate().slice(0, 7);
+  const months = new Set([currentMonth]);
+
+  (Array.isArray(DB.attendance) ? DB.attendance : []).forEach(record => {
+    if(String(record?.empId) === String(employeeId) && String(record?.date || '').length >= 7){
+      months.add(String(record.date).slice(0, 7));
+    }
+  });
+
+  (Array.isArray(DB.leaves) ? DB.leaves : []).forEach(leave => {
+    if(String(leave?.empId) !== String(employeeId)) return;
+    if(String(leave?.from || '').length >= 7) months.add(String(leave.from).slice(0, 7));
+    if(String(leave?.to || '').length >= 7) months.add(String(leave.to).slice(0, 7));
+  });
+
+  (Array.isArray(DB.holidays) ? DB.holidays : []).forEach(holiday => {
+    if(String(holiday?.date || '').length >= 7){
+      months.add(String(holiday.date).slice(0, 7));
+    }
+  });
+
+  return [...months]
+    .sort((a, b) => b.localeCompare(a))
+    .map(value => ({value, label: getAttendanceMonthLabel(value)}));
+}
+
+function getAttendanceLogMonthValue(scopeKey, employeeId){
+  window.__attendanceLogMonthValues = window.__attendanceLogMonthValues || {};
+  const options = getAttendanceLogMonthOptions(employeeId);
+  const fallback = options[0]?.value || getTodayLocalDate().slice(0, 7);
+  const saved = window.__attendanceLogMonthValues[scopeKey];
+  if(saved && options.some(option => option.value === saved)){
+    return saved;
+  }
+  window.__attendanceLogMonthValues[scopeKey] = fallback;
+  return fallback;
+}
+
+function setAttendanceLogMonthValue(scopeKey, value){
+  if(!value) return;
+  window.__attendanceLogMonthValues = window.__attendanceLogMonthValues || {};
+  window.__attendanceLogMonthValues[scopeKey] = value;
+  showPage(scopeKey === 'admin' ? 'attendance' : 'emp-attendance');
+}
+
+function getAttendanceRecordForEmployeeDate(employeeId, dateStr){
+  return (Array.isArray(DB.attendance) ? DB.attendance : []).find(record =>
+    String(record?.empId) === String(employeeId) &&
+    String(record?.date) === String(dateStr)
+  ) || null;
+}
+
+function getApprovedLeaveForEmployeeDate(employeeId, dateStr){
+  return (Array.isArray(DB.leaves) ? DB.leaves : []).find(leave => {
+    const approved = leave?.status === 'Approved' || leave?.hrStatus === 'Approved';
+    return approved &&
+      String(leave?.empId) === String(employeeId) &&
+      String(leave?.from || '') <= String(dateStr) &&
+      String(leave?.to || '') >= String(dateStr);
+  }) || null;
+}
+
+function getHolidayForDate(dateStr){
+  return (Array.isArray(DB.holidays) ? DB.holidays : []).find(holiday => String(holiday?.date) === String(dateStr)) || null;
+}
+
+function escapeHtmlAttr(value){
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+const attendanceIconAssets = {
+  present: '/uploads/attendance-icons/present.png',
+  late: '/uploads/attendance-icons/half-leave.png',
+  leave: '/uploads/attendance-icons/onleave-unpaid.png',
+  holiday: '/uploads/attendance-icons/calendar-icon.png',
+  absent: '/uploads/attendance-icons/absent.png',
+  empty: '/uploads/attendance-icons/half-leave.png',
+  future: '/uploads/attendance-icons/calendar-icon.png',
+};
+
+function getAttendanceIconMarkup(iconKey, label, extraClass=''){
+  if(iconKey === 'off'){
+    return `<span class="att-log-texticon ${extraClass}">W</span>`;
+  }
+  const src = attendanceIconAssets[iconKey] || attendanceIconAssets.empty;
+  const safeLabel = escapeHtmlAttr(label);
+  const classes = ['att-log-icon-media', extraClass].filter(Boolean).join(' ');
+  return `<img src="${src}" alt="${safeLabel}" class="${classes}" draggable="false">`;
+}
+
+function isAttendanceWorkingDay(employee, dateStr){
+  const normalized = String(employee?.shiftWorkingDays || employee?.workingDays || 'Mon - Fri').toLowerCase().trim();
+  const parsed = new Date(`${dateStr}T00:00:00`);
+  if(Number.isNaN(parsed.getTime())) return true;
+  const dayOfWeek = parsed.getDay();
+  const isoDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+
+  if(!normalized || normalized.includes('mon-fri') || normalized.includes('mon - fri') || normalized.includes('mon–fri')){
+    return isoDay >= 1 && isoDay <= 5;
+  }
+
+  if(normalized.includes('sat') && normalized.includes('sun') && normalized.includes('mon')){
+    return true;
+  }
+
+  const map = {
+    mon: 1,
+    tue: 2,
+    wed: 3,
+    thu: 4,
+    fri: 5,
+    sat: 6,
+    sun: 7,
+  };
+
+  for(const [label, dayNumber] of Object.entries(map)){
+    if(normalized.includes(label) && isoDay === dayNumber){
+      return true;
+    }
+  }
+
+  return isoDay >= 1 && isoDay <= 5;
+}
+
+function getAttendanceDayDescriptor(employeeId, dateStr){
+  const employee = String(DB.currentUser?.id) === String(employeeId)
+    ? DB.currentUser
+    : ((Array.isArray(DB.employees) ? DB.employees : []).find(item => String(item?.id) === String(employeeId)) || {});
+  const record = getAttendanceRecordForEmployeeDate(employeeId, dateStr);
+  const leave = getApprovedLeaveForEmployeeDate(employeeId, dateStr);
+  const holiday = getHolidayForDate(dateStr);
+  const today = getTodayLocalDate();
+  const status = String(record?.status || '').toLowerCase();
+  const isWorkingDay = isAttendanceWorkingDay(employee, dateStr);
+
+  if(record?.late){
+    return {key:'late', label:'Late', icon:'late', tone:'late', record, leave:null, holiday:null};
+  }
+
+  if(record && (status === 'present' || status === 'clocked out' || status === 'clocked in' || record.in || record.out)){
+    return {key:'present', label:'Present', icon:'present', tone:'present', record, leave:null, holiday:null};
+  }
+
+  if(leave){
+    const leaveType = leave?.type || 'Leave';
+    return {
+      key:'leave',
+      label:`On Leave (${leaveType})`,
+      icon:'leave',
+      tone:'leave',
+      record:null,
+      leave,
+      holiday:null
+    };
+  }
+
+  if(holiday){
+    return {
+      key:'holiday',
+      label:`Public Holiday: ${holiday.name || 'Holiday'}`,
+      icon:'holiday',
+      tone:'holiday',
+      record:null,
+      leave:null,
+      holiday
+    };
+  }
+
+  if(!isWorkingDay){
+    return {key:'off', label:'Weekend Off', icon:'off', tone:'off', record:null, leave:null, holiday:null};
+  }
+
+  if(record && status === 'absent'){
+    return {key:'absent', label:'Absent', icon:'absent', tone:'absent', record, leave:null, holiday:null};
+  }
+
+  if(dateStr > today){
+    return {key:'future', label:'Upcoming Date', icon:'future', tone:'future', record:null, leave:null, holiday:null};
+  }
+
+  if(dateStr === today){
+    return {key:'empty', label:'No Attendance Yet', icon:'empty', tone:'empty', record:null, leave:null, holiday:null};
+  }
+
+  return {key:'absent', label:'Absent', icon:'absent', tone:'absent', record:null, leave:null, holiday:null};
+}
+
+function buildAttendanceLogLegend(){
+  const items = [
+    {tone:'present', icon:'present', label:'Present'},
+    {tone:'late', icon:'late', label:'Late'},
+    {tone:'leave', icon:'leave', label:'On Leave'},
+    {tone:'holiday', icon:'holiday', label:'Public Holiday'},
+    {tone:'off', icon:'off', label:'Weekend Off'},
+    {tone:'absent', icon:'absent', label:'Absent'},
+    {tone:'empty', icon:'empty', label:'No Record'},
+  ];
+
+  return `<div class="att-log-legend">${items.map(item => `
+    <div class="att-log-legend-item">
+      <span class="att-log-legend-icon tone-${item.tone}">${getAttendanceIconMarkup(item.icon, item.label, item.tone === 'empty' ? 'is-dimmed' : '')}</span>
+      <span>${item.label}</span>
+    </div>
+  `).join('')}</div>`;
+}
+
+function buildAttendanceMonthLog(scopeKey, employeeId, title, actionHtml=''){
+  const monthValue = getAttendanceLogMonthValue(scopeKey, employeeId);
+  const options = getAttendanceLogMonthOptions(employeeId);
+  const dayCount = getAttendanceMonthDayCount(monthValue);
+  const employee = String(DB.currentUser?.id) === String(employeeId)
+    ? DB.currentUser
+    : ((Array.isArray(DB.employees) ? DB.employees : []).find(item => String(item?.id) === String(employeeId)) || {});
+  const monthDays = Array.from({length: dayCount}, (_, index) => {
+    const dayNumber = index + 1;
+    const dateStr = `${monthValue}-${String(dayNumber).padStart(2,'0')}`;
+    const descriptor = getAttendanceDayDescriptor(employeeId, dateStr);
+    return {dayNumber, dateStr, descriptor};
+  });
+  const summary = monthDays.reduce((acc, day) => {
+    acc[day.descriptor.key] = (acc[day.descriptor.key] || 0) + 1;
+    return acc;
+  }, {});
+
+  return `
+    <div class="card attendance-log-card">
+      <div class="card-hdr att-log-card-hdr">
+        <div class="att-log-heading">
+          <div class="att-log-eyebrow">Attendance Workspace</div>
+          <div class="card-title">${title}</div>
+          <div class="att-log-subtitle">Review the month at a glance, hover icons for meaning, and open any day for the full attendance record.</div>
+        </div>
+        <div class="att-log-toolbar">
+          <div class="att-log-monthfilter">
+            <label for="att-month-${scopeKey}">Month</label>
+            <select id="att-month-${scopeKey}" class="fi" onchange="window.setAttendanceLogMonthValue('${scopeKey}', this.value)">
+              ${options.map(option => `<option value="${option.value}" ${option.value === monthValue ? 'selected' : ''}>${option.label}</option>`).join('')}
+            </select>
+          </div>
+          ${actionHtml ? `<div class="att-log-actions">${actionHtml}</div>` : ''}
+        </div>
+      </div>
+      ${buildAttendanceLogLegend()}
+      <div class="att-log-summary">
+        <div class="att-log-summary-pill tone-present">
+          <span class="att-log-summary-label">Present</span>
+          <strong>${summary.present || 0}</strong>
+        </div>
+        <div class="att-log-summary-pill tone-late">
+          <span class="att-log-summary-label">Late</span>
+          <strong>${summary.late || 0}</strong>
+        </div>
+        <div class="att-log-summary-pill tone-leave">
+          <span class="att-log-summary-label">Leave</span>
+          <strong>${summary.leave || 0}</strong>
+        </div>
+        <div class="att-log-summary-pill tone-holiday">
+          <span class="att-log-summary-label">Holiday</span>
+          <strong>${summary.holiday || 0}</strong>
+        </div>
+        <div class="att-log-summary-pill tone-off">
+          <span class="att-log-summary-label">Off</span>
+          <strong>${summary.off || 0}</strong>
+        </div>
+        <div class="att-log-summary-pill tone-absent">
+          <span class="att-log-summary-label">Absent</span>
+          <strong>${summary.absent || 0}</strong>
+        </div>
+      </div>
+      <div class="att-log-board">
+        <div class="att-log-grid">
+          <div class="att-log-grid-head">
+            <div class="att-log-namecell">
+              <strong>${employee?.name || 'Employee'}</strong>
+              <span>${getAttendanceMonthLabel(monthValue)}</span>
+            </div>
+            <div class="att-log-days">
+              ${monthDays.map(day => `
+                <div class="att-log-dayhead">
+                  <strong>${String(day.dayNumber).padStart(2,'0')}</strong>
+                  <span>${new Date(`${day.dateStr}T00:00:00`).toLocaleDateString('en-GB', {weekday:'short'})}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          <div class="att-log-grid-row">
+            <div class="att-log-namecell">
+              <strong>Status</strong>
+              <span>Tap a day to inspect that record</span>
+            </div>
+            <div class="att-log-days">
+              ${monthDays.map(day => `
+                <button
+                  type="button"
+                  class="att-log-daybtn tone-${day.descriptor.tone}"
+                  aria-label="${escapeHtmlAttr(`${day.descriptor.label} on ${formatDate(day.dateStr)}`)}"
+                  onclick="window.openAttendanceDayDetails('${scopeKey}', '${employeeId}', '${day.dateStr}')"
+                >
+                  <span class="att-log-icon" data-tooltip="${escapeHtmlAttr(day.descriptor.label)}">${getAttendanceIconMarkup(day.descriptor.icon, day.descriptor.label, day.descriptor.tone === 'future' || day.descriptor.tone === 'empty' ? 'is-dimmed' : '')}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function buildAttendanceDetailActivity(record, dateStr){
+  const activities = [];
+
+  if(record?.in){
+    activities.push({label:'Clock In', time:record.in, detail:'Attendance clock-in captured'});
+  }
+  if(record?.breakOut){
+    activities.push({label:'Break Start', time:record.breakOut, detail:'Break started'});
+  }
+  if(record?.breakIn){
+    activities.push({label:'Break End', time:record.breakIn, detail:'Break ended'});
+  }
+  if(record?.out){
+    activities.push({label:'Clock Out', time:record.out, detail:'Attendance clock-out captured'});
+  }
+
+  if(!activities.length){
+    return `<div class="att-detail-empty">No punch activity recorded for this date.</div>`;
+  }
+
+  return `
+    <div class="att-detail-activity-list">
+      ${activities.map(item => `
+        <div class="att-detail-activity-item">
+          <span class="att-detail-activity-dot"></span>
+          <div>
+            <div class="att-detail-activity-main">${item.label}</div>
+            <div class="att-detail-activity-meta">${formatDate(dateStr)} | ${item.time}</div>
+            <div class="att-detail-activity-note">${item.detail}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function openAttendanceDayDetails(scopeKey, employeeId, dateStr){
+  const descriptor = getAttendanceDayDescriptor(employeeId, dateStr);
+  const record = descriptor.record;
+  const employee = String(DB.currentUser?.id) === String(employeeId)
+    ? DB.currentUser
+    : ((Array.isArray(DB.employees) ? DB.employees : []).find(item => String(item?.id) === String(employeeId)) || {});
+  const breakMinutes = record
+    ? Math.max(0, (() => {
+        if(record.breakMinutes != null) return Number(record.breakMinutes || 0);
+        if(!record.breakOut || !record.breakIn) return 0;
+        const [startHour, startMinute] = String(record.breakOut).split(':').map(Number);
+        const [endHour, endMinute] = String(record.breakIn).split(':').map(Number);
+        return ((endHour * 60) + endMinute) - ((startHour * 60) + startMinute);
+      })())
+    : 0;
+  const overtimeMinutes = Number(record?.overtime || record?.overtime_minutes || 0);
+  const subtitle = document.getElementById('attendance-detail-subtitle');
+  const body = document.getElementById('attendance-detail-body');
+  const workedLabel = record ? calcWorkHours(record) : 'â€”';
+  const shiftStart = employee?.shiftStart || '11:00';
+  const shiftEnd = employee?.shiftEnd || '20:00';
+  const shiftGrace = Number.isFinite(Number(employee?.shiftGrace)) ? Number(employee.shiftGrace) : 10;
+  const shiftBreak = Number.isFinite(Number(employee?.shiftBreak)) ? Number(employee.shiftBreak) : 60;
+  const detailFacts = [
+    ['Employee', employee?.name || 'Employee'],
+    ['Status', descriptor.label],
+    ['Clock In', record?.in || 'â€”'],
+    ['Clock Out', record?.out || 'â€”'],
+    ['Worked', workedLabel],
+    ['Break', breakMinutes ? `${breakMinutes} min` : 'â€”'],
+    ['Overtime', overtimeMinutes ? `+${overtimeMinutes} min` : 'â€”'],
+    ['Shift', `${shiftStart} - ${shiftEnd}`],
+    ['Policy', `${shiftBreak} min break | ${shiftGrace} min grace`],
+  ];
+
+  if(subtitle){
+    subtitle.textContent = `${formatDate(dateStr)} - ${descriptor.label}`;
+  }
+
+  if(body){
+    body.innerHTML = `
+      <div class="att-detail-layout">
+        <div class="att-detail-summary">
+          <div class="att-detail-date">Date: ${formatDate(dateStr)}</div>
+          <div class="att-detail-punch-card">
+            <div class="att-detail-punch-block">
+              <span>Clock In</span>
+              <strong>${record?.in || 'â€”'}</strong>
+            </div>
+            <div class="att-detail-hours-ring">
+              <strong>${workedLabel}</strong>
+              <span>Total Worked</span>
+            </div>
+            <div class="att-detail-punch-block">
+              <span>Clock Out</span>
+              <strong>${record?.out || 'â€”'}</strong>
+            </div>
+          </div>
+          <div class="att-detail-facts">
+            ${detailFacts.map(([label, value]) => `
+              <div class="att-detail-fact">
+                <span>${label}</span>
+                <strong>${value}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        <div class="att-detail-activity">
+          <div class="att-detail-activity-title">Activity</div>
+          ${buildAttendanceDetailActivity(record, dateStr)}
+        </div>
+      </div>
+    `;
+  }
+
+  openModal('attendanceDetailModal');
+}
+
+window.setAttendanceLogMonthValue = setAttendanceLogMonthValue;
+window.openAttendanceDayDetails = openAttendanceDayDetails;
 
 function now(){ return new Date(); }
 function nowTime(){ return new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }

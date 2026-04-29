@@ -47,8 +47,19 @@ class User extends Authenticatable
         return (bool) $allowed;
     }
 
+    public function canonicalRole(): string
+    {
+        $role = strtolower(trim((string) ($this->role ?? 'employee')));
+
+        return match ($role) {
+            'super admin', 'super_admin', 'super-admin', 'manager' => 'manager',
+            'administrator' => 'admin',
+            default => $role !== '' ? $role : 'employee',
+        };
+    }
+
     public function isSuperAdmin(): bool
     {
-        return in_array($this->role ?? null, ['admin', 'manager'], true);
+        return in_array($this->canonicalRole(), ['admin', 'manager'], true);
     }
 }

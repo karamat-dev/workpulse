@@ -19,7 +19,8 @@ class EnsureRole
             abort(401);
         }
 
-        if (!in_array($user->role, $roles, true)) {
+        $currentRole = method_exists($user, 'canonicalRole') ? $user->canonicalRole() : $user->role;
+        if (!in_array($currentRole, $roles, true)) {
             abort(403);
         }
 

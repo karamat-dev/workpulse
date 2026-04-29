@@ -5,12 +5,17 @@ namespace App\Services;
 use App\Mail\ManagerDeletionAlertMail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class DeletionRecoveryService
 {
     public function record(string $type, string $label, array $payload, ?int $deletedBy): void
     {
+        if (!$this->hasRecoveryTable()) {
+            return;
+        }
+
         $deletedAt = now();
         $expiresAt = now()->addDays(4);
 
@@ -30,6 +35,10 @@ class DeletionRecoveryService
 
     public function list(int $days = 4): array
     {
+        if (!$this->hasRecoveryTable()) {
+            return [];
+        }
+
         $this->pruneExpired();
 
         return DB::table('deletion_recovery_items')
@@ -61,6 +70,10 @@ class DeletionRecoveryService
 
     public function restore(int $id, int $restoredBy): void
     {
+        if (!$this->hasRecoveryTable()) {
+            throw new RuntimeException('Recovery storage is not available on this installation.');
+        }
+
         $item = DB::table('deletion_recovery_items')
             ->where('id', $id)
             ->whereNull('restored_at')
@@ -189,10 +202,31 @@ class DeletionRecoveryService
 
     private function pruneExpired(): void
     {
+        if (!$this->hasRecoveryTable()) {
+            return;
+        }
+
         DB::table('deletion_recovery_items')
             ->whereNull('restored_at')
             ->where('expires_at', '<', now()->subDay())
             ->delete();
+    }
+
+    private function hasRecoveryTable(): bool
+    {
+        static $hasTable;
+
+        if ($hasTable !== null) {
+            return $hasTable;
+        }
+
+        try {
+            $hasTable = Schema::hasTable('deletion_recovery_items');
+        } catch (\Throwable) {
+            $hasTable = false;
+        }
+
+        return $hasTable;
     }
 
     private function emailManagersIfAdminDeleted(string $type, string $label, ?int $deletedBy, string $deletedAt, string $expiresAt): void

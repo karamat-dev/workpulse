@@ -519,6 +519,25 @@
   </div>
 </div>
 
+<!-- Attendance Detail Dialog -->
+<div class="modal-overlay" id="attendanceDetailModal">
+  <div class="modal modal-wide attendance-detail-modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">Attendance Details</div>
+        <div class="modal-subtitle" id="attendance-detail-subtitle" style="margin-top:6px;color:var(--muted);font-size:13px;">Select a date from the attendance log.</div>
+      </div>
+      <button class="modal-close" onclick="window.closeModal('attendanceDetailModal')">×</button>
+    </div>
+    <div id="attendance-detail-body">
+      <div style="color:var(--muted);font-size:13px;">Attendance details will appear here.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="window.closeModal('attendanceDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm Dialog -->
 <div class="modal-overlay" id="confirmModal">
   <div class="modal" style="width:360px;text-align:center;">
