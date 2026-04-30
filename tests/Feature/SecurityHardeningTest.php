@@ -364,4 +364,10 @@ class SecurityHardeningTest extends TestCase
         $this->assertStringContainsString('/api/policies/', $response->json('policies.0.fileUrl'));
         $this->assertStringNotContainsString('/uploads/', $response->json('policies.0.fileUrl'));
     }
+
+    public function test_workpulse_routes_redirect_guests_to_login(): void
+    {
+        $this->get('/musharp')->assertRedirect('/login');
+        $this->get('/workpulse')->assertRedirect('/login');
+    }
 }

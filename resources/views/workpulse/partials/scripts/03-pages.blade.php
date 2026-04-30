@@ -1106,6 +1106,8 @@ function resetAnnouncementForm(){
   window.__workpulseAnnouncementEditId = '';
   document.getElementById('ann-title').value='';
   document.getElementById('ann-cat').value='General';
+  document.getElementById('ann-effective-from').value='';
+  document.getElementById('ann-effective-to').value='';
   document.getElementById('ann-msg').value='';
   document.getElementById('ann-aud').value='all';
   document.getElementById('ann-has-vote').checked=false;
@@ -1125,6 +1127,8 @@ function submitAnnouncement(){
   const title=document.getElementById('ann-title').value;
   const cat=document.getElementById('ann-cat').value;
   const audience=document.getElementById('ann-aud').value;
+  const effectiveFrom=document.getElementById('ann-effective-from').value;
+  const effectiveTo=document.getElementById('ann-effective-to').value;
   const msg=document.getElementById('ann-msg').value;
   const recipientCodes = Array.from(document.getElementById('ann-targets')?.selectedOptions || []).map(option => option.value);
   const votePayload = getAnnouncementVotePayload();
@@ -1134,7 +1138,7 @@ function submitAnnouncement(){
   const path = announcementId ? `/api/announcements/${announcementId}` : '/api/announcements';
   const method = announcementId ? 'PATCH' : 'POST';
   const successMessage = announcementId ? 'Announcement updated!' : 'Announcement published!';
-  wpApi(path, {method, body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes,...votePayload})})
+  wpApi(path, {method, body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,effective_from:effectiveFrom||null,effective_to:effectiveTo||null,recipient_employee_codes:recipientCodes,...votePayload})})
     .then(()=>wpReload())
     .then(()=>{
       resetAnnouncementForm();
@@ -1157,6 +1161,8 @@ function openAnnouncementModal(announcementId=''){
       document.getElementById('ann-title').value = current.title || '';
       document.getElementById('ann-cat').value = current.cat || 'General';
       document.getElementById('ann-aud').value = current.audienceKey || 'all';
+      document.getElementById('ann-effective-from').value = current.effectiveFrom || '';
+      document.getElementById('ann-effective-to').value = current.effectiveTo || '';
       document.getElementById('ann-msg').value = current.msg || '';
       document.getElementById('ann-has-vote').checked = !!current.hasVote;
       document.getElementById('ann-vote-question').value = current.voteQuestion || '';
@@ -1926,6 +1932,14 @@ window.applyDashboardRecentSearchState = applyDashboardRecentSearchState;
 
 function dashboardUpcomingItems(){
   const today = new Date().toISOString().slice(0,10);
+  const birthdays = getBirthdayEventFeed()
+    .filter(item => item.date >= today)
+    .map(item => ({
+      title: item.label,
+      sub: item.description || 'Birthday',
+      date: item.date,
+      badge: item.badge || 'bg-amber',
+    }));
   const holidays = (DB.holidays||[])
     .filter(h=>h.date>=today)
     .map(h=>({title:h.name, sub:`${h.type} holiday`, date:h.date, badge:'bg-amber'}));
@@ -1940,7 +1954,7 @@ function dashboardUpcomingItems(){
   const approvedLeaves = (DB.leaves||[])
     .filter(l=>l.status==='Approved' && l.from>=today)
     .map(l=>({title:`${l.empName} â€” ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
-  return [...holidays, ...events, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+  return [...birthdays, ...holidays, ...events, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
 }
 
 function pageAdminDashboard(){
@@ -1991,7 +2005,7 @@ function pageAdminDashboard(){
         };
       });
     const recentRows = dashboardRecentRows();
-    const upcoming = dashboardUpcomingItems();
+    const upcoming = dashboardUpcomingItems().filter(item => !/ birthday$/i.test(String(item.title || '')));
 
     return `
   <div class="card dash-welcome-card" style="margin-bottom:14px;">
@@ -2120,13 +2134,15 @@ function pageAdminDashboard(){
           </div>
         </div>
       </div>
-    <div class="card">
-      <div class="card-hdr"><div class="card-title">Upcoming Events</div><button class="btn btn-sm" onclick="window.showPage('calendar')">View All</button></div>
-      ${upcoming.map(ev=>`
-      <div class="irow">
-        <div><strong style="font-size:13px;">${ev.title}</strong><div style="font-size:11px;color:var(--muted);">${ev.sub}</div></div>
-        <span class="badge ${ev.badge}">${formatDate(ev.date)}</span>
-      </div>`).join('') || `<p style="color:var(--muted);">No upcoming items.</p>`}
+    <div style="display:grid;gap:14px;">
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Upcoming Events</div><button class="btn btn-sm" onclick="window.showPage('calendar')">View All</button></div>
+        ${upcoming.map(ev=>`
+        <div class="irow">
+          <div><strong style="font-size:13px;">${ev.title}</strong><div style="font-size:11px;color:var(--muted);">${ev.sub}</div></div>
+          <span class="badge ${ev.badge}">${formatDate(ev.date)}</span>
+        </div>`).join('') || `<p style="color:var(--muted);">No upcoming events.</p>`}
+      </div>
     </div>
   </div>
 
@@ -2643,6 +2659,23 @@ function pageLeave(){
 function pageEmployees(){
   const employees = Array.isArray(DB.employees) ? DB.employees : [];
   const today = new Date().toISOString().slice(0, 10);
+  const currentMonthValue = String(new Date().getMonth() + 1).padStart(2, '0');
+  const birthdayMonthOptions = [
+    { value: '', label: 'All Birthdays' },
+    { value: '__current__', label: 'This Month' },
+    { value: '01', label: 'January' },
+    { value: '02', label: 'February' },
+    { value: '03', label: 'March' },
+    { value: '04', label: 'April' },
+    { value: '05', label: 'May' },
+    { value: '06', label: 'June' },
+    { value: '07', label: 'July' },
+    { value: '08', label: 'August' },
+    { value: '09', label: 'September' },
+    { value: '10', label: 'October' },
+    { value: '11', label: 'November' },
+    { value: '12', label: 'December' },
+  ];
   const getEmployeeLifecycleStage = (employee) => {
     const status = String(employee?.status || '').toLowerCase();
     const lastWorkingDate = String(employee?.lwd || '');
@@ -2661,7 +2694,7 @@ function pageEmployees(){
   const offboardingCount = offboardingEmployees.length;
   const exCount = exEmployees.length;
   const renderDirectoryRows = (items, emptyLabel, allowRemove = false) => items.map(e=>`
-    <tr>
+    <tr data-birth-month="${String(e.dob || '').slice(5, 7)}">
       <td>${e.id}</td>
       <td><div class="ucell"><div class="av av-32" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
       <div class="ucell-info"><div class="n">${e.fname} ${e.lname}</div><div class="s">${e.email}</div></div></div></td>
@@ -2722,14 +2755,20 @@ function pageEmployees(){
           <label class="fl">Search Employee</label>
           <input class="search-input" id="emp-search" placeholder="Search employee, code, title, team, manager..." oninput="applyEmployeeDirectoryFilters()" style="width:100%;">
         </div>
-        <div>
+        <div class="toolbar-field-compact">
           <label class="fl">Team</label>
           <select class="fi" id="emp-team-filter" onchange="applyEmployeeDirectoryFilters()">
             <option value="">All Teams</option>
             ${DB.departments.map(d=>`<option>${d.name}</option>`).join('')}
           </select>
         </div>
-        <div>
+        <div class="toolbar-field-compact">
+          <label class="fl">Birthday Month</label>
+          <select class="fi" id="emp-birthday-filter" onchange="applyEmployeeDirectoryFilters()">
+            ${birthdayMonthOptions.map(option => `<option value="${option.value}">${option.label}${option.value === '__current__' ? ` (${birthdayMonthOptions.find(item => item.value === currentMonthValue)?.label || ''})` : ''}</option>`).join('')}
+          </select>
+        </div>
+        <div class="toolbar-field-summary">
           <label class="fl">Directory View</label>
           <div class="data-pill-row">
             <span class="data-pill">Active <strong>${activeCount}</strong></span>
@@ -2738,7 +2777,7 @@ function pageEmployees(){
             <span class="data-pill">Ex-employee <strong>${exCount}</strong></span>
           </div>
         </div>
-        <div style="display:flex;align-items:end;justify-content:flex-end;">
+        <div class="toolbar-field-action" style="display:flex;align-items:end;justify-content:flex-end;">
           <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
         </div>
       </div>
@@ -2766,6 +2805,10 @@ function pageEmployees(){
 function applyEmployeeDirectoryFilters(){
   const searchText = (document.getElementById('emp-search')?.value || '').trim().toLowerCase();
   const teamFilter = document.getElementById('emp-team-filter')?.value || '';
+  const birthdayFilter = document.getElementById('emp-birthday-filter')?.value || '';
+  const selectedBirthdayMonth = birthdayFilter === '__current__'
+    ? String(new Date().getMonth() + 1).padStart(2, '0')
+    : birthdayFilter;
   const activeTab = (window.__workpulseTabState && window.__workpulseTabState['employees-directory']) || 'current';
   const tableId = {
     current: 'emp-table-current',
@@ -2777,9 +2820,11 @@ function applyEmployeeDirectoryFilters(){
     const cells = row.querySelectorAll('td');
     const searchableText = Array.from(cells).map(cell => cell.textContent.toLowerCase()).join(' ');
     const rowTeam = cells[3]?.textContent?.trim() || '';
+    const rowBirthMonth = row.getAttribute('data-birth-month') || '';
     const matchesSearch = !searchText || searchableText.includes(searchText);
     const matchesTeam = !teamFilter || rowTeam === teamFilter;
-    row.style.display = matchesSearch && matchesTeam ? '' : 'none';
+    const matchesBirthdayMonth = !selectedBirthdayMonth || rowBirthMonth === selectedBirthdayMonth;
+    row.style.display = matchesSearch && matchesTeam && matchesBirthdayMonth ? '' : 'none';
   });
 
   ['emp-table-current', 'emp-table-offboarding', 'emp-table-ex']
@@ -3126,17 +3171,32 @@ function pageOrgChart(){
   </div>`;
 }
 
-function getAudienceAnnouncementEvents(){
-  return (Array.isArray(DB.announcements) ? DB.announcements : []).map(item => ({
-    date: item.date,
-    label: item.title,
-    description: item.msg,
-    badge: item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : item.cat === 'Important' ? 'bg-red' : 'bg-blue',
-    type: 'announcement',
-  }));
+function getAudienceAnnouncementEvents(expandRange=false){
+  return (Array.isArray(DB.announcements) ? DB.announcements : []).flatMap(item => {
+    const from = String(item.effectiveFrom || item.date || '').trim();
+    const to = String(item.effectiveTo || from).trim();
+    const dates = from ? getDateRangeValues(from, to || from) : [];
+    const eventDates = expandRange
+      ? (dates.length ? dates : [String(item.date || '').trim()].filter(Boolean))
+      : [from || String(item.date || '').trim()].filter(Boolean);
+
+    return eventDates.map(date => ({
+      date,
+      label: item.title,
+      description: expandRange || !to || to === from
+        ? item.msg
+        : `${item.msg}${item.msg ? ' | ' : ''}${formatDate(from)} - ${formatDate(to)}`,
+      badge: item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : item.cat === 'Important' ? 'bg-red' : 'bg-blue',
+      type: 'announcement',
+      effectiveFrom: from || null,
+      effectiveTo: to || null,
+    }));
+  });
 }
 
 function getCalendarEventFeed(){
+  const birthdayEvents = getBirthdayEventFeed();
+  const announcementEvents = getAudienceAnnouncementEvents();
   const companyEvents = (Array.isArray(DB.events) ? DB.events : [])
     .map(event => ({
       date: String(event.start || event.date || '').slice(0, 10),
@@ -3147,8 +3207,41 @@ function getCalendarEventFeed(){
     }))
     .filter(event => event.date);
 
-  return companyEvents
-    .concat(getAudienceAnnouncementEvents())
+  return birthdayEvents
+    .concat(companyEvents)
+    .concat(announcementEvents)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+function getBirthdayEventFeed(){
+  if(typeof isSuperAdminRole === 'function' && !isSuperAdminRole()){
+    return [];
+  }
+
+  const employees = Array.isArray(DB.employees) ? DB.employees : [];
+  const today = getTodayLocalDate();
+  const currentYear = Number(String(today).slice(0, 4));
+
+  return employees
+    .filter(employee => /^\d{4}-\d{2}-\d{2}$/.test(String(employee?.dob || '')))
+    .map(employee => {
+      const dob = String(employee.dob);
+      const monthDay = dob.slice(5);
+      let eventDate = `${currentYear}-${monthDay}`;
+      if(eventDate < today){
+        eventDate = `${currentYear + 1}-${monthDay}`;
+      }
+
+      const fullName = `${employee.fname || ''} ${employee.lname || ''}`.trim() || employee.id || 'Employee';
+      return {
+        date: eventDate,
+        label: `${fullName} Birthday`,
+        description: `${employee.dept || 'Team'}${employee.desg ? ` | ${employee.desg}` : ''}`,
+        badge: 'bg-amber',
+        type: 'birthday',
+        employeeId: employee.id,
+      };
+    })
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
@@ -3196,6 +3289,19 @@ function pageCalendar(empView=false){
   const daysInMonth=new Date(year,month+1,0).getDate();
   const todayDate=today.getDate();
   const events = getCalendarEventFeed();
+  const calendarRangeEvents = getAudienceAnnouncementEvents(true);
+  const birthdayItems = !empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole()
+    ? getBirthdayEventFeed().slice(0, 6).map(item => {
+        const employee = (Array.isArray(DB.employees) ? DB.employees : []).find(entry => String(entry.id) === String(item.employeeId)) || {};
+        return {
+          name: String(item.label || '').replace(/ Birthday$/, ''),
+          avatar: employee.avatar,
+          avatarColor: employee.avatarColor,
+          detail: `${formatDate(item.date)}${item.description ? ` - ${item.description}` : ''}`,
+          badge: '<span class="badge bg-amber">Birthday</span>',
+        };
+      })
+    : [];
 
   let calDays='';
   for(let i=0;i<firstDay;i++) calDays+=`<div class="cal-day"></div>`;
@@ -3204,9 +3310,11 @@ function pageCalendar(empView=false){
     const isToday=d===todayDate;
     const isHoliday=DB.holidays.some(h=>h.date===dateStr);
     const hasLeave=DB.leaves.some(l=>l.status==='Approved'&&l.from<=dateStr&&l.to>=dateStr);
-    const hasEvent=events.some(ev=>ev.date===dateStr);
+    const hasEvent=events.some(ev=>ev.date===dateStr) || calendarRangeEvents.some(ev=>ev.date===dateStr);
     const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':hasEvent?'cal-event':'';
-    const title=isHoliday ? DB.holidays.find(h=>h.date===dateStr).name : (events.filter(ev=>ev.date===dateStr).map(ev=>ev.label).join(' | ') || '');
+    const title=isHoliday
+      ? DB.holidays.find(h=>h.date===dateStr).name
+      : ([...events.filter(ev=>ev.date===dateStr), ...calendarRangeEvents.filter(ev=>ev.date===dateStr)].map(ev=>ev.label).join(' | ') || '');
     calDays+=`<div class="cal-day ${cls}" title="${title}">${d}</div>`;
   }
 
@@ -3248,7 +3356,7 @@ function pageCalendar(empView=false){
           <strong class="event-feed-title">${ev.label}</strong>
           <div class="event-feed-desc">${ev.description || meta.helper}</div>
         </div>
-        <span class="badge ${ev.badge}">${formatEventCardDate(ev.date)}</span>
+        <span class="badge ${ev.badge}">${ev.effectiveFrom && ev.effectiveTo && ev.effectiveTo !== ev.effectiveFrom ? `${formatDate(ev.effectiveFrom)} - ${formatDate(ev.effectiveTo)}` : formatEventCardDate(ev.date)}</span>
       </div>`;
       }).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
       <div style="margin-top:14px;">
@@ -3256,6 +3364,11 @@ function pageCalendar(empView=false){
         ${DB.holidays.slice(0,5).map(h=>`
         <div class="irow"><span style="font-size:13px;">${h.name}</span><span class="badge bg-amber">${formatDate(h.date)}</span></div>`).join('')}
       </div>
+      ${!empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole() ? `
+      <div style="margin-top:14px;">
+        <div class="card-hdr" style="padding:0 0 10px 0;margin:0;"><div class="card-title">Upcoming Birthdays</div><button class="btn btn-sm" onclick="window.showPage('employees')">View Employees</button></div>
+        ${renderEmployeeDashboardStatusList(birthdayItems, 'No upcoming birthdays right now')}
+      </div>` : ''}
     </div>
   </div>`;
 }
@@ -3805,6 +3918,14 @@ function downloadAttendanceMonthlyCSV(){
 
 window.downloadAttendanceMonthlyCSV = downloadAttendanceMonthlyCSV;
 
+function formatAnnouncementDateLabel(announcement){
+  const from = String(announcement?.effectiveFrom || announcement?.date || '').trim();
+  const to = String(announcement?.effectiveTo || '').trim();
+  if(!from) return formatDate(announcement?.publishedOn || announcement?.date || '');
+  if(!to || to === from) return formatDate(from);
+  return `${formatDate(from)} - ${formatDate(to)}`;
+}
+
 function pageAnnouncements(empView=false){
   const items=DB.announcements.map(a=>`
     <div class="ann" style="border-left-color:${a.cat==='Event'?'var(--purple)':a.cat==='Policy'?'var(--green)':a.cat==='Important'?'var(--red)':'var(--accent)'};">
@@ -3821,7 +3942,7 @@ function pageAnnouncements(empView=false){
       <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
       ${a.hasVote ? `<div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;"><strong>${a.voteQuestion || 'Voting'}</strong><div style="margin-top:6px;color:var(--muted);font-size:12px;">${a.myVoteOptionId ? `Your vote: ${(a.voteOptions || []).find(option => String(option.id) === String(a.myVoteOptionId))?.label || 'Submitted'}` : (a.voteStatus === 'closed' ? 'Voting is closed' : 'Waiting for your vote')}</div>${Array.isArray(a.voteOptions) && a.voteOptions.some(option => option.count !== null) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${a.voteOptions.map(option => `<span class="badge bg-blue">${option.label}: ${option.count}</span>`).join('')}</div>` : ''}</div>` : ''}
       ${Array.isArray(a.recipients) && a.recipients.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${a.recipients.map(recipient => `<span class="badge bg-blue">${recipient.name}</span>`).join('')}</div>` : ''}
-      <div class="ann-meta">By ${a.author} (${a.role}) | ${formatDate(a.date)} | Audience: ${a.audience}</div>
+      <div class="ann-meta">By ${a.author} (${a.role}) | ${formatAnnouncementDateLabel(a)} | Audience: ${a.audience}</div>
     </div>`).join('');
 
   return `
@@ -4376,6 +4497,19 @@ function pageEmpDashboard(){
     const myLogs = attendance.filter(a=>a.empId===u.id).slice(0,5);
     const latestAnnouncements = (Array.isArray(DB.announcements) ? DB.announcements : []).slice(0,3);
     const upcomingItems = dashboardUpcomingItems();
+    const birthdayItems = getBirthdayEventFeed()
+      .filter(item => item.date >= today)
+      .slice(0, 5)
+      .map(item => {
+        const employee = employees.find(entry => String(entry.id) === String(item.employeeId)) || {};
+        return {
+          name: String(item.label || '').replace(/ Birthday$/, ''),
+          avatar: employee.avatar,
+          avatarColor: employee.avatarColor,
+          detail: `${formatDate(item.date)}${item.description ? ` - ${item.description}` : ''}`,
+          badge: '<span class="badge bg-amber">Birthday</span>',
+        };
+      });
     const statusLabel=ps.punchedIn?(ps.onBreak?'On Break':'In Office'):(shiftCompleted?'Completed':(todayRec.out?'Clocked Out':'Not Started'));
 
     return `
@@ -4463,10 +4597,6 @@ function pageEmpDashboard(){
         ${renderEmployeeDashboardStatusList(teamNotClockedIn, 'Everyone from your team has clocked in or is on leave')}
       </div>
       <div class="emp-pp-card">
-        <div class="card-hdr"><div class="emp-pp-title">Upcoming Birthday</div></div>
-        <div class="emp-pp-empty">${employees.filter(e=>String(e.dob||'').slice(5)===today.slice(5)).length ? 'Birthday alerts available' : 'No birthday right now'}</div>
-      </div>
-      <div class="emp-pp-card">
         <div class="card-hdr"><div class="emp-pp-title">Latest Announcements</div><button class="btn btn-sm" onclick="window.showPage('emp-announcements')">View All</button></div>
         ${latestAnnouncements.map(item=>`
           <div class="irow" style="align-items:flex-start;">
@@ -4474,21 +4604,9 @@ function pageEmpDashboard(){
               <div style="font-size:13px;font-weight:600;">${item.title}</div>
               <div style="font-size:11px;color:var(--muted);margin-top:3px;">${item.msg}</div>
             </div>
-            <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatEventCardDate(item.date)}</span>
+            <span class="badge ${item.cat === 'Event' ? 'bg-purple' : item.cat === 'Policy' ? 'bg-green' : 'bg-blue'}">${formatAnnouncementDateLabel(item)}</span>
           </div>
         `).join('') || `<div class="emp-pp-empty">No announcements for your audience right now</div>`}
-      </div>
-      <div class="emp-pp-card">
-        <div class="card-hdr"><div class="emp-pp-title">Holidays & Events</div><button class="btn btn-sm" onclick="window.showPage('emp-calendar')">View Calendar</button></div>
-        ${upcomingItems.map(item=>`
-          <div class="irow" style="align-items:flex-start;">
-            <div>
-              <div style="font-size:13px;font-weight:600;">${item.title}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:3px;">${item.sub}</div>
-            </div>
-            <span class="badge ${item.badge}">${formatDate(item.date)}</span>
-          </div>
-        `).join('') || `<div class="emp-pp-empty">No upcoming holidays or events right now</div>`}
       </div>
     </div>
   </div>`;
@@ -4992,7 +5110,7 @@ function renderProfileWorkspace(employee, options={}){
       <div class="pp-main-card">
         <div class="pp-card-title"><h3>Official</h3><span class="badge bg-green">Live Profile</span></div>
         <div class="pp-info-grid">
-          ${profileInfoRow('Status', statusBadge(employee.status || 'Active'))}
+          ${profileInfoRow('Status', employee.status || 'Active', statusBadge)}
           ${profileInfoRow('Employment', employee.type)}
           ${profileInfoRow('Shift', employee.shiftName ? `${employee.shiftName} (${employee.shiftStart||'-'} - ${employee.shiftEnd||'-'})` : 'Not Assigned')}
           ${profileInfoRow('Hire Date', employee.doj, formatDate)}
