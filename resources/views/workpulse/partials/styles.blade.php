@@ -2275,7 +2275,7 @@ textarea.fi{line-height:1.55;resize:vertical;min-height:92px;font-weight:500;}
 .dashboard-recent-row:hover{background:rgba(245,247,255,.88);}
 .dashboard-recent-user{
   display:flex;
-  align-items:flex-start;
+  align-items:center;
   gap:10px;
   min-width:0;
 }
