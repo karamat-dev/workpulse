@@ -18,6 +18,72 @@ class EmployeesController extends Controller
     private const OFFBOARDING_STATUS = 'Offboarding';
     private const EX_EMPLOYEE_STATUSES = ['Inactive', 'Resigned'];
 
+    private function isSuperAdminRole(object $user): bool
+    {
+        return method_exists($user, 'canonicalRole')
+            ? $user->canonicalRole() === 'manager'
+            : in_array((string) ($user->role ?? ''), ['manager', 'super_admin', 'super-admin', 'super admin'], true);
+    }
+
+    private function isSuperAdminAccountRole(?string $role): bool
+    {
+        return in_array((string) $role, ['manager', 'super_admin', 'super-admin', 'super admin'], true);
+    }
+
+    private function normalizeEmail(?string $email): string
+    {
+        return Str::lower(trim((string) $email));
+    }
+
+    private function emailExistsAsOfficial(string $email, ?int $ignoreUserId = null): bool
+    {
+        $normalized = $this->normalizeEmail($email);
+
+        return DB::table('users')
+            ->whereRaw('LOWER(email) = ?', [$normalized])
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+            ->exists();
+    }
+
+    private function emailExistsAsPersonal(string $email, ?int $ignoreUserId = null): bool
+    {
+        $normalized = $this->normalizeEmail($email);
+
+        return DB::table('employee_profiles')
+            ->whereNotNull('personal_email')
+            ->whereRaw('LOWER(personal_email) = ?', [$normalized])
+            ->when($ignoreUserId, fn ($query) => $query->where('user_id', '!=', $ignoreUserId))
+            ->exists();
+    }
+
+    private function validateDistinctEmployeeEmails(string $officialEmail, string $personalEmail, ?int $ignoreUserId = null): ?JsonResponse
+    {
+        $official = $this->normalizeEmail($officialEmail);
+        $personal = $this->normalizeEmail($personalEmail);
+
+        if ($official === $personal) {
+            return response()->json(['ok' => false, 'message' => 'Official email and personal email must be different.'], 422);
+        }
+
+        if ($this->emailExistsAsOfficial($official, $ignoreUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Official email is already used as another employee official email.'], 422);
+        }
+
+        if ($this->emailExistsAsPersonal($official, $ignoreUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Official email is already used as another employee personal email.'], 422);
+        }
+
+        if ($this->emailExistsAsOfficial($personal, $ignoreUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Personal email is already used as another employee official email.'], 422);
+        }
+
+        if ($this->emailExistsAsPersonal($personal, $ignoreUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Personal email is already used as another employee personal email.'], 422);
+        }
+
+        return null;
+    }
+
     public function show(Request $request, string $employeeCode): JsonResponse
     {
         $user = $request->user();
@@ -28,6 +94,14 @@ class EmployeesController extends Controller
 
         if (!$record) {
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
+        }
+
+        if (
+            $this->isSuperAdminAccountRole($record->role ?? null)
+            && (int) $record->user_id !== (int) $user->id
+            && !$this->isSuperAdminRole($user)
+        ) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can view Super-Admin accounts.'], 403);
         }
 
         if (!$this->canViewEmployeeRecord($user, $record)) {
@@ -51,7 +125,7 @@ class EmployeesController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'password' => ['nullable', 'string', 'min:8', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
-            'personal_email' => ['nullable', 'email', 'max:255'],
+            'personal_email' => ['required', 'email', 'max:255'],
             'dept' => ['required', 'string', 'max:255'],
             'desg' => ['required', 'string', 'max:255'],
             'doj' => ['required', 'date_format:Y-m-d'],
@@ -92,9 +166,17 @@ class EmployeesController extends Controller
             ? $requestedRole
             : 'employee';
 
-        // Only full-access operators can create elevated roles.
-        if (!$request->user()->isSuperAdmin() && in_array($role, ['manager', 'admin'], true)) {
-            $role = 'employee';
+        if ($role === 'manager' && !$this->isSuperAdminRole($request->user())) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can create Super-Admin accounts.'], 403);
+        }
+
+        if ($emailError = $this->validateDistinctEmployeeEmails($validated['email'], $validated['personal_email'])) {
+            return $emailError;
+        }
+
+        $existingUserForEmail = DB::table('users')->where('email', $validated['email'])->first();
+        if ($existingUserForEmail && $this->isSuperAdminAccountRole($existingUserForEmail->role ?? null) && !$this->isSuperAdminRole($request->user())) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can change Super-Admin accounts.'], 403);
         }
 
         $departmentId = DB::table('departments')->where('name', $validated['dept'])->value('id');
@@ -199,7 +281,7 @@ class EmployeesController extends Controller
                     'bank_account_no' => $validated['acct'] ?? null,
                     'bank_iban' => $validated['iban'] ?? null,
                     'personal_phone' => $validated['phone'] ?? null,
-                    'personal_email' => $validated['personal_email'] ?? $validated['email'],
+                    'personal_email' => $validated['personal_email'],
                     'created_at' => now(),
                     'updated_at' => now(),
                 ],
@@ -257,7 +339,7 @@ class EmployeesController extends Controller
             ],
             'password' => ['nullable', 'string', 'min:8', 'max:255'],
             'phone' => ['nullable', 'string', 'max:40'],
-            'personal_email' => ['nullable', 'email', 'max:255'],
+            'personal_email' => ['required', 'email', 'max:255'],
             'dept' => ['required', 'string', 'max:255'],
             'desg' => ['required', 'string', 'max:255'],
             'doj' => ['required', 'date_format:Y-m-d'],
@@ -300,8 +382,16 @@ class EmployeesController extends Controller
         }
 
         $targetRole = DB::table('users')->where('id', $userId)->value('role');
-        if ($targetRole === 'manager' && $request->user()->role !== 'manager') {
+        if ($this->isSuperAdminAccountRole($targetRole) && !$this->isSuperAdminRole($request->user())) {
             return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can change Super-Admin accounts.'], 403);
+        }
+
+        if (($validated['role'] ?? null) === 'manager' && !$this->isSuperAdminRole($request->user())) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can create Super-Admin accounts.'], 403);
+        }
+
+        if ($emailError = $this->validateDistinctEmployeeEmails($validated['email'], $validated['personal_email'], (int) $userId)) {
+            return $emailError;
         }
 
         $departmentId = DB::table('departments')->where('name', $validated['dept'])->value('id');
@@ -348,7 +438,7 @@ class EmployeesController extends Controller
                 $userUpdate['password'] = Hash::make($validated['password']);
             }
 
-            if ($request->user()->isSuperAdmin() && !empty($validated['role'])) {
+            if (!empty($validated['role'])) {
                 $userUpdate['role'] = $validated['role'];
             }
 
@@ -384,7 +474,7 @@ class EmployeesController extends Controller
                     'cnic_document_path' => $cnicDocumentMeta['path'] ?? ($profile?->cnic_document_path),
                     'cnic_document_name' => $cnicDocumentMeta['name'] ?? ($profile?->cnic_document_name),
                     'personal_phone' => $validated['phone'] ?? null,
-                    'personal_email' => $validated['personal_email'] ?? $validated['email'],
+                    'personal_email' => $validated['personal_email'],
                     'address' => $validated['address'] ?? null,
                     'marital_status' => $validated['marital_status'] ?? null,
                     'blood_group' => $validated['blood'] ?? null,
@@ -439,6 +529,11 @@ class EmployeesController extends Controller
             return response()->json(['ok' => false, 'message' => 'Not found'], 404);
         }
 
+        $targetRole = DB::table('users')->where('employee_code', $employeeCode)->value('role');
+        if ($this->isSuperAdminAccountRole($targetRole) && !$this->isSuperAdminRole($request->user())) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can change Super-Admin accounts.'], 403);
+        }
+
         if ($profile->cnic_document_path) {
             $this->deleteStoredFile((string) $profile->cnic_document_path);
         }
@@ -466,6 +561,14 @@ class EmployeesController extends Controller
             abort(404);
         }
 
+        if (
+            $this->isSuperAdminAccountRole($record->role ?? null)
+            && (int) $record->user_id !== (int) $user->id
+            && !$this->isSuperAdminRole($user)
+        ) {
+            abort(403);
+        }
+
         if (!$this->canViewEmployeeRecord($user, $record)) {
             abort(403);
         }
@@ -486,6 +589,14 @@ class EmployeesController extends Controller
 
         if (!$record) {
             abort(404);
+        }
+
+        if (
+            $this->isSuperAdminAccountRole($record->role ?? null)
+            && (int) $record->user_id !== (int) $user->id
+            && !$this->isSuperAdminRole($user)
+        ) {
+            abort(403);
         }
 
         if (!$this->canViewEmployeeRecord($user, $record)) {
@@ -511,7 +622,7 @@ class EmployeesController extends Controller
         }
 
         $targetRole = DB::table('users')->where('id', $userId)->value('role');
-        if ($targetRole === 'manager' && $request->user()->role !== 'manager') {
+        if ($this->isSuperAdminAccountRole($targetRole) && !$this->isSuperAdminRole($request->user())) {
             return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can delete Super-Admin accounts.'], 403);
         }
 
@@ -714,6 +825,14 @@ class EmployeesController extends Controller
 
     private function canViewEmployeeRecord(object $viewer, object $record): bool
     {
+        if (
+            $this->isSuperAdminAccountRole($record->role ?? null)
+            && (int) $record->user_id !== (int) $viewer->id
+            && !$this->isSuperAdminRole($viewer)
+        ) {
+            return false;
+        }
+
         if (in_array($viewer->role, ['admin', 'manager', 'hr'], true)) {
             return true;
         }

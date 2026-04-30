@@ -153,6 +153,18 @@ class WorkpulseBootstrapController extends Controller
             ])
             ->first();
 
+        $attendancePolicies = DB::table('module_policies')
+            ->where('module', 'attendance')
+            ->whereIn('key', ['shift_start', 'shift_end', 'grace_minutes'])
+            ->pluck('value', 'key');
+        $defaultShiftStart = preg_match('/^\d{2}:\d{2}$/', (string) ($attendancePolicies['shift_start'] ?? ''))
+            ? (string) $attendancePolicies['shift_start']
+            : '11:00';
+        $defaultShiftEnd = preg_match('/^\d{2}:\d{2}$/', (string) ($attendancePolicies['shift_end'] ?? ''))
+            ? (string) $attendancePolicies['shift_end']
+            : '20:00';
+        $defaultShiftGrace = max(0, (int) ($attendancePolicies['grace_minutes'] ?? 10));
+
         $nameParts = preg_split('/\s+/', trim((string) $user->name)) ?: [];
         $fname = $nameParts[0] ?? $user->name;
         $lname = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
@@ -183,9 +195,9 @@ class WorkpulseBootstrapController extends Controller
             'shiftId' => $profile?->shift_id,
             'shiftCode' => $profile?->shift_code,
             'shiftName' => $profile?->shift_name,
-            'shiftStart' => $profile?->start_time ? substr((string) $profile->start_time, 0, 5) : null,
-            'shiftEnd' => $profile?->end_time ? substr((string) $profile->end_time, 0, 5) : null,
-            'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : null,
+            'shiftStart' => $profile?->start_time ? substr((string) $profile->start_time, 0, 5) : $defaultShiftStart,
+            'shiftEnd' => $profile?->end_time ? substr((string) $profile->end_time, 0, 5) : $defaultShiftEnd,
+            'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : $defaultShiftGrace,
             'shiftBreak' => $profile?->break_minutes !== null ? (int) $profile->break_minutes : 60,
             'shiftWorkingDays' => $profile?->working_days,
             'phone' => $profile?->personal_phone,
@@ -309,7 +321,7 @@ class WorkpulseBootstrapController extends Controller
             });
         }
 
-        $employees = $employeesQuery->get()->map(function ($employee) use ($colors, $user) {
+        $employees = $employeesQuery->get()->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace) {
             $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
             $fn = $parts[0] ?? $employee->name;
             $ln = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
@@ -335,9 +347,9 @@ class WorkpulseBootstrapController extends Controller
                 'shiftId' => $employee->shift_id,
                 'shiftCode' => $employee->shift_code,
                 'shiftName' => $employee->shift_name,
-                'shiftStart' => $employee->start_time ? substr((string) $employee->start_time, 0, 5) : null,
-                'shiftEnd' => $employee->end_time ? substr((string) $employee->end_time, 0, 5) : null,
-                'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : null,
+                'shiftStart' => $employee->start_time ? substr((string) $employee->start_time, 0, 5) : $defaultShiftStart,
+                'shiftEnd' => $employee->end_time ? substr((string) $employee->end_time, 0, 5) : $defaultShiftEnd,
+                'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : $defaultShiftGrace,
                 'shiftBreak' => $employee->break_minutes !== null ? (int) $employee->break_minutes : 60,
                 'shiftWorkingDays' => $employee->working_days,
                 'cnicDocumentPath' => $user->isSuperAdmin() ? $employee->cnic_document_path : null,
@@ -532,25 +544,33 @@ class WorkpulseBootstrapController extends Controller
             ->orderByDesc('leave_requests.created_at')
             ->limit(200)
             ->get()
-            ->map(fn ($leave) => [
-                'id' => $leave->id,
-                'empId' => $leave->empId,
-                'empName' => $leave->empName,
-                'dept' => $leave->dept ?? '-',
-                'type' => $leave->type,
-                'from' => $leave->from_date,
-                'to' => $leave->to_date,
-                'durationType' => $leave->duration_type ?? 'full_day',
-                'halfDaySlot' => $leave->half_day_slot,
-                'dailyBreakdown' => json_decode($leave->daily_breakdown ?? '[]', true) ?: [],
-                'days' => (float) $leave->days,
-                'reason' => $leave->reason,
-                'handover' => $leave->handover,
-                'applied' => optional($leave->applied_at)->toDateString() ?? null,
-                'managerStatus' => '-',
-                'hrStatus' => $leave->hr_status ?? '-',
-                'status' => $leave->status,
-            ])
+            ->map(function ($leave) {
+                $cancelledDates = DB::table('leave_request_cancellations')
+                    ->where('leave_request_id', $leave->id)
+                    ->pluck('date')
+                    ->all();
+
+                return [
+                    'id' => $leave->id,
+                    'empId' => $leave->empId,
+                    'empName' => $leave->empName,
+                    'dept' => $leave->dept ?? '-',
+                    'type' => $leave->type,
+                    'from' => $leave->from_date,
+                    'to' => $leave->to_date,
+                    'durationType' => $leave->duration_type ?? 'full_day',
+                    'halfDaySlot' => $leave->half_day_slot,
+                    'dailyBreakdown' => json_decode($leave->daily_breakdown ?? '[]', true) ?: [],
+                    'cancelledDates' => $cancelledDates,
+                    'days' => (float) $leave->days,
+                    'reason' => $leave->reason,
+                    'handover' => $leave->handover,
+                    'applied' => optional($leave->applied_at)->toDateString() ?? null,
+                    'managerStatus' => '-',
+                    'hrStatus' => $leave->hr_status ?? '-',
+                    'status' => $leave->status,
+                ];
+            })
             ->values();
 
         $leaveBalances = DB::table('leave_balances')
@@ -611,13 +631,17 @@ class WorkpulseBootstrapController extends Controller
 
         $attendanceByEmployeeToday = $attendance->where('date', $today)->groupBy('empId');
         $leaveByEmployeeToday = $leaves
-            ->filter(fn (array $leave) => $leave['status'] === 'Approved' && $leave['from'] <= $today && $leave['to'] >= $today)
+            ->filter(fn (array $leave) => $leave['status'] === 'Approved'
+                && $leave['from'] <= $today
+                && $leave['to'] >= $today
+                && !in_array($today, $leave['cancelledDates'] ?? [], true))
             ->groupBy('empId');
 
         $liveAttendance = $employees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday, $today) {
             $empId = $employee['id'];
+            $todayPunches = $attendancePunches->get($empId.'|'.$today, collect());
 
-            if ($leaveByEmployeeToday->has($empId)) {
+            if ($leaveByEmployeeToday->has($empId) && $todayPunches->isEmpty()) {
                 $leave = $leaveByEmployeeToday->get($empId)?->first();
 
                 return [
@@ -631,7 +655,6 @@ class WorkpulseBootstrapController extends Controller
                 ];
             }
 
-            $todayPunches = $attendancePunches->get($empId.'|'.$today, collect());
             $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
             $lastClockInPunch = $todayPunches->where('type', 'clock_in')->last();
             $clockOutPunch = $todayPunches->where('type', 'clock_out')->last();

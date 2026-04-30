@@ -52,6 +52,12 @@ class WorkpulseAttendanceReminder extends Command
             ->where('status', 'Approved')
             ->where('from_date', '<=', $today)
             ->where('to_date', '>=', $today)
+            ->whereNotExists(function ($query) use ($today) {
+                $query->selectRaw('1')
+                    ->from('leave_request_cancellations')
+                    ->whereColumn('leave_request_cancellations.leave_request_id', 'leave_requests.id')
+                    ->where('leave_request_cancellations.date', $today);
+            })
             ->pluck('user_id')
             ->all();
 

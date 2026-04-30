@@ -59,19 +59,19 @@ class AttendanceController extends Controller
 
         $this->closeOpenAttendanceBeforeDate($user->id, $date);
 
-        $hasApprovedLeave = DB::table('leave_requests')
+        $approvedLeave = DB::table('leave_requests')
             ->where('user_id', $user->id)
             ->where('status', 'Approved')
             ->where('from_date', '<=', $date)
             ->where('to_date', '>=', $date)
-            ->exists();
-
-        if ($hasApprovedLeave) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'You cannot punch attendance on an approved leave day.',
-            ], 422);
-        }
+            ->whereNotExists(function ($query) use ($date) {
+                $query->selectRaw('1')
+                    ->from('leave_request_cancellations')
+                    ->whereColumn('leave_request_cancellations.leave_request_id', 'leave_requests.id')
+                    ->where('leave_request_cancellations.date', $date);
+            })
+            ->orderByDesc('created_at')
+            ->first(['id', 'code']);
 
         DB::transaction(function () use ($user, $validated, $punchedAt, $date) {
             $existingPunches = DB::table('attendance_punches')
@@ -116,9 +116,28 @@ class AttendanceController extends Controller
             );
         });
 
+        $message = null;
+        if ($approvedLeave && $validated['type'] === 'clock_in') {
+            $message = 'You are clocked in on an approved leave day. Please submit an attendance regulation request for leave cancellation.';
+            $this->createEmployeeNotification(
+                (int) $user->id,
+                'leave_cancellation_regulation_reminder',
+                'Leave Cancellation Regulation Needed',
+                $message,
+                'leave_request',
+                (string) $approvedLeave->code,
+                [
+                    'leave_request_id' => (int) $approvedLeave->id,
+                    'date' => $date,
+                ],
+            );
+        }
+
         return response()->json([
             'ok' => true,
             'date' => $date,
+            'message' => $message,
+            'requires_leave_cancellation_regulation' => (bool) $message,
         ]);
     }
 
@@ -198,6 +217,34 @@ class AttendanceController extends Controller
         return $closedDates;
     }
 
+    public function recalculateAttendanceDay(int $userId, string $date): void
+    {
+        $punches = DB::table('attendance_punches')
+            ->where('user_id', $userId)
+            ->where('date', $date)
+            ->orderBy('punched_at')
+            ->get();
+
+        if ($punches->isEmpty()) {
+            return;
+        }
+
+        $summary = $this->buildAttendanceDaySummary($punches, $this->shiftForUser($userId));
+        $day = DB::table('attendance_days')->where('user_id', $userId)->where('date', $date)->first();
+
+        DB::table('attendance_days')->updateOrInsert(
+            ['user_id' => $userId, 'date' => $date],
+            [
+                'status' => $summary['status'],
+                'late' => $summary['late'],
+                'overtime_minutes' => $summary['overtime_minutes'],
+                'worked_minutes' => $summary['worked_minutes'],
+                'created_at' => $day?->created_at ?? now(),
+                'updated_at' => now(),
+            ]
+        );
+    }
+
     private function shiftEndAt(string $date, ?object $shift = null)
     {
         $shiftStart = $shift?->start_time ? now()->parse($date.' '.(string) $shift->start_time) : now()->parse($date.' 11:00:00');
@@ -254,15 +301,38 @@ class AttendanceController extends Controller
 
     private function shiftForUser(int $userId): ?object
     {
+        $fallback = $this->defaultAttendanceShiftPolicy();
+
         return DB::table('employee_profiles')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->where('employee_profiles.user_id', $userId)
             ->select([
-                'shifts.start_time',
-                'shifts.end_time',
-                'shifts.grace_minutes',
+                DB::raw("COALESCE(shifts.start_time, '{$fallback['start_time']}') as start_time"),
+                DB::raw("COALESCE(shifts.end_time, '{$fallback['end_time']}') as end_time"),
+                DB::raw('COALESCE(shifts.grace_minutes, '.$fallback['grace_minutes'].') as grace_minutes'),
             ])
             ->first();
+    }
+
+    private function defaultAttendanceShiftPolicy(): array
+    {
+        $policies = DB::table('module_policies')
+            ->where('module', 'attendance')
+            ->whereIn('key', ['shift_start', 'shift_end', 'grace_minutes'])
+            ->pluck('value', 'key');
+
+        $shiftStart = preg_match('/^\d{2}:\d{2}$/', (string) ($policies['shift_start'] ?? ''))
+            ? (string) $policies['shift_start']
+            : '11:00';
+        $shiftEnd = preg_match('/^\d{2}:\d{2}$/', (string) ($policies['shift_end'] ?? ''))
+            ? (string) $policies['shift_end']
+            : '20:00';
+
+        return [
+            'start_time' => $shiftStart.':00',
+            'end_time' => $shiftEnd.':00',
+            'grace_minutes' => max(0, (int) ($policies['grace_minutes'] ?? 10)),
+        ];
     }
 
     private function buildAttendanceDaySummary($punches, ?object $shift = null): array
@@ -390,8 +460,15 @@ class AttendanceController extends Controller
 
         $leaveRequests = DB::table('leave_requests')
             ->join('leave_types', 'leave_types.id', '=', 'leave_requests.leave_type_id')
+            ->where('leave_requests.status', 'Approved')
             ->where('leave_requests.from_date', '<=', $date)
             ->where('leave_requests.to_date', '>=', $date)
+            ->whereNotExists(function ($query) use ($date) {
+                $query->selectRaw('1')
+                    ->from('leave_request_cancellations')
+                    ->whereColumn('leave_request_cancellations.leave_request_id', 'leave_requests.id')
+                    ->where('leave_request_cancellations.date', $date);
+            })
             ->select([
                 'leave_requests.user_id',
                 'leave_requests.code',
@@ -629,6 +706,12 @@ class AttendanceController extends Controller
             ->where('leave_requests.status', 'Approved')
             ->where('leave_requests.from_date', '<=', $today)
             ->where('leave_requests.to_date', '>=', $today)
+            ->whereNotExists(function ($query) use ($today) {
+                $query->selectRaw('1')
+                    ->from('leave_request_cancellations')
+                    ->whereColumn('leave_request_cancellations.leave_request_id', 'leave_requests.id')
+                    ->where('leave_request_cancellations.date', $today);
+            })
             ->select([
                 'users.employee_code as empId',
                 'leave_types.name as leave_type',
@@ -638,8 +721,9 @@ class AttendanceController extends Controller
 
         $liveAttendance = $employees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday) {
             $empId = $employee['id'];
+            $todayPunches = $attendancePunches->get($empId, collect());
 
-            if ($leaveByEmployeeToday->has($empId)) {
+            if ($leaveByEmployeeToday->has($empId) && $todayPunches->isEmpty()) {
                 $leave = $leaveByEmployeeToday->get($empId)?->first();
 
                 return [
@@ -653,7 +737,6 @@ class AttendanceController extends Controller
                 ];
             }
 
-            $todayPunches = $attendancePunches->get($empId, collect());
             $clockInPunch = $todayPunches->firstWhere('type', 'clock_in');
             $lastClockInPunch = $todayPunches->where('type', 'clock_in')->last();
             $clockOutPunch = $todayPunches->where('type', 'clock_out')->last();
@@ -780,6 +863,7 @@ class AttendanceController extends Controller
 
             if ($validated['status'] === 'Approved') {
                 $this->applyApprovedRegulation($regulation);
+                $this->applyLeaveCancellationForApprovedRegulation($regulation);
             }
 
             $decision = strtolower($validated['status']);
@@ -873,6 +957,130 @@ class AttendanceController extends Controller
                 'updated_at' => now(),
             ]
         );
+    }
+
+    private function applyLeaveCancellationForApprovedRegulation(object $regulation): void
+    {
+        $date = (string) $regulation->date;
+        $userId = (int) $regulation->user_id;
+
+        $hasWorkedOnLeaveDate = DB::table('attendance_punches')
+            ->where('user_id', $userId)
+            ->where('date', $date)
+            ->where('type', 'clock_in')
+            ->exists();
+
+        if (!$hasWorkedOnLeaveDate) {
+            return;
+        }
+
+        $leave = DB::table('leave_requests')
+            ->where('user_id', $userId)
+            ->where('status', 'Approved')
+            ->where('from_date', '<=', $date)
+            ->where('to_date', '>=', $date)
+            ->whereNotExists(function ($query) use ($date) {
+                $query->selectRaw('1')
+                    ->from('leave_request_cancellations')
+                    ->whereColumn('leave_request_cancellations.leave_request_id', 'leave_requests.id')
+                    ->where('leave_request_cancellations.date', $date);
+            })
+            ->orderByDesc('created_at')
+            ->lockForUpdate()
+            ->first();
+
+        if (!$leave) {
+            return;
+        }
+
+        $cancelledDays = $this->leaveDaysForDate($leave, $date);
+
+        DB::table('leave_request_cancellations')->insert([
+            'leave_request_id' => $leave->id,
+            'user_id' => $userId,
+            'date' => $date,
+            'days' => $cancelledDays,
+            'regulation_request_id' => $regulation->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $remainingRequestDays = max(0, (float) $leave->days - $cancelledDays);
+        DB::table('leave_requests')
+            ->where('id', $leave->id)
+            ->update([
+                'days' => $remainingRequestDays,
+                'status' => $remainingRequestDays <= 0 ? 'Cancelled' : 'Approved',
+                'updated_at' => now(),
+            ]);
+
+        $this->adjustLeaveBalanceUsage(
+            $userId,
+            (int) date('Y', strtotime((string) $leave->from_date)),
+            (int) $leave->leave_type_id,
+            -1 * $cancelledDays
+        );
+
+        $punches = DB::table('attendance_punches')
+            ->where('user_id', $userId)
+            ->where('date', $date)
+            ->orderBy('punched_at')
+            ->get();
+
+        if ($punches->isNotEmpty()) {
+            $summary = $this->buildAttendanceDaySummary($punches, $this->shiftForUser($userId));
+            DB::table('attendance_days')->updateOrInsert(
+                ['user_id' => $userId, 'date' => $date],
+                [
+                    'status' => $summary['status'],
+                    'late' => $summary['late'],
+                    'overtime_minutes' => $summary['overtime_minutes'],
+                    'worked_minutes' => $summary['worked_minutes'],
+                    'updated_at' => now(),
+                    'created_at' => now(),
+                ]
+            );
+        }
+    }
+
+    private function leaveDaysForDate(object $leave, string $date): float
+    {
+        $breakdown = json_decode((string) ($leave->daily_breakdown ?? '[]'), true);
+        if (is_array($breakdown)) {
+            foreach ($breakdown as $entry) {
+                if (($entry['date'] ?? null) === $date) {
+                    return max(0.5, (float) ($entry['days'] ?? (($entry['duration_type'] ?? 'full_day') === 'half_day' ? 0.5 : 1.0)));
+                }
+            }
+        }
+
+        return (string) ($leave->duration_type ?? 'full_day') === 'half_day' ? 0.5 : 1.0;
+    }
+
+    private function adjustLeaveBalanceUsage(int $userId, int $year, int $leaveTypeId, float $deltaUsed): void
+    {
+        $balance = DB::table('leave_balances')
+            ->where('user_id', $userId)
+            ->where('year', $year)
+            ->where('leave_type_id', $leaveTypeId)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$balance) {
+            return;
+        }
+
+        $allocated = (float) $balance->allocated_days;
+        $used = max(0, (float) $balance->used_days + $deltaUsed);
+        $remaining = max(0, $allocated - $used);
+
+        DB::table('leave_balances')
+            ->where('id', $balance->id)
+            ->update([
+                'used_days' => $used,
+                'remaining_days' => $remaining,
+                'updated_at' => now(),
+            ]);
     }
 
     private function extractRegulationPunchAt(string $requestedValue, string $label): ?string

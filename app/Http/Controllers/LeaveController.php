@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class LeaveController extends Controller
 {
-    private function summarizeAttendancePunches($punches): array
+    private function summarizeAttendancePunches($punches, ?object $shift = null): array
     {
         $clockIn = $punches->firstWhere('type', 'clock_in');
 
@@ -71,13 +71,18 @@ class LeaveController extends Controller
         }
 
         $workedMinutes = max(0, $workedMinutes);
-        $late = $clockInAt->copy()->greaterThan($clockInAt->copy()->setTime(11, 10));
+        $shiftStart = $shift?->start_time ? now()->parse((string) $shift->start_time) : now()->parse($this->defaultAttendanceShiftPolicy()['start_time']);
+        $shiftEnd = $shift?->end_time ? now()->parse((string) $shift->end_time) : now()->parse($this->defaultAttendanceShiftPolicy()['end_time']);
+        $graceMinutes = (int) ($shift?->grace_minutes ?? $this->defaultAttendanceShiftPolicy()['grace_minutes']);
+        $lateCutoff = $clockInAt->copy()->setTime((int) $shiftStart->format('H'), (int) $shiftStart->format('i'));
+        $lateCutoff->addMinutes($graceMinutes);
+        $late = $clockInAt->greaterThan($lateCutoff);
         $overtimeMinutes = 0;
 
         if ($lastClockOutAt) {
-            $shiftEnd = $lastClockOutAt->copy()->setTime(20, 0);
-            if ($lastClockOutAt->greaterThan($shiftEnd)) {
-                $overtimeMinutes = $shiftEnd->diffInMinutes($lastClockOutAt);
+            $scheduledShiftEnd = $lastClockOutAt->copy()->setTime((int) $shiftEnd->format('H'), (int) $shiftEnd->format('i'));
+            if ($lastClockOutAt->greaterThan($scheduledShiftEnd)) {
+                $overtimeMinutes = $scheduledShiftEnd->diffInMinutes($lastClockOutAt);
             }
         }
 
@@ -86,6 +91,42 @@ class LeaveController extends Controller
             'late' => $late,
             'worked_minutes' => $workedMinutes,
             'overtime_minutes' => $overtimeMinutes,
+        ];
+    }
+
+    private function shiftForUser(int $userId): ?object
+    {
+        $fallback = $this->defaultAttendanceShiftPolicy();
+
+        return DB::table('employee_profiles')
+            ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
+            ->where('employee_profiles.user_id', $userId)
+            ->select([
+                DB::raw("COALESCE(shifts.start_time, '{$fallback['start_time']}') as start_time"),
+                DB::raw("COALESCE(shifts.end_time, '{$fallback['end_time']}') as end_time"),
+                DB::raw('COALESCE(shifts.grace_minutes, '.$fallback['grace_minutes'].') as grace_minutes'),
+            ])
+            ->first();
+    }
+
+    private function defaultAttendanceShiftPolicy(): array
+    {
+        $policies = DB::table('module_policies')
+            ->where('module', 'attendance')
+            ->whereIn('key', ['shift_start', 'shift_end', 'grace_minutes'])
+            ->pluck('value', 'key');
+
+        $shiftStart = preg_match('/^\d{2}:\d{2}$/', (string) ($policies['shift_start'] ?? ''))
+            ? (string) $policies['shift_start']
+            : '11:00';
+        $shiftEnd = preg_match('/^\d{2}:\d{2}$/', (string) ($policies['shift_end'] ?? ''))
+            ? (string) $policies['shift_end']
+            : '20:00';
+
+        return [
+            'start_time' => $shiftStart.':00',
+            'end_time' => $shiftEnd.':00',
+            'grace_minutes' => max(0, (int) ($policies['grace_minutes'] ?? 10)),
         ];
     }
 
@@ -238,6 +279,15 @@ class LeaveController extends Controller
             $existingPlan = $this->expandStoredLeavePlan($existing);
 
             foreach ($existingPlan as $existingDay) {
+                $isCancelled = DB::table('leave_request_cancellations')
+                    ->where('leave_request_id', $existing->id)
+                    ->where('date', $existingDay['date'])
+                    ->exists();
+
+                if ($isCancelled) {
+                    continue;
+                }
+
                 $requestedDay = $requestedMap->get($existingDay['date']);
                 if (!$requestedDay) {
                     continue;
@@ -341,7 +391,7 @@ class LeaveController extends Controller
                         ->where('date', $date)
                         ->delete();
                 } else {
-                    $summary = $this->summarizeAttendancePunches($punches);
+                    $summary = $this->summarizeAttendancePunches($punches, $this->shiftForUser($userId));
 
                     DB::table('attendance_days')->updateOrInsert(
                         ['user_id' => $userId, 'date' => $date],

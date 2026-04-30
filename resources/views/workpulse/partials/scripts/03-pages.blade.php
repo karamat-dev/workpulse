@@ -600,11 +600,11 @@ async function punchIn(){
   const empId = DB.currentUser.id;
 
   try{
-    await wpPunch('clock_in');
+    const punchResponse = await wpPunch('clock_in');
     await wpReload();
     savePunchState(empId);
     refreshPunchUI();
-    showToast('Clocked in at '+actionLabel,'green');
+    showToast(punchResponse?.message || ('Clocked in at '+actionLabel),'green');
   }catch(e){
     restorePunchState(snapshot);
     await wpReload();
@@ -1366,6 +1366,7 @@ function submitAddEmployee(){
   const shiftId=document.getElementById('ne-shift').value;
   const cnicDocument=document.getElementById('ne-cnic-document').files?.[0];
   if(!fn||!ln||!email||!personalEmail||!dept||!desg||!doj||!cnicDocument){ showToast('Please fill all required fields, including official email, personal email, and CNIC document','red'); return; }
+  if(email.trim().toLowerCase() === personalEmail.trim().toLowerCase()){ showToast('Official email and personal email must be different','red'); return; }
   const formData = new FormData();
   formData.append('fname', fn);
   formData.append('lname', ln);
@@ -2879,8 +2880,8 @@ function pageRoles(){
       <div style="font-size:12px;color:var(--muted);">Create a new elevated account or jump into an existing profile to update access.</div>
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
-      <button class="btn btn-primary" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='manager'; }, 0);">+ New Super-Admin</button>
-      <button class="btn" onclick="window.openModal('addEmpModal'); setTimeout(() => { const roleEl = document.getElementById('ne-role'); if(roleEl) roleEl.value='admin'; }, 0);">+ New Admin</button>
+      ${DB.currentRole === 'manager' ? `<button class="btn btn-primary" onclick="window.openAddEmployeeWithRole && window.openAddEmployeeWithRole('manager')">+ New Super-Admin</button>` : ''}
+      <button class="btn" onclick="window.openAddEmployeeWithRole && window.openAddEmployeeWithRole('admin')">+ New Admin</button>
       <button class="btn btn-ghost" onclick="window.showPage('employees')">Open Employee Directory</button>
     </div>
   </div>
@@ -2914,7 +2915,7 @@ function pageRoles(){
           <div style="font-size:12px;color:var(--muted);padding-top:10px;">Create Super-Admins here, then assign reporting managers in employee profiles.</div>
         </div>
         <div style="display:flex;align-items:end;justify-content:flex-end;">
-          <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
+          <button class="btn btn-sm btn-primary" onclick="window.openAddEmployeeWithRole && window.openAddEmployeeWithRole('employee')">+ Add Employee</button>
         </div>
       </div>
     </div>

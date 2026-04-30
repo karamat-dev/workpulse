@@ -106,7 +106,7 @@ class LeaveAttendanceSyncTest extends TestCase
         ]);
     }
 
-    public function test_user_cannot_punch_on_an_approved_leave_day(): void
+    public function test_user_can_clock_in_on_an_approved_leave_day_and_gets_cancellation_reminder(): void
     {
         $admin = User::factory()->create([
             'role' => 'admin',
@@ -151,15 +151,243 @@ class LeaveAttendanceSyncTest extends TestCase
                 'punched_at' => $date.' 09:00:00',
             ]);
 
-        $punch->assertStatus(422)->assertJson([
-            'ok' => false,
-            'message' => 'You cannot punch attendance on an approved leave day.',
+        $punch->assertOk()->assertJson([
+            'ok' => true,
+            'requires_leave_cancellation_regulation' => true,
         ]);
 
-        $this->assertDatabaseMissing('attendance_punches', [
+        $this->assertDatabaseHas('attendance_punches', [
             'user_id' => $admin->id,
             'date' => $date,
             'type' => 'clock_in',
+        ]);
+
+        $this->assertDatabaseHas('employee_notifications', [
+            'user_id' => $admin->id,
+            'type' => 'leave_cancellation_regulation_reminder',
+            'reference_code' => $code,
+        ]);
+    }
+
+    public function test_late_status_uses_configured_grace_period_when_employee_has_no_shift(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-204',
+        ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
+
+        DB::table('module_policies')->updateOrInsert(
+            ['module' => 'attendance', 'key' => 'shift_start'],
+            ['value' => '11:00', 'value_type' => 'string', 'created_at' => now(), 'updated_at' => now()]
+        );
+        DB::table('module_policies')->updateOrInsert(
+            ['module' => 'attendance', 'key' => 'grace_minutes'],
+            ['value' => '60', 'value_type' => 'int', 'created_at' => now(), 'updated_at' => now()]
+        );
+
+        $onTimeDate = now()->addDays(2)->toDateString();
+        $lateDate = now()->addDays(3)->toDateString();
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/attendance/punch', [
+                'type' => 'clock_in',
+                'punched_at' => $onTimeDate.' 11:50:00',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $onTimeDate,
+            'status' => 'Present',
+            'late' => 0,
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/attendance/punch', [
+                'type' => 'clock_in',
+                'punched_at' => $lateDate.' 12:01:00',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $lateDate,
+            'status' => 'Present',
+            'late' => 1,
+        ]);
+    }
+
+    public function test_updating_shift_grace_recalculates_today_late_status(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-205',
+        ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
+
+        $shiftId = DB::table('shifts')->insertGetId([
+            'code' => 'day',
+            'name' => 'Day Shift',
+            'start_time' => '11:00:00',
+            'end_time' => '20:00:00',
+            'grace_minutes' => 10,
+            'break_minutes' => 60,
+            'working_days' => 'Mon-Fri',
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')
+            ->where('user_id', $admin->id)
+            ->update(['shift_id' => $shiftId]);
+
+        $today = now()->toDateString();
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/attendance/punch', [
+                'type' => 'clock_in',
+                'punched_at' => $today.' 11:50:00',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $today,
+            'late' => 1,
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/shifts/{$shiftId}", [
+                'name' => 'Day Shift',
+                'code' => 'day',
+                'start' => '11:00',
+                'end' => '20:00',
+                'grace' => 60,
+                'break' => 60,
+                'workingDays' => 'Mon-Fri',
+                'active' => true,
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $today,
+            'late' => 0,
+        ]);
+    }
+
+    public function test_approved_regulation_for_worked_leave_day_refunds_leave_balance(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-203',
+        ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
+
+        $leaveTypeId = DB::table('leave_types')->insertGetId([
+            'name' => 'Annual Leave',
+            'code' => 'annual',
+            'paid' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('leave_policies')->insert([
+            'year' => (int) now()->format('Y'),
+            'leave_type_id' => $leaveTypeId,
+            'quota_days' => 5,
+            'carry_forward_days' => 0,
+            'pro_rata' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $date = now()->addDay()->toDateString();
+
+        $apply = $this
+            ->actingAs($admin)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'annual',
+                'from_date' => $date,
+                'to_date' => $date,
+                'days' => 1,
+            ]);
+
+        $apply->assertCreated()->assertJson(['ok' => true]);
+        $leaveCode = $apply->json('code');
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/leave/{$leaveCode}/review", [
+                'step' => 'hr',
+                'status' => 'Approved',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('leave_balances', [
+            'user_id' => $admin->id,
+            'leave_type_id' => $leaveTypeId,
+            'used_days' => 1,
+            'remaining_days' => 4,
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/attendance/punch', [
+                'type' => 'clock_in',
+                'punched_at' => $date.' 09:00:00',
+            ])
+            ->assertOk();
+
+        $regulation = $this
+            ->actingAs($admin)
+            ->postJson('/api/attendance/regulations', [
+                'date' => $date,
+                'type' => 'Leave Cancellation',
+                'original_value' => 'Approved leave '.$leaveCode,
+                'requested_value' => 'In '.$date.' 09:00',
+                'reason' => 'Worked on approved leave day; please cancel the leave for this date.',
+            ]);
+
+        $regulation->assertCreated()->assertJson(['ok' => true]);
+        $regulationCode = $regulation->json('code');
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/attendance/regulations/{$regulationCode}/review", [
+                'status' => 'Approved',
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseHas('leave_balances', [
+            'user_id' => $admin->id,
+            'leave_type_id' => $leaveTypeId,
+            'used_days' => 0,
+            'remaining_days' => 5,
+        ]);
+
+        $this->assertDatabaseHas('leave_requests', [
+            'code' => $leaveCode,
+            'status' => 'Cancelled',
+            'days' => 0,
+        ]);
+
+        $this->assertDatabaseHas('leave_request_cancellations', [
+            'user_id' => $admin->id,
+            'date' => $date,
+            'days' => 1,
+        ]);
+
+        $this->assertDatabaseHas('attendance_days', [
+            'user_id' => $admin->id,
+            'date' => $date,
+            'status' => 'Present',
         ]);
     }
 

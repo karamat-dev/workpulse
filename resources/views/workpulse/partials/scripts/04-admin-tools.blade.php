@@ -184,6 +184,30 @@ if(!window.__managerPickerOutsideClickBound){
   window.__managerPickerOutsideClickBound = true;
 }
 
+function syncEmployeeRoleOptions(selectId, selected='employee'){
+  const select = document.getElementById(selectId);
+  if(!select) return;
+
+  const roles = [
+    {value:'employee', label:'Employee'},
+    ...(DB.currentRole === 'manager' ? [{value:'manager', label:'Super-Admin'}] : []),
+    {value:'admin', label:'Admin'},
+  ];
+  const safeSelected = roles.some(role => role.value === selected) ? selected : 'employee';
+  select.innerHTML = roles.map(role => `<option value="${role.value}">${role.label}</option>`).join('');
+  select.value = safeSelected;
+}
+
+function openAddEmployeeWithRole(role='employee'){
+  if(role === 'manager' && DB.currentRole !== 'manager'){
+    showToast('Only a Super-Admin can create Super-Admin accounts','red');
+    return;
+  }
+
+  openModal('addEmpModal');
+  setTimeout(() => syncEmployeeRoleOptions('ne-role', role), 0);
+}
+
 async function openEditEmployee(id){
   const target = (DB.employees || []).find(employee => employee.id === id);
   if(target?.role === 'manager' && DB.currentRole !== 'manager'){
@@ -221,7 +245,7 @@ async function openEditEmployee(id){
     document.getElementById('ee-lwd').value = e.lwd||'';
     document.getElementById('ee-confirmation-date').value = e.confirmationDate||'';
     document.getElementById('ee-type').value = e.type||'Permanent';
-    document.getElementById('ee-role').value = e.role||'employee';
+    syncEmployeeRoleOptions('ee-role', e.role||'employee');
     document.getElementById('ee-work-location').value = e.workLocation||'';
     const managerValue = e.manager==='-' ? '' : (e.manager||'');
     const editManagerSearch = document.getElementById('ee-manager-search');
@@ -372,6 +396,11 @@ async function saveEditEmployee(){
     showToast('Personal email is required','red');
     return;
   }
+  const officialEmail = document.getElementById('ee-email').value.trim();
+  if(officialEmail.toLowerCase() === personalEmail.toLowerCase()){
+    showToast('Official email and personal email must be different','red');
+    return;
+  }
   formData.append('personal_email', personalEmail);
   if(document.getElementById('ee-address').value.trim()) formData.append('address', document.getElementById('ee-address').value.trim());
   formData.append('blood', document.getElementById('ee-blood').value);
@@ -390,7 +419,7 @@ async function saveEditEmployee(){
   if(document.getElementById('ee-work-location').value.trim()) formData.append('work_location', document.getElementById('ee-work-location').value.trim());
   if(document.getElementById('ee-manager').value.trim()) formData.append('manager', document.getElementById('ee-manager').value.trim());
   formData.append('shift_id', document.getElementById('ee-shift').value || '');
-  formData.append('email', document.getElementById('ee-email').value.trim());
+  formData.append('email', officialEmail);
   if(document.getElementById('ee-password').value) formData.append('password', document.getElementById('ee-password').value);
   formData.append('basic', parseInt(document.getElementById('ee-basic').value)||0);
   formData.append('house', parseInt(document.getElementById('ee-house').value)||0);

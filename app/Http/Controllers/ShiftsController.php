@@ -126,6 +126,14 @@ class ShiftsController extends Controller
                 'updated_at' => now(),
             ]);
 
+        $affectedUserIds = DB::table('employee_profiles')
+            ->where('shift_id', $shiftId)
+            ->pluck('user_id');
+
+        foreach ($affectedUserIds as $userId) {
+            app(AttendanceController::class)->recalculateAttendanceDay((int) $userId, now()->toDateString());
+        }
+
         return response()->json(['ok' => true]);
     }
 

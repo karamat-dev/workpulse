@@ -114,6 +114,9 @@ function openModal(id){
   if(id === 'addEmpModal' && typeof syncEmployeeManagerOptions === 'function'){
     syncEmployeeManagerOptions('ne-manager', '');
   }
+  if(id === 'addEmpModal' && typeof syncEmployeeRoleOptions === 'function'){
+    syncEmployeeRoleOptions('ne-role', document.getElementById('ne-role')?.value || 'employee');
+  }
   if(id === 'addEmpModal' && typeof initializeNewEmployeePassword === 'function'){
     initializeNewEmployeePassword();
   }
@@ -1384,7 +1387,9 @@ function getAttendanceRecordForEmployeeDate(employeeId, dateStr){
 function getApprovedLeaveForEmployeeDate(employeeId, dateStr){
   return (Array.isArray(DB.leaves) ? DB.leaves : []).find(leave => {
     const approved = leave?.status === 'Approved' || leave?.hrStatus === 'Approved';
+    const cancelledDates = Array.isArray(leave?.cancelledDates) ? leave.cancelledDates.map(String) : [];
     return approved &&
+      !cancelledDates.includes(String(dateStr)) &&
       String(leave?.empId) === String(employeeId) &&
       String(leave?.from || '') <= String(dateStr) &&
       String(leave?.to || '') >= String(dateStr);

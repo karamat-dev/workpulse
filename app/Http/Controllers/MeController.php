@@ -138,6 +138,21 @@ class MeController extends Controller
             ->first();
 
         if ($row) {
+            $attendancePolicies = DB::table('module_policies')
+                ->where('module', 'attendance')
+                ->whereIn('key', ['shift_start', 'shift_end', 'grace_minutes'])
+                ->pluck('value', 'key');
+            $defaultShiftStart = preg_match('/^\d{2}:\d{2}$/', (string) ($attendancePolicies['shift_start'] ?? ''))
+                ? (string) $attendancePolicies['shift_start']
+                : '11:00';
+            $defaultShiftEnd = preg_match('/^\d{2}:\d{2}$/', (string) ($attendancePolicies['shift_end'] ?? ''))
+                ? (string) $attendancePolicies['shift_end']
+                : '20:00';
+
+            $row->shiftStart = $row->shiftStart ? substr((string) $row->shiftStart, 0, 5) : $defaultShiftStart;
+            $row->shiftEnd = $row->shiftEnd ? substr((string) $row->shiftEnd, 0, 5) : $defaultShiftEnd;
+            $row->shiftGrace = $row->shiftGrace !== null ? (int) $row->shiftGrace : max(0, (int) ($attendancePolicies['grace_minutes'] ?? 10));
+            $row->shiftBreak = $row->shiftBreak !== null ? (int) $row->shiftBreak : 60;
             $row->profilePhotoUrl = $row->profile_photo_path
                 ? url('/api/employees/'.$row->employee_code.'/profile-photo')
                 : null;
