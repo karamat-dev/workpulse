@@ -733,7 +733,7 @@ body{
 .card > *,.stat-card > *{position:relative;z-index:1;}
 .dash-stat-grid .stat-card{min-height:132px;}
 .dash-stat-grid .stat-label{font-size:12px;text-transform:none;letter-spacing:0;}
-.dash-stat-grid .stat-val{font-size:30px;}
+.dash-stat-grid .stat-val{font-size:42px;line-height:.98;}
 .dash-stat-grid .stat-sub{font-size:12px;}
 
 :where(
@@ -2864,6 +2864,30 @@ textarea.fi{line-height:1.55;resize:vertical;min-height:92px;font-weight:500;}
 .dash-pill.soft{background:rgba(128,138,241,.10);color:#6670D8;border-color:rgba(128,138,241,.12);}
 .dash-pill.danger{background:var(--red-bg);color:var(--red);border-color:rgba(228,102,103,.10);}
 .dash-stat-grid .stat-card{min-height:160px;}
+
+@media(min-width:1400px){
+  body{font-size:15px;}
+  .nav-item,
+  .btn,
+  .fi,
+  .search-input,
+  table,
+  .tab{font-size:14px;}
+  .btn-sm,
+  .badge,
+  .stat-label,
+  .stat-sub,
+  .fl,
+  .ucell-info .n,
+  .dash-pill{font-size:12px;}
+  thead th,
+  .table-wrap table .badge{font-size:11px;}
+  .card-title{font-size:19px;}
+  .topbar-title{font-size:30px;}
+  .hero-title{font-size:31px;}
+  .hero-sub,
+  .dash-welcome-copy p{font-size:15px;}
+}
 
 @media(max-width:1600px){
   .dash-welcome-card{flex-direction:column;align-items:flex-start;}

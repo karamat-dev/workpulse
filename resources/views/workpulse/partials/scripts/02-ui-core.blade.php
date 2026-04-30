@@ -1404,6 +1404,15 @@ function escapeHtmlAttr(value){
     .replace(/>/g, '&gt;');
 }
 
+function escapeHtml(value){
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const attendanceIconAssets = {
   present: '/uploads/attendance-icons/present.png',
   late: '/uploads/attendance-icons/half-leave.png',

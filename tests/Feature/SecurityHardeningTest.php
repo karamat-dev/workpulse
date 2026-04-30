@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class SecurityHardeningTest extends TestCase
@@ -150,6 +151,187 @@ class SecurityHardeningTest extends TestCase
             ->get('/api/employees/EMP-100/cnic-document');
 
         $otherResponse->assertForbidden();
+    }
+
+    public function test_null_role_user_bootstrap_does_not_receive_other_department_data(): void
+    {
+        $viewer = User::factory()->create([
+            'role' => '',
+            'employee_code' => 'EMP-500',
+            'name' => 'Scoped Viewer',
+        ]);
+
+        $other = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-501',
+            'name' => 'Other Employee',
+        ]);
+
+        $engId = DB::table('departments')->insertGetId([
+            'name' => 'Engineering',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $salesId = DB::table('departments')->insertGetId([
+            'name' => 'Sales',
+            'color' => '#0D7373',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            [
+                'user_id' => $viewer->id,
+                'department_id' => $engId,
+                'designation' => 'Developer',
+                'date_of_joining' => '2026-01-10',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $other->id,
+                'department_id' => $salesId,
+                'designation' => 'Sales Executive',
+                'date_of_joining' => '2026-01-10',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        DB::table('attendance_days')->insert([
+            'user_id' => $other->id,
+            'date' => now()->toDateString(),
+            'status' => 'Present',
+            'late' => false,
+            'worked_minutes' => 480,
+            'overtime_minutes' => 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($viewer)
+            ->getJson('/api/bootstrap');
+
+        $response->assertOk()->assertJson(['ok' => true]);
+
+        $employeeIds = collect($response->json('employees'))->pluck('id')->all();
+        $attendanceEmployeeIds = collect($response->json('attendance'))->pluck('empId')->all();
+
+        $this->assertContains('EMP-500', $employeeIds);
+        $this->assertNotContains('EMP-501', $employeeIds);
+        $this->assertNotContains('EMP-501', $attendanceEmployeeIds);
+    }
+
+    public function test_hr_employee_record_is_not_globally_visible_to_other_employee(): void
+    {
+        $target = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-310',
+            'name' => 'Target User',
+        ]);
+
+        $viewer = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-311',
+            'name' => 'Viewer User',
+        ]);
+
+        $hrDeptId = DB::table('departments')->insertGetId([
+            'name' => 'HR',
+            'color' => '#0D7373',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $opsDeptId = DB::table('departments')->insertGetId([
+            'name' => 'Operations',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            [
+                'user_id' => $target->id,
+                'department_id' => $hrDeptId,
+                'designation' => 'HR Executive',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'cnic_document_path' => 'employee-documents/hr-private.pdf',
+                'cnic_document_name' => 'hr-private.pdf',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $viewer->id,
+                'department_id' => $opsDeptId,
+                'designation' => 'Coordinator',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'cnic_document_path' => null,
+                'cnic_document_name' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        File::ensureDirectoryExists(storage_path('app/private/employee-documents'));
+        File::put(storage_path('app/private/employee-documents/hr-private.pdf'), 'hr-sensitive-doc');
+
+        $response = $this
+            ->actingAs($viewer)
+            ->get('/api/employees/EMP-310/cnic-document');
+
+        $response->assertForbidden();
+    }
+
+    public function test_registration_assigns_employee_role(): void
+    {
+        $response = $this->post('/register', [
+            'name' => 'New Joiner',
+            'email' => 'new.joiner@example.com',
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ]);
+
+        $response->assertRedirect('/dashboard');
+
+        $user = User::query()->where('email', 'new.joiner@example.com')->first();
+
+        $this->assertNotNull($user);
+        $this->assertSame('employee', $user->role);
+        $this->assertTrue(Hash::check('Password123!', $user->password));
+    }
+
+    public function test_policy_download_rejects_path_traversal(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-700',
+        ]);
+
+        $policyId = DB::table('company_policies')->insertGetId([
+            'title' => 'Unsafe Policy',
+            'file_path' => '../../.env',
+            'file_name' => 'unsafe.txt',
+            'file_size' => 128,
+            'uploaded_by' => $admin->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->get('/api/policies/'.$policyId.'/file');
+
+        $response->assertStatus(400);
     }
 
     public function test_policy_index_exposes_authenticated_download_route_not_public_upload_path(): void

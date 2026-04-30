@@ -127,6 +127,13 @@ class PoliciesController extends Controller
     private function downloadStoredPolicyFile(string $relativePath, string $downloadName)
     {
         $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        abort_if(
+            str_contains($normalizedPath, '../')
+            || str_starts_with($normalizedPath, '..')
+            || preg_match('#(^|/)\.\.(/|$)#', $normalizedPath) === 1,
+            400,
+            'Invalid file path.'
+        );
 
         if (Storage::exists($normalizedPath)) {
             return response()->download(Storage::path($normalizedPath), $downloadName);

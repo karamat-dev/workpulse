@@ -1507,11 +1507,11 @@ function openApproval(leaveId){
   if(!lv) return;
   document.getElementById('approval-details').innerHTML=`
     <div class="card" style="background:var(--surface2);">
-      <div class="irow"><span class="ikey">Employee</span><span class="ival">${lv.empName}</span></div>
-          <div class="irow"><span class="ikey">Team</span><span class="ival">${lv.dept}</span></div>
-      <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${lv.type}</span></div>
+      <div class="irow"><span class="ikey">Employee</span><span class="ival">${escapeHtml(lv.empName)}</span></div>
+          <div class="irow"><span class="ikey">Team</span><span class="ival">${escapeHtml(lv.dept)}</span></div>
+      <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${escapeHtml(lv.type)}</span></div>
       <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} â†’ ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
-      <div class="irow"><span class="ikey">Reason</span><span class="ival">${lv.reason}</span></div>
+      <div class="irow"><span class="ikey">Reason</span><span class="ival">${escapeHtml(lv.reason)}</span></div>
       <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'â€”'}</span></div>
     </div>`;
   openModal('approvalModal');
@@ -2275,7 +2275,7 @@ function pageAttendance(){
     </tr>`).join('');
 
   const regRows = DB.regulations.filter(r=>r.empId===u.id).map(r=>`
-    <tr><td>${formatDate(r.date)}</td><td>${r.type}</td><td>${r.orig}</td><td>${r.req}</td><td>${r.reason}</td><td>${statusBadge(r.status)}</td>
+    <tr><td>${formatDate(r.date)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.orig)}</td><td>${escapeHtml(r.req)}</td><td>${escapeHtml(r.reason)}</td><td>${statusBadge(r.status)}</td>
     <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'â€”'}</td></tr>`).join('');
 
   const logTimeline = ps.sessionLogs.map(l=>`
@@ -2488,7 +2488,7 @@ function pageLeave(){
     <tr>
       <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${l.empName.split(' ').map(x=>x[0]).join('')}</div>
       <div class="ucell-info"><div class="n">${l.empName}</div><div class="s">${l.dept}</div></div></div></td>
-      <td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td><td>${l.reason}</td>
+      <td>${escapeHtml(l.type)}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td><td>${escapeHtml(l.reason)}</td>
       <td>${statusBadge(l.hrStatus)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm bg-green" onclick="openApproval('${l.id}')">Review</button>
@@ -2506,9 +2506,9 @@ function pageLeave(){
       <td><div class="ucell"><div class="av av-28" style="background:var(--accent-bg);color:var(--accent);">${r.empName.split(' ').map(x=>x[0]).join('').slice(0,2) || 'ER'}</div>
       <div class="ucell-info"><div class="n">${r.empName}</div><div class="s">${r.empId} | ${r.dept}</div></div></div></td>
       <td>${formatDate(r.date)}</td>
-      <td>${r.orig || '-'}</td>
-      <td>${r.req || '-'}</td>
-      <td>${r.reason || '-'}</td>
+      <td>${escapeHtml(r.orig || '-')}</td>
+      <td>${escapeHtml(r.req || '-')}</td>
+      <td>${escapeHtml(r.reason || '-')}</td>
       <td>${statusBadge(r.status)}</td>
       <td>${r.status === 'Pending' ? `<div style="display:flex;gap:4px;flex-wrap:wrap;">
         <button class="btn btn-sm bg-green" onclick="window.reviewRegulationRequest('${r.id}','Approved')">Approve</button>
@@ -4671,13 +4671,13 @@ function pageNotifications(employeeView=false){
     return `<div class="notif-card${toneClass}" style="${target ? 'cursor:pointer;' : ''}"${clickAttr}>
       <div class="notif-card-head">
         <div>
-          <div class="notif-card-title">${notification.title || 'Notification'}</div>
+          <div class="notif-card-title">${escapeHtml(notification.title || 'Notification')}</div>
           <div class="notif-card-meta">${formatDateTime(notification.createdAt)}</div>
         </div>
         <span class="badge ${notification.isRead ? 'bg-gray' : 'bg-blue'}">${notification.isRead ? 'Read' : badge}</span>
       </div>
-      <div class="notif-card-body">${message}</div>
-      ${notification.referenceCode ? `<div class="notif-card-ref">Reference: ${notification.referenceCode}</div>` : ''}
+      <div class="notif-card-body">${escapeHtml(message)}</div>
+      ${notification.referenceCode ? `<div class="notif-card-ref">Reference: ${escapeHtml(notification.referenceCode)}</div>` : ''}
     </div>`;
   }).join('');
 
@@ -4692,13 +4692,13 @@ function pageNotifications(employeeView=false){
         <div class="notif-card">
           <div class="notif-card-head">
             <div>
-              <div class="notif-card-title">${notification.title || 'Notification'}</div>
+              <div class="notif-card-title">${escapeHtml(notification.title || 'Notification')}</div>
               <div class="notif-card-meta">Audience: ${formatNotificationAudienceLabel(notification.audience)} • Recipients: ${notification.recipientCount || 0} • ${formatDateTime(notification.updatedAt || notification.createdAt)}</div>
             </div>
-            <span class="badge bg-teal">${notification.referenceCode}</span>
+            <span class="badge bg-teal">${escapeHtml(notification.referenceCode)}</span>
           </div>
-          <div class="notif-card-body">${notification.message || ''}</div>
-          <div class="notif-card-ref">Created by ${notification.authorName || 'Admin'}</div>
+          <div class="notif-card-body">${escapeHtml(notification.message || '')}</div>
+          <div class="notif-card-ref">Created by ${escapeHtml(notification.authorName || 'Admin')}</div>
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
             <button class="btn btn-sm" onclick="window.openNotificationModal('${notification.referenceCode}')">Edit</button>
             <button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteNotification('${notification.referenceCode}')">Delete</button>
@@ -4778,7 +4778,7 @@ function pageEmpProfile(){
 }
 
 function profileValue(value, fallback='-'){
-  return value===undefined || value===null || value==='' ? fallback : value;
+  return escapeHtml(value===undefined || value===null || value==='' ? fallback : value);
 }
 
 function renderAvatarDisplay(person, sizeClass='av av-64', style=''){
@@ -4792,7 +4792,7 @@ function renderAvatarDisplay(person, sizeClass='av av-64', style=''){
 
 function profileInfoRow(label, value, formatter=null){
   const display = formatter ? formatter(value) : profileValue(value);
-  return `<div class="pp-info-row"><div class="label">${label}</div><div class="value">${display}</div></div>`;
+  return `<div class="pp-info-row"><div class="label">${escapeHtml(label)}</div><div class="value">${display}</div></div>`;
 }
 
 function profileMoney(amount){
@@ -4921,7 +4921,7 @@ function renderProfileWorkspace(employee, options={}){
       ${profileInfoRow('Contributions', profileMoney(employee.contribution))}
       ${profileInfoRow('Other Deductions', profileMoney(employee.otherDeductions))}
       ${profileInfoRow('Tax', profileMoney(employee.tax))}
-      ${profileInfoRow('Net Salary', `<span style="color:var(--green);">${profileMoney(net)}</span>`)}
+      ${profileInfoRow('Net Salary', net, amount => `<span style="color:var(--green);">${profileMoney(amount)}</span>`)}
     </div>
   </div>` : '';
 
@@ -4939,8 +4939,8 @@ function renderProfileWorkspace(employee, options={}){
   <div class="hero-panel" style="margin-bottom:16px;">
     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
       <div>
-        <div class="hero-title">${options.heroTitle || `${employee.fname} ${employee.lname}`}</div>
-        <div class="hero-sub">${options.heroSub || 'A richer employee workspace with official records, profile identity, salary overview, reporting view, documents, and history in one place.'}</div>
+        <div class="hero-title">${escapeHtml(options.heroTitle || `${employee.fname} ${employee.lname}`)}</div>
+        <div class="hero-sub">${escapeHtml(options.heroSub || 'A richer employee workspace with official records, profile identity, salary overview, reporting view, documents, and history in one place.')}</div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${options.headerAction || ''}
@@ -4952,7 +4952,7 @@ function renderProfileWorkspace(employee, options={}){
       <div class="pp-cover"></div>
       <div class="pp-summary-body">
         <div class="pp-avatar-stage">${renderAvatarDisplay(employee, 'av av-64', `background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;`)}</div>
-        <div class="pp-name">${employee.id || '-' } : ${employee.fname} ${employee.lname}</div>
+        <div class="pp-name">${escapeHtml(employee.id || '-')} : ${escapeHtml(employee.fname)} ${escapeHtml(employee.lname)}</div>
         <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` â€¢ ${employee.workLocation}` : ''}</div>
         <div class="pp-chipbar">${statusBadge(employee.status || 'Active')}<span class="badge bg-blue">${profileValue(employee.dept)}</span></div>
         <div class="pp-meta-list">

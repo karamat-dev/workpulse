@@ -722,10 +722,6 @@ class EmployeesController extends Controller
             return true;
         }
 
-        if (($record->role ?? null) === 'hr') {
-            return true;
-        }
-
         if (!empty($record->manager_user_id) && (int) $record->manager_user_id === (int) $viewer->id) {
             return true;
         }
@@ -741,6 +737,14 @@ class EmployeesController extends Controller
     private function downloadPrivateFile(string $relativePath, string $downloadName)
     {
         $normalizedPath = ltrim(str_replace('\\', '/', $relativePath), '/');
+        abort_if(
+            str_contains($normalizedPath, '../')
+            || str_starts_with($normalizedPath, '..')
+            || preg_match('#(^|/)\.\.(/|$)#', $normalizedPath) === 1,
+            400,
+            'Invalid file path.'
+        );
+
         if (Storage::exists($normalizedPath)) {
             return response()->download(Storage::path($normalizedPath), $downloadName);
         }

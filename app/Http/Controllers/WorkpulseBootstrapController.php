@@ -290,11 +290,14 @@ class WorkpulseBootstrapController extends Controller
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
-            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->where(function ($query) use ($user) {
+                $query->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+                    ->orWhere('users.id', $user->id);
+            })
             ->select($employeeSelect)
             ->orderBy('users.employee_code');
 
-        if ($user->role === 'employee') {
+        if ($user->canonicalRole() === 'employee') {
             $teamUserIds = DB::table('reporting_lines')->where('manager_user_id', $user->id)->pluck('user_id');
             $currentDepartment = $profile?->dept_name;
 
@@ -386,6 +389,12 @@ class WorkpulseBootstrapController extends Controller
             return $mapped;
         })->values();
 
+        $visibleEmployeeCodes = $employees
+            ->pluck('id')
+            ->filter(fn ($employeeCode) => filled($employeeCode))
+            ->values()
+            ->all();
+
         $departments = DB::table('departments')
             ->leftJoin('users as head', 'head.id', '=', 'departments.head_user_id')
             ->select([
@@ -427,6 +436,7 @@ class WorkpulseBootstrapController extends Controller
         $attendancePunches = DB::table('attendance_punches')
             ->join('users', 'users.id', '=', 'attendance_punches.user_id')
             ->where('attendance_punches.date', '>=', $attendanceStartDate)
+            ->when($visibleEmployeeCodes !== [], fn ($query) => $query->whereIn('users.employee_code', $visibleEmployeeCodes))
             ->select([
                 'users.employee_code as emp_id',
                 'attendance_punches.date',
@@ -440,6 +450,7 @@ class WorkpulseBootstrapController extends Controller
         $attendance = DB::table('attendance_days')
             ->join('users', 'users.id', '=', 'attendance_days.user_id')
             ->where('attendance_days.date', '>=', $attendanceStartDate)
+            ->when($visibleEmployeeCodes !== [], fn ($query) => $query->whereIn('users.employee_code', $visibleEmployeeCodes))
             ->select([
                 'users.employee_code as emp_id',
                 'attendance_days.date',
@@ -477,6 +488,7 @@ class WorkpulseBootstrapController extends Controller
 
         $regulations = DB::table('attendance_regulation_requests')
             ->join('users', 'users.id', '=', 'attendance_regulation_requests.user_id')
+            ->when($visibleEmployeeCodes !== [], fn ($query) => $query->whereIn('users.employee_code', $visibleEmployeeCodes))
             ->select([
                 'attendance_regulation_requests.code as id',
                 'users.employee_code as empId',
@@ -511,6 +523,7 @@ class WorkpulseBootstrapController extends Controller
             })
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
+            ->when($visibleEmployeeCodes !== [], fn ($query) => $query->whereIn('users.employee_code', $visibleEmployeeCodes))
             ->select([
                 'leave_requests.code as id',
                 'users.employee_code as empId',
