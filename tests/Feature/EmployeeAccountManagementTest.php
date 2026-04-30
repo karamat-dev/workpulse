@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class EmployeeAccountManagementTest extends TestCase
@@ -481,7 +483,7 @@ class EmployeeAccountManagementTest extends TestCase
         ]);
     }
 
-    public function test_past_last_working_date_moves_employee_to_ex_employee_status(): void
+    public function test_past_last_working_date_moves_employee_to_offboarding_status(): void
     {
         $pastDate = now()->subDay()->toDateString();
 
@@ -537,7 +539,218 @@ class EmployeeAccountManagementTest extends TestCase
         $this->assertDatabaseHas('employee_profiles', [
             'user_id' => $employee->id,
             'last_working_date' => $pastDate,
+            'status' => 'Offboarding',
+        ]);
+    }
+
+    public function test_removing_last_working_date_moves_employee_to_offboarding_status(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-100',
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-100',
+            'email' => 'employee@example.com',
+            'name' => 'Ali Raza',
+        ]);
+
+        DB::table('departments')->insert([
+            'id' => 1,
+            'name' => 'Operations',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            'user_id' => $employee->id,
+            'department_id' => 1,
+            'designation' => 'Coordinator',
+            'date_of_joining' => '2026-01-10',
+            'last_working_date' => '2026-06-30',
+            'status' => 'Active',
+            'employment_type' => 'Permanent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->patchJson('/api/employees/EMP-100', [
+                'fname' => 'Ali',
+                'lname' => 'Raza',
+                'email' => 'employee@example.com',
+                'personal_email' => 'employee.personal@example.com',
+                'dept' => 'Operations',
+                'desg' => 'Coordinator',
+                'doj' => '2026-01-10',
+                'lwd' => null,
+                'status' => 'Active',
+                'type' => 'Permanent',
+                'role' => 'employee',
+            ]);
+
+        $response->assertOk()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('employee_profiles', [
+            'user_id' => $employee->id,
+            'last_working_date' => null,
+            'status' => 'Offboarding',
+        ]);
+    }
+
+    public function test_offboarding_completion_requires_document_and_moves_employee_to_ex_employee(): void
+    {
+        Storage::fake('local');
+
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-100',
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-100',
+            'email' => 'employee@example.com',
+            'name' => 'Ali Raza',
+        ]);
+
+        DB::table('departments')->insert([
+            'id' => 1,
+            'name' => 'Operations',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            'user_id' => $employee->id,
+            'department_id' => 1,
+            'designation' => 'Coordinator',
+            'date_of_joining' => '2026-01-10',
+            'last_working_date' => now()->addDay()->toDateString(),
+            'status' => 'Offboarding',
+            'employment_type' => 'Permanent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/employees/EMP-100/offboarding-complete')
+            ->assertStatus(422)
+            ->assertJson([
+                'ok' => false,
+                'message' => 'Upload at least one offboarding document before completing offboarding.',
+            ]);
+
+        $upload = $this
+            ->actingAs($admin)
+            ->post('/api/employees/EMP-100/offboarding-documents', [
+                'title' => 'Clearance form',
+                'document' => UploadedFile::fake()->create('clearance.pdf', 12, 'application/pdf'),
+            ]);
+
+        $upload->assertCreated()->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('employee_offboarding_documents', [
+            'user_id' => $employee->id,
+            'title' => 'Clearance form',
+            'file_name' => 'clearance.pdf',
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->postJson('/api/employees/EMP-100/offboarding-complete')
+            ->assertOk()
+            ->assertJson([
+                'ok' => true,
+                'message' => 'Offboarding completed. Employee moved to ex-employee records.',
+            ]);
+
+        $this->assertDatabaseHas('employee_profiles', [
+            'user_id' => $employee->id,
             'status' => 'Inactive',
+        ]);
+    }
+
+    public function test_admin_can_edit_and_delete_offboarding_documents_after_completion(): void
+    {
+        Storage::fake('local');
+
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-100',
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-100',
+            'email' => 'employee@example.com',
+            'name' => 'Ali Raza',
+        ]);
+
+        DB::table('departments')->insert([
+            'id' => 1,
+            'name' => 'Operations',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            'user_id' => $employee->id,
+            'department_id' => 1,
+            'designation' => 'Coordinator',
+            'date_of_joining' => '2026-01-10',
+            'last_working_date' => now()->toDateString(),
+            'status' => 'Inactive',
+            'employment_type' => 'Permanent',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $documentId = DB::table('employee_offboarding_documents')->insertGetId([
+            'user_id' => $employee->id,
+            'uploaded_by' => $admin->id,
+            'title' => 'Initial clearance',
+            'file_path' => 'employee-offboarding-documents/initial.pdf',
+            'file_name' => 'initial.pdf',
+            'mime_type' => 'application/pdf',
+            'file_size' => 10,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Storage::put('employee-offboarding-documents/initial.pdf', 'old-file');
+
+        $this
+            ->actingAs($admin)
+            ->post('/api/employees/EMP-100/offboarding-documents/'.$documentId, [
+                '_method' => 'PATCH',
+                'title' => 'Final clearance',
+                'document' => UploadedFile::fake()->create('final.pdf', 12, 'application/pdf'),
+            ])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertDatabaseHas('employee_offboarding_documents', [
+            'id' => $documentId,
+            'title' => 'Final clearance',
+            'file_name' => 'final.pdf',
+        ]);
+
+        $this
+            ->actingAs($admin)
+            ->deleteJson('/api/employees/EMP-100/offboarding-documents/'.$documentId)
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertDatabaseMissing('employee_offboarding_documents', [
+            'id' => $documentId,
         ]);
     }
 }

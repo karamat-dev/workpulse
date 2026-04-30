@@ -347,6 +347,20 @@
         <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
         <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ee-email"></div>
       </div>
+      <div class="fg" id="ee-offboarding-panel">
+        <label class="fl">Offboarding Documents</label>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2);">
+          <div id="ee-offboarding-documents" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;">
+            <input type="text" class="fi" id="ee-offboarding-doc-title" placeholder="Document title">
+            <input type="file" class="fi" id="ee-offboarding-doc-file">
+            <button type="button" class="btn btn-sm btn-primary" onclick="window.uploadOffboardingDocument()">Upload</button>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+            <button type="button" class="btn btn-sm btn-green" id="ee-offboarding-complete" onclick="window.completeEmployeeOffboarding()">Offboarding Complete</button>
+          </div>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ee-confirmation-date"></div>
         <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ee-work-location"></div>

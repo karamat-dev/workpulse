@@ -254,6 +254,7 @@ class EmployeesController extends Controller
                     'status' => $this->resolveEmploymentStatus(
                         ($validated['type'] ?? '') === 'Probation' ? 'Probation' : 'Active',
                         $validated['lwd'] ?? null,
+                        !empty($validated['lwd']),
                     ),
                     'work_location' => $validated['work_location'] ?? null,
                     'confirmation_date' => $validated['confirmation_date'] ?? null,
@@ -445,6 +446,9 @@ class EmployeesController extends Controller
             DB::table('users')->where('id', $userId)->update($userUpdate);
 
             $profile = DB::table('employee_profiles')->where('user_id', $userId)->first();
+            $lastWorkingDate = $validated['lwd'] ?? null;
+            $lastWorkingDateChanged = array_key_exists('lwd', $validated)
+                && (string) ($profile?->last_working_date ?? '') !== (string) ($lastWorkingDate ?? '');
             $cnicDocumentMeta = null;
             if ($request->hasFile('cnic_document')) {
                 $cnicDocumentMeta = $this->storeEmployeeDocument($request->file('cnic_document'), $updatedEmployeeCode, $userId);
@@ -459,11 +463,12 @@ class EmployeesController extends Controller
                     'designation' => $validated['desg'],
                     'date_of_joining' => $validated['doj'],
                     'probation_end_date' => $validated['dop'] ?? null,
-                    'last_working_date' => $validated['lwd'] ?? null,
+                    'last_working_date' => $lastWorkingDate,
                     'employment_type' => $validated['type'] ?? 'Permanent',
                     'status' => $this->resolveEmploymentStatus(
                         $validated['status'] ?? ($profile?->status ?? 'Active'),
-                        $validated['lwd'] ?? null,
+                        $lastWorkingDate,
+                        $lastWorkingDateChanged,
                     ),
                     'work_location' => $validated['work_location'] ?? null,
                     'confirmation_date' => $validated['confirmation_date'] ?? null,
@@ -610,6 +615,165 @@ class EmployeesController extends Controller
         return $this->downloadPrivateFile((string) $record->profile_photo_path, (string) ($record->profile_photo_name ?: 'profile-photo'));
     }
 
+    public function storeOffboardingDocument(Request $request, string $employeeCode): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'document' => ['required', 'file', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        $file = $request->file('document');
+        $meta = $this->storeOffboardingFile($file, $employeeCode, (int) $record->user_id);
+
+        $documentId = DB::table('employee_offboarding_documents')->insertGetId([
+            'user_id' => $record->user_id,
+            'uploaded_by' => $request->user()->id,
+            'title' => $validated['title'] ?? null,
+            'file_path' => $meta['path'],
+            'file_name' => $meta['name'],
+            'mime_type' => $meta['mime'],
+            'file_size' => $meta['size'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'document' => $this->formatOffboardingDocument(
+                DB::table('employee_offboarding_documents')->where('id', $documentId)->first(),
+                $employeeCode,
+            ),
+        ], 201);
+    }
+
+    public function updateOffboardingDocument(Request $request, string $employeeCode, int $documentId): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'document' => ['nullable', 'file', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        $document = $this->offboardingDocumentForEmployee((int) $record->user_id, $documentId);
+        if (!$document) {
+            return response()->json(['ok' => false, 'message' => 'Document not found.'], 404);
+        }
+
+        $update = [
+            'title' => $validated['title'] ?? null,
+            'updated_at' => now(),
+        ];
+
+        if ($request->hasFile('document')) {
+            $this->deleteStoredFile((string) $document->file_path);
+            $meta = $this->storeOffboardingFile($request->file('document'), $employeeCode, (int) $record->user_id);
+            $update = array_merge($update, [
+                'file_path' => $meta['path'],
+                'file_name' => $meta['name'],
+                'mime_type' => $meta['mime'],
+                'file_size' => $meta['size'],
+                'uploaded_by' => $request->user()->id,
+            ]);
+        }
+
+        DB::table('employee_offboarding_documents')->where('id', $documentId)->update($update);
+
+        return response()->json([
+            'ok' => true,
+            'document' => $this->formatOffboardingDocument(
+                DB::table('employee_offboarding_documents')->where('id', $documentId)->first(),
+                $employeeCode,
+            ),
+        ]);
+    }
+
+    public function deleteOffboardingDocument(Request $request, string $employeeCode, int $documentId): JsonResponse
+    {
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        $document = $this->offboardingDocumentForEmployee((int) $record->user_id, $documentId);
+        if (!$document) {
+            return response()->json(['ok' => false, 'message' => 'Document not found.'], 404);
+        }
+
+        $this->deleteStoredFile((string) $document->file_path);
+        DB::table('employee_offboarding_documents')->where('id', $documentId)->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
+    public function downloadOffboardingDocument(Request $request, string $employeeCode, int $documentId)
+    {
+        $user = $request->user();
+        $record = $this->employeeQuery($user->isSuperAdmin())
+            ->where('users.employee_code', $employeeCode)
+            ->first();
+
+        if (!$record) {
+            abort(404);
+        }
+
+        if (!$this->canViewEmployeeRecord($user, $record)) {
+            abort(403);
+        }
+
+        $document = $this->offboardingDocumentForEmployee((int) $record->user_id, $documentId);
+        abort_unless($document, 404);
+
+        return $this->downloadPrivateFile((string) $document->file_path, (string) $document->file_name);
+    }
+
+    public function completeOffboarding(Request $request, string $employeeCode): JsonResponse
+    {
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        if (($record->status ?? null) !== self::OFFBOARDING_STATUS) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Only employees in offboarding can be completed.',
+            ], 422);
+        }
+
+        $hasDocuments = DB::table('employee_offboarding_documents')
+            ->where('user_id', $record->user_id)
+            ->exists();
+
+        if (!$hasDocuments) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Upload at least one offboarding document before completing offboarding.',
+            ], 422);
+        }
+
+        DB::table('employee_profiles')
+            ->where('user_id', $record->user_id)
+            ->update([
+                'status' => 'Inactive',
+                'last_working_date' => DB::raw("COALESCE(last_working_date, '".now()->toDateString()."')"),
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Offboarding completed. Employee moved to ex-employee records.',
+        ]);
+    }
+
     public function destroy(Request $request, string $employeeCode): JsonResponse
     {
         $userId = DB::table('users')->where('employee_code', $employeeCode)->value('id');
@@ -649,10 +813,14 @@ class EmployeesController extends Controller
         ]);
     }
 
-    private function resolveEmploymentStatus(?string $status, ?string $lastWorkingDate): string
+    private function resolveEmploymentStatus(?string $status, ?string $lastWorkingDate, bool $lastWorkingDateChanged = false): string
     {
         $normalizedStatus = trim((string) ($status ?? '')) ?: 'Active';
         $today = now()->toDateString();
+
+        if ($lastWorkingDateChanged) {
+            return self::OFFBOARDING_STATUS;
+        }
 
         if (in_array($normalizedStatus, self::EX_EMPLOYEE_STATUSES, true)) {
             return $normalizedStatus;
@@ -771,6 +939,9 @@ class EmployeesController extends Controller
             'profilePhotoPath' => $record->profile_photo_path,
             'profilePhotoName' => $record->profile_photo_name,
             'profilePhotoUrl' => $record->profile_photo_path ? url('/api/employees/'.$record->employee_code.'/profile-photo') : null,
+            'offboardingDocuments' => $includeSensitiveProfile
+                ? $this->offboardingDocumentsForEmployee((int) $record->user_id, (string) $record->employee_code)
+                : [],
             'address' => $includeSensitiveProfile ? $record->address : null,
             'maritalStatus' => $includeSensitiveProfile ? $record->marital_status : null,
             'blood' => $includeSensitiveProfile ? $record->blood_group : null,
@@ -820,6 +991,77 @@ class EmployeesController extends Controller
         return [
             'path' => $path,
             'name' => $file->getClientOriginalName(),
+        ];
+    }
+
+    private function storeOffboardingFile($file, string $employeeCode, int $userId): array
+    {
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $filename = sprintf('offboarding-%s-%s.%s', $employeeCode ?: $userId, Str::lower(Str::random(10)), $extension);
+        $path = 'employee-offboarding-documents/'.$filename;
+
+        Storage::putFileAs('employee-offboarding-documents', $file, $filename);
+
+        return [
+            'path' => $path,
+            'name' => $file->getClientOriginalName(),
+            'mime' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+        ];
+    }
+
+    private function employeeForManagedOffboarding(Request $request, string $employeeCode)
+    {
+        $record = $this->employeeQuery($request->user()->isSuperAdmin())
+            ->where('users.employee_code', $employeeCode)
+            ->first();
+
+        if (!$record) {
+            return response()->json(['ok' => false, 'message' => 'Not found'], 404);
+        }
+
+        if ($this->isSuperAdminAccountRole($record->role ?? null) && !$this->isSuperAdminRole($request->user())) {
+            return response()->json(['ok' => false, 'message' => 'Only a Super-Admin can change Super-Admin accounts.'], 403);
+        }
+
+        return $record;
+    }
+
+    private function offboardingDocumentForEmployee(int $userId, int $documentId): ?object
+    {
+        return DB::table('employee_offboarding_documents')
+            ->where('id', $documentId)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    private function offboardingDocumentsForEmployee(int $userId, string $employeeCode): array
+    {
+        return DB::table('employee_offboarding_documents')
+            ->where('user_id', $userId)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($document) => $this->formatOffboardingDocument($document, $employeeCode))
+            ->values()
+            ->all();
+    }
+
+    private function formatOffboardingDocument(?object $document, string $employeeCode): ?array
+    {
+        if (!$document) {
+            return null;
+        }
+
+        return [
+            'id' => $document->id,
+            'title' => $document->title,
+            'fileName' => $document->file_name,
+            'mimeType' => $document->mime_type,
+            'fileSize' => $document->file_size !== null ? (int) $document->file_size : null,
+            'uploadedAt' => $document->created_at,
+            'updatedAt' => $document->updated_at,
+            'url' => url('/api/employees/'.$employeeCode.'/offboarding-documents/'.$document->id),
         ];
     }
 

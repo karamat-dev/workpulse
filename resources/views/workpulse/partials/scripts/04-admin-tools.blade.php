@@ -3,6 +3,7 @@
 let _editEmpId = null;
 let _editTab = 'personal';
 let _editDepartmentName = null;
+let _editEmpRecord = null;
 
 function getManagerDirectoryOptions(excludeEmployeeCode=''){
   return (Array.isArray(DB.employees) ? DB.employees : [])
@@ -220,6 +221,7 @@ async function openEditEmployee(id){
     const data = await wpApi('/api/employees/'+encodeURIComponent(id), {method:'GET'});
     const e = data.employee;
     if(!e) return;
+    _editEmpRecord = e;
   // Personal
     document.getElementById('ee-fname').value = e.fname||'';
     document.getElementById('ee-lname').value = e.lname||'';
@@ -255,6 +257,11 @@ async function openEditEmployee(id){
     document.getElementById('ee-email').value = e.email||'';
     document.getElementById('ee-password').value = '';
     document.getElementById('ee-cnic-document').value = '';
+    const offboardingTitle = document.getElementById('ee-offboarding-doc-title');
+    const offboardingFile = document.getElementById('ee-offboarding-doc-file');
+    if(offboardingTitle) offboardingTitle.value = '';
+    if(offboardingFile) offboardingFile.value = '';
+    renderOffboardingDocuments(e);
   // Salary
     document.getElementById('ee-basic').value = e.basic||0;
     document.getElementById('ee-house').value = e.house||0;
@@ -273,6 +280,124 @@ async function openEditEmployee(id){
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
+}
+
+function renderOffboardingDocuments(employee=null){
+  const e = employee || _editEmpRecord || {};
+  const docs = Array.isArray(e.offboardingDocuments) ? e.offboardingDocuments : [];
+  const list = document.getElementById('ee-offboarding-documents');
+  const completeBtn = document.getElementById('ee-offboarding-complete');
+  if(!list) return;
+
+  if(completeBtn){
+    completeBtn.style.display = String(e.status || '') === 'Offboarding' ? '' : 'none';
+    completeBtn.disabled = !docs.length;
+  }
+
+  list.innerHTML = docs.length ? docs.map(doc => `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:8px;">
+      <div style="min-width:0;">
+        <input type="text" class="fi" id="offboarding-doc-title-${doc.id}" value="${escapeHtmlAttr(doc.title || '')}" placeholder="Document title" style="margin-bottom:6px;">
+        <div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(doc.fileName || 'Uploaded document')}</div>
+        <input type="file" class="fi" id="offboarding-doc-file-${doc.id}" style="margin-top:6px;">
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+        <a class="btn btn-sm" href="${doc.url}" target="_blank" rel="noopener">Open</a>
+        <button type="button" class="btn btn-sm btn-primary" onclick="window.saveOffboardingDocument('${doc.id}')">Save</button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="window.deleteOffboardingDocument('${doc.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('') : `<div style="font-size:12px;color:var(--muted);">No offboarding documents uploaded yet.</div>`;
+}
+
+async function refreshEditedEmployee(){
+  if(!_editEmpId) return null;
+  const data = await wpApi('/api/employees/'+encodeURIComponent(_editEmpId), {method:'GET'});
+  _editEmpRecord = data.employee || _editEmpRecord;
+  renderOffboardingDocuments(_editEmpRecord);
+  return _editEmpRecord;
+}
+
+async function uploadOffboardingDocument(){
+  if(!_editEmpId) return;
+  const fileInput = document.getElementById('ee-offboarding-doc-file');
+  const titleInput = document.getElementById('ee-offboarding-doc-title');
+  const file = fileInput?.files?.[0];
+  if(!file){
+    showToast('Choose an offboarding document first.','red');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('document', file);
+  formData.append('title', titleInput?.value?.trim() || '');
+
+  try{
+    await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-documents', {
+      method:'POST',
+      body: formData
+    });
+    if(fileInput) fileInput.value = '';
+    if(titleInput) titleInput.value = '';
+    await wpReload();
+    await refreshEditedEmployee();
+    showToast('Offboarding document uploaded.','green');
+  }catch(e){
+    showToast(e?.message || 'Unable to upload offboarding document.','red');
+  }
+}
+
+async function saveOffboardingDocument(documentId){
+  if(!_editEmpId || !documentId) return;
+  const titleInput = document.getElementById('offboarding-doc-title-'+documentId);
+  const fileInput = document.getElementById('offboarding-doc-file-'+documentId);
+  const formData = new FormData();
+  formData.append('title', titleInput?.value?.trim() || '');
+  if(fileInput?.files?.[0]) formData.append('document', fileInput.files[0]);
+  formData.append('_method', 'PATCH');
+
+  try{
+    await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-documents/'+encodeURIComponent(documentId), {
+      method:'POST',
+      body: formData
+    });
+    await wpReload();
+    await refreshEditedEmployee();
+    showToast('Offboarding document updated.','green');
+  }catch(e){
+    showToast(e?.message || 'Unable to update offboarding document.','red');
+  }
+}
+
+function deleteOffboardingDocument(documentId){
+  if(!_editEmpId || !documentId) return;
+  showConfirm('Delete Offboarding Document', 'This will remove the selected offboarding document from the employee record.', '!', async function(){
+    try{
+      await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-documents/'+encodeURIComponent(documentId), {method:'DELETE'});
+      await wpReload();
+      await refreshEditedEmployee();
+      showToast('Offboarding document deleted.','green');
+    }catch(e){
+      showToast(e?.message || 'Unable to delete offboarding document.','red');
+    }
+  });
+}
+
+function completeEmployeeOffboarding(){
+  if(!_editEmpId) return;
+  showConfirm('Complete Offboarding', 'This will end the offboarding process and move the employee to ex-employee records.', '!', async function(){
+    try{
+      await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-complete', {method:'POST'});
+      await wpReload();
+      closeModal('editEmpModal');
+      showToast('Offboarding completed. Employee moved to Ex-employee.','green');
+      const title = document.getElementById('page-title').textContent;
+      if(title==='Employees') showPage('employees');
+      else if(title==='Employee Profile') showPage('emp-profile-detail');
+    }catch(e){
+      showToast(e?.message || 'Unable to complete offboarding.','red');
+    }
+  });
 }
 
 function switchEditTab(tab){
@@ -412,7 +537,7 @@ async function saveEditEmployee(){
   formData.append('desg', document.getElementById('ee-desg').value.trim());
   formData.append('doj', document.getElementById('ee-doj').value);
   if(document.getElementById('ee-dop').value) formData.append('dop', document.getElementById('ee-dop').value);
-  if(document.getElementById('ee-lwd').value) formData.append('lwd', document.getElementById('ee-lwd').value);
+  formData.append('lwd', document.getElementById('ee-lwd').value || '');
   if(document.getElementById('ee-confirmation-date').value) formData.append('confirmation_date', document.getElementById('ee-confirmation-date').value);
   formData.append('type', document.getElementById('ee-type').value);
   formData.append('role', document.getElementById('ee-role').value);

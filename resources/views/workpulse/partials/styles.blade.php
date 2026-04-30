@@ -2668,6 +2668,13 @@ textarea.fi{line-height:1.55;resize:vertical;min-height:92px;font-weight:500;}
 .pp-info-row .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.35px;font-weight:700;}
 .pp-info-row .value{font-size:13px;font-weight:600;color:var(--text);min-width:0;overflow-wrap:anywhere;word-break:normal;}
 .pp-info-row .value .badge{display:inline-flex;align-items:center;white-space:nowrap;max-width:100%;}
+.confidential-value{display:inline-block;max-width:100%;filter:blur(5px);transition:filter .16s ease, text-shadow .16s ease;cursor:default;}
+.confidential-value:hover,.confidential-value:focus,.confidential-value:focus-visible{filter:blur(0);outline:none;}
+.confidential-value:focus-visible{box-shadow:0 0 0 3px rgba(36,71,208,.14);border-radius:4px;}
+.card:has(.card-title .badge.bg-red) .ival{display:inline-block;filter:blur(5px);transition:filter .16s ease;}
+.card:has(.card-title .badge.bg-red) .ival:hover,.card:has(.card-title .badge.bg-red) .ival:focus-within{filter:blur(0);}
+#edit-tab-salary .fi,#edit-tab-salary #ee-gross-display,#edit-tab-salary #ee-net-display{filter:blur(5px);transition:filter .16s ease;}
+#edit-tab-salary .fi:hover,#edit-tab-salary .fi:focus,#edit-tab-salary #ee-gross-display:hover,#edit-tab-salary #ee-net-display:hover{filter:blur(0);}
 .pp-reporting-empty{min-height:82px;display:flex;align-items:center;justify-content:center;text-align:center;border:1px dashed var(--border);border-radius:14px;background:var(--surface2);font-size:12px;color:var(--muted);}
 .pp-tab-shell{background:linear-gradient(180deg,#FFFFFF 0%, #F7FAFF 100%);border:1px solid rgba(220,228,242,.94);border-radius:15px;padding:20px;box-shadow:var(--shadow-sm);}
 .pp-tab-shell .tabs{display:flex;flex-wrap:wrap;gap:10px;border-bottom:none;margin-bottom:16px;}

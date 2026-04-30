@@ -324,7 +324,37 @@ class WorkpulseBootstrapController extends Controller
             });
         }
 
-        $employees = $employeesQuery->get()->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace) {
+        $employeeRows = $employeesQuery->get();
+        $offboardingDocumentsByUser = collect();
+
+        if ($user->isSuperAdmin() && $employeeRows->isNotEmpty()) {
+            $employeeCodesByUser = $employeeRows
+                ->pluck('employee_code', 'user_id')
+                ->map(fn ($employeeCode) => (string) $employeeCode);
+
+            $offboardingDocumentsByUser = DB::table('employee_offboarding_documents')
+                ->whereIn('user_id', $employeeRows->pluck('user_id')->filter()->values())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('user_id')
+                ->map(function ($documents, $userId) use ($employeeCodesByUser) {
+                    $employeeCode = $employeeCodesByUser->get($userId);
+
+                    return $documents->map(fn ($document) => [
+                        'id' => $document->id,
+                        'title' => $document->title,
+                        'fileName' => $document->file_name,
+                        'mimeType' => $document->mime_type,
+                        'fileSize' => $document->file_size !== null ? (int) $document->file_size : null,
+                        'uploadedAt' => $document->created_at,
+                        'updatedAt' => $document->updated_at,
+                        'url' => url('/api/employees/'.$employeeCode.'/offboarding-documents/'.$document->id),
+                    ])->values()->all();
+                });
+        }
+
+        $employees = $employeeRows->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace, $offboardingDocumentsByUser) {
             $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
             $fn = $parts[0] ?? $employee->name;
             $ln = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
@@ -365,6 +395,9 @@ class WorkpulseBootstrapController extends Controller
                 'profilePhotoUrl' => $employee->profile_photo_path
                     ? url('/api/employees/'.$employee->employee_code.'/profile-photo')
                     : null,
+                'offboardingDocuments' => $user->isSuperAdmin()
+                    ? ($offboardingDocumentsByUser->get($employee->user_id) ?? [])
+                    : [],
                 'avatar' => $av,
                 'avatarColor' => $color,
                 'status' => $employee->status ?? 'Active',

@@ -2646,11 +2646,11 @@ function pageEmployees(){
   const getEmployeeLifecycleStage = (employee) => {
     const status = String(employee?.status || '').toLowerCase();
     const lastWorkingDate = String(employee?.lwd || '');
+    if(status === 'offboarding') return 'offboarding';
     if(status === 'inactive' || status === 'resigned') return 'ex';
     if(lastWorkingDate){
       return lastWorkingDate < today ? 'ex' : 'offboarding';
     }
-    if(status === 'offboarding') return 'offboarding';
     return 'current';
   };
   const currentEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='current');
@@ -2677,6 +2677,7 @@ function pageEmployees(){
       <td>${statusBadge(e.status)}</td>
       <td><div style="display:flex;gap:4px;">
         <button class="btn btn-sm" onclick="viewEmpProfile('${e.id}')">Open</button>
+        ${canModifyEmployee(e) ? `<button class="btn btn-sm btn-ghost" onclick="window.openEditEmployee('${e.id}')">Edit</button>` : ''}
         ${allowRemove && canModifyEmployee(e) ? `<button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>` : ''}
       </div></td>
     </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">${emptyLabel}</td></tr>`;
@@ -3002,18 +3003,18 @@ function pageEmpProfileDetail(){
     {id:'salary',label:'Salary & Bank',content:`
       <div class="g2">
         <div class="card"><div class="card-hdr"><div class="card-title">Salary <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
-          <div class="irow"><span class="ikey">Basic Salary</span><span class="ival">PKR ${(e.basic||0).toLocaleString()}</span></div>
-          <div class="irow"><span class="ikey">House Allowance</span><span class="ival">PKR ${(e.house||0).toLocaleString()}</span></div>
-          <div class="irow"><span class="ikey">Transport</span><span class="ival">PKR ${(e.transport||0).toLocaleString()}</span></div>
-          <div class="irow"><span class="ikey">Gross Salary</span><span class="ival" style="font-weight:700;">PKR ${gross.toLocaleString()}</span></div>
-          <div class="irow"><span class="ikey">Tax Deduction</span><span class="ival">PKR ${(e.tax||0).toLocaleString()}</span></div>
-          <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);font-weight:700;">PKR ${net.toLocaleString()}</span></div>
+          <div class="irow"><span class="ikey">Basic Salary</span><span class="ival">${confidentialValue(`PKR ${(e.basic||0).toLocaleString()}`)}</span></div>
+          <div class="irow"><span class="ikey">House Allowance</span><span class="ival">${confidentialValue(`PKR ${(e.house||0).toLocaleString()}`)}</span></div>
+          <div class="irow"><span class="ikey">Transport</span><span class="ival">${confidentialValue(`PKR ${(e.transport||0).toLocaleString()}`)}</span></div>
+          <div class="irow"><span class="ikey">Gross Salary</span><span class="ival" style="font-weight:700;">${confidentialValue(`PKR ${gross.toLocaleString()}`)}</span></div>
+          <div class="irow"><span class="ikey">Tax Deduction</span><span class="ival">${confidentialValue(`PKR ${(e.tax||0).toLocaleString()}`)}</span></div>
+          <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);font-weight:700;">${confidentialValue(`PKR ${net.toLocaleString()}`)}</span></div>
         </div>
         <div class="card"><div class="card-hdr"><div class="card-title">Bank Details <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
           <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'â€”'}</span></div>
           <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'â€”'}</span></div>
           <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">Payment Method</span><span class="ival">Bank Transfer</span></div>
+          <div class="irow"><span class="ikey">Payment Method</span><span class="ival">${confidentialValue('Bank Transfer')}</span></div>
         </div>
       </div>`},
     {id:'docs',label:'Documents',content:`
@@ -4800,6 +4801,10 @@ function profileMoney(amount){
   return `PKR ${Number(amount||0).toLocaleString()}`;
 }
 
+function confidentialValue(value){
+  return `<span class="confidential-value" tabindex="0">${value}</span>`;
+}
+
 function profileLeaveCardsForEmployee(employee){
   const employeeLeaves = (DB.leaves||[]).filter(l => l.empId===employee.id);
   const liveBalances = employee.id===DB.currentUser?.id ? getLeaveBalancesList() : [];
@@ -4868,6 +4873,13 @@ function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='
   const cnicDocument = employee.cnicDocumentUrl
     ? `<div class="pp-doc-actions"><a class="btn btn-sm btn-primary" href="${employee.cnicDocumentUrl}" target="_blank" rel="noopener">${selfLabel}</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${employee.id}')">Delete Document</button>` : ''}</div>`
     : `<div class="pp-mini-empty">No profile document has been uploaded yet.</div>`;
+  const offboardingDocuments = Array.isArray(employee.offboardingDocuments) ? employee.offboardingDocuments : [];
+  const offboardingRows = offboardingDocuments.length
+    ? offboardingDocuments.map(doc => `<div class="pp-doc-actions" style="justify-content:space-between;">
+        <div><strong>${escapeHtml(doc.title || doc.fileName || 'Offboarding document')}</strong><div class="meta">${escapeHtml(doc.fileName || '')}</div></div>
+        <a class="btn btn-sm" href="${doc.url}" target="_blank" rel="noopener">Open</a>
+      </div>`).join('')
+    : `<div class="pp-mini-empty">No offboarding documents have been uploaded yet.</div>`;
 
   return `<div class="pp-doc-grid">
     <div class="pp-doc-card">
@@ -4883,6 +4895,12 @@ function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='
         ${profileInfoRow('Passport No', employee.passportNo)}
         ${profileInfoRow('Personal Email', employee.personalEmail || employee.email)}
       </div>
+    </div>
+    <div class="pp-doc-card">
+      <div class="panel-title">Offboarding Documents</div>
+      <div class="meta">Exit documents and clearance records</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">${offboardingRows}</div>
+      ${canManageEmployeeDocs ? `<div style="margin-top:10px;"><button class="btn btn-sm btn-primary" onclick="window.openEditEmployee('${employee.id}')">Manage Documents</button></div>` : ''}
     </div>
   </div>`;
 }
@@ -4915,24 +4933,24 @@ function renderProfileWorkspace(employee, options={}){
   const salaryCard = canSeeSalary ? `<div class="pp-main-card">
     <div class="pp-card-title"><h3>Salary</h3><span class="badge bg-red">${isSelf ? 'Personal' : 'Confidential'}</span></div>
     <div class="pp-info-grid">
-      ${profileInfoRow('Pay Period', employee.payPeriod)}
-      ${profileInfoRow('Salary Start Date', employee.salaryStartDate, formatDate)}
-      ${profileInfoRow('Base Salary', profileMoney(employee.basic))}
-      ${profileInfoRow('Allowances', profileMoney(Number(employee.house||0) + Number(employee.transport||0)))}
-      ${profileInfoRow('Contributions', profileMoney(employee.contribution))}
-      ${profileInfoRow('Other Deductions', profileMoney(employee.otherDeductions))}
-      ${profileInfoRow('Tax', profileMoney(employee.tax))}
-      ${profileInfoRow('Net Salary', net, amount => `<span style="color:var(--green);">${profileMoney(amount)}</span>`)}
+      ${profileInfoRow('Pay Period', employee.payPeriod, value => confidentialValue(profileValue(value)))}
+      ${profileInfoRow('Salary Start Date', employee.salaryStartDate, value => confidentialValue(formatDate(value)))}
+      ${profileInfoRow('Base Salary', employee.basic, value => confidentialValue(profileMoney(value)))}
+      ${profileInfoRow('Allowances', Number(employee.house||0) + Number(employee.transport||0), value => confidentialValue(profileMoney(value)))}
+      ${profileInfoRow('Contributions', employee.contribution, value => confidentialValue(profileMoney(value)))}
+      ${profileInfoRow('Other Deductions', employee.otherDeductions, value => confidentialValue(profileMoney(value)))}
+      ${profileInfoRow('Tax', employee.tax, value => confidentialValue(profileMoney(value)))}
+      ${profileInfoRow('Net Salary', net, amount => confidentialValue(`<span style="color:var(--green);">${profileMoney(amount)}</span>`))}
     </div>
   </div>` : '';
 
   const methodCard = canSeeSalary ? `<div class="pp-main-card">
     <div class="pp-card-title"><h3>Method</h3><span class="badge bg-blue">Bank</span></div>
     <div class="pp-info-grid">
-      ${profileInfoRow('Bank Name', employee.bank)}
-      ${profileInfoRow('Account No', employee.acct)}
-      ${profileInfoRow('IBAN', employee.iban)}
-      ${profileInfoRow('Gross Salary', profileMoney(gross))}
+      ${profileInfoRow('Bank Name', employee.bank, value => confidentialValue(profileValue(value)))}
+      ${profileInfoRow('Account No', employee.acct, value => confidentialValue(profileValue(value)))}
+      ${profileInfoRow('IBAN', employee.iban, value => confidentialValue(profileValue(value)))}
+      ${profileInfoRow('Gross Salary', gross, value => confidentialValue(profileMoney(value)))}
     </div>
   </div>` : '';
 

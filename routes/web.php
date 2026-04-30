@@ -57,6 +57,11 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');
+            Route::post('/{employeeCode}/offboarding-documents', [EmployeesController::class, 'storeOffboardingDocument'])->middleware('perm:employees.manage');
+            Route::get('/{employeeCode}/offboarding-documents/{documentId}', [EmployeesController::class, 'downloadOffboardingDocument']);
+            Route::patch('/{employeeCode}/offboarding-documents/{documentId}', [EmployeesController::class, 'updateOffboardingDocument'])->middleware('perm:employees.manage');
+            Route::delete('/{employeeCode}/offboarding-documents/{documentId}', [EmployeesController::class, 'deleteOffboardingDocument'])->middleware('perm:employees.manage');
+            Route::post('/{employeeCode}/offboarding-complete', [EmployeesController::class, 'completeOffboarding'])->middleware('perm:employees.manage');
             Route::get('/{employeeCode}', [EmployeesController::class, 'show'])->middleware('perm:employees.view');
             Route::get('/{employeeCode}/cnic-document', [EmployeesController::class, 'downloadCnicDocument']);
             Route::get('/{employeeCode}/profile-photo', [EmployeesController::class, 'downloadProfilePhoto']);
