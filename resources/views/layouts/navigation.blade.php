@@ -16,8 +16,8 @@
                         {{ __('Dashboard') }}
                     </x-nav-link>
 
-                    <x-nav-link :href="route('workpulse')" :active="request()->routeIs('workpulse')">
-                        {{ __('WorkPulse') }}
+                    <x-nav-link :href="route('musharp')" :active="request()->routeIs('musharp') || request()->routeIs('workpulse')">
+                        {{ __('muSharp') }}
                     </x-nav-link>
                 </div>
             </div>

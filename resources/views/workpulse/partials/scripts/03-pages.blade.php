@@ -1048,6 +1048,59 @@ async function submitRegulation(){
 }
 
 window.__workpulseAnnouncementEditId = '';
+window.__workpulseVoteResults = null;
+window.__workpulseVoteDetailAnnouncementId = '';
+window.__workpulseVoteResultsAnnouncementId = '';
+window.__workpulseVoteResultsFilter = 'all';
+
+function getAnnouncementNumericId(announcementId){
+  return String(announcementId || '').replace('AN-','');
+}
+
+function getAnnouncementById(announcementId){
+  return (Array.isArray(DB.announcements) ? DB.announcements : []).find(a => String(a.id) === String(announcementId)) || null;
+}
+
+function toggleAnnouncementVoteFields(){
+  const enabled = !!document.getElementById('ann-has-vote')?.checked;
+  const wrap = document.getElementById('ann-vote-fields');
+  if(wrap) wrap.style.display = enabled ? 'block' : 'none';
+  if(enabled && !document.querySelectorAll('#ann-vote-options .ann-vote-option-row').length){
+    addAnnouncementVoteOption('', '');
+    addAnnouncementVoteOption('', '');
+  }
+}
+
+function addAnnouncementVoteOption(label='', optionId=''){
+  const wrap = document.getElementById('ann-vote-options');
+  if(!wrap) return;
+  const row = document.createElement('div');
+  row.className = 'ann-vote-option-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;';
+  row.dataset.optionId = optionId ? String(optionId) : '';
+  row.innerHTML = `<input type="text" class="fi ann-vote-option-label" value="${escapeHtmlAttr(label)}" placeholder="Choice option" style="flex:1;"><button type="button" class="btn btn-sm" onclick="window.removeAnnouncementVoteOption(this)">Remove</button>`;
+  wrap.appendChild(row);
+}
+
+function removeAnnouncementVoteOption(button){
+  const row = button?.closest('.ann-vote-option-row');
+  if(row) row.remove();
+}
+
+function getAnnouncementVotePayload(){
+  const hasVote = !!document.getElementById('ann-has-vote')?.checked;
+  const options = Array.from(document.querySelectorAll('#ann-vote-options .ann-vote-option-row')).map(row => ({
+    id: row.dataset.optionId || null,
+    label: row.querySelector('.ann-vote-option-label')?.value?.trim() || '',
+  })).filter(option => option.label);
+
+  return {
+    has_vote: hasVote,
+    vote_question: hasVote ? (document.getElementById('ann-vote-question')?.value || '') : '',
+    vote_options: hasVote ? options : [],
+    show_results_to_employees_after_close: hasVote && !!document.getElementById('ann-vote-show-results')?.checked,
+  };
+}
 
 function resetAnnouncementForm(){
   window.__workpulseAnnouncementEditId = '';
@@ -1055,10 +1108,16 @@ function resetAnnouncementForm(){
   document.getElementById('ann-cat').value='General';
   document.getElementById('ann-msg').value='';
   document.getElementById('ann-aud').value='all';
+  document.getElementById('ann-has-vote').checked=false;
+  document.getElementById('ann-vote-question').value='';
+  document.getElementById('ann-vote-show-results').checked=false;
+  const voteOptionsWrap = document.getElementById('ann-vote-options');
+  if(voteOptionsWrap) voteOptionsWrap.innerHTML = '';
   document.getElementById('announcement-modal-title').textContent='Post Announcement';
   document.getElementById('announcement-submit-btn').textContent='Publish';
   Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => { option.selected = false; });
   toggleAnnouncementRecipients();
+  toggleAnnouncementVoteFields();
 }
 
 function submitAnnouncement(){
@@ -1068,12 +1127,14 @@ function submitAnnouncement(){
   const audience=document.getElementById('ann-aud').value;
   const msg=document.getElementById('ann-msg').value;
   const recipientCodes = Array.from(document.getElementById('ann-targets')?.selectedOptions || []).map(option => option.value);
+  const votePayload = getAnnouncementVotePayload();
   if(!title||!msg){ showToast('Title and message required','red'); return; }
   if(audience==='specific' && !recipientCodes.length){ showToast('Select at least one employee','red'); return; }
+  if(votePayload.has_vote && (!votePayload.vote_question || votePayload.vote_options.length < 2)){ showToast('Voting question and at least two choices required','red'); return; }
   const path = announcementId ? `/api/announcements/${announcementId}` : '/api/announcements';
   const method = announcementId ? 'PATCH' : 'POST';
   const successMessage = announcementId ? 'Announcement updated!' : 'Announcement published!';
-  wpApi(path, {method, body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes})})
+  wpApi(path, {method, body: JSON.stringify({title,category:cat,audience:audience||'all',message:msg,recipient_employee_codes:recipientCodes,...votePayload})})
     .then(()=>wpReload())
     .then(()=>{
       resetAnnouncementForm();
@@ -1097,6 +1158,12 @@ function openAnnouncementModal(announcementId=''){
       document.getElementById('ann-cat').value = current.cat || 'General';
       document.getElementById('ann-aud').value = current.audienceKey || 'all';
       document.getElementById('ann-msg').value = current.msg || '';
+      document.getElementById('ann-has-vote').checked = !!current.hasVote;
+      document.getElementById('ann-vote-question').value = current.voteQuestion || '';
+      document.getElementById('ann-vote-show-results').checked = !!current.showResultsToEmployeesAfterClose;
+      const voteOptionsWrap = document.getElementById('ann-vote-options');
+      if(voteOptionsWrap) voteOptionsWrap.innerHTML = '';
+      (current.voteOptions || []).forEach(option => addAnnouncementVoteOption(option.label || '', option.id || ''));
       document.getElementById('announcement-modal-title').textContent='Edit Announcement';
       document.getElementById('announcement-submit-btn').textContent='Update';
       Array.from(document.getElementById('ann-targets')?.options || []).forEach(option => {
@@ -1106,6 +1173,7 @@ function openAnnouncementModal(announcementId=''){
   }
 
   toggleAnnouncementRecipients();
+  toggleAnnouncementVoteFields();
   openModal('announcementModal');
 }
 
@@ -1121,6 +1189,63 @@ function deleteAnnouncement(announcementId){
       if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function openAnnouncementVote(announcementId){
+  window.__workpulseVoteDetailAnnouncementId = announcementId;
+  showPage('announcement-vote');
+}
+
+function submitAnnouncementVote(announcementId){
+  const announcement = getAnnouncementById(announcementId);
+  const selected = document.querySelector('input[name="announcement-vote-option"]:checked')?.value;
+  if(!announcement || !selected){ showToast('Select a voting option','red'); return; }
+
+  wpApi(`/api/announcements/${getAnnouncementNumericId(announcementId)}/vote`, {method:'POST', body: JSON.stringify({option_id:selected})})
+    .then(()=>wpReload())
+    .then(()=>{
+      showToast('Vote submitted','green');
+      window.__workpulseVoteDetailAnnouncementId = announcementId;
+      showPage('announcement-vote');
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function closeAnnouncementVote(announcementId){
+  if(!confirm('Close voting for this announcement? Employees will no longer be able to vote.')) return;
+  wpApi(`/api/announcements/${getAnnouncementNumericId(announcementId)}/vote/close`, {method:'PATCH', body: JSON.stringify({})})
+    .then(()=>wpReload())
+    .then(()=>{
+      showToast('Voting closed','green');
+      if(window.__workpulseCurrentPage === 'announcement-vote-results'){
+        openAnnouncementVoteResults(announcementId);
+      } else {
+        showPage('announcements');
+      }
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function openAnnouncementVoteResults(announcementId){
+  window.__workpulseVoteResultsAnnouncementId = announcementId;
+  window.__workpulseVoteResults = null;
+  window.__workpulseVoteResultsFilter = 'all';
+  showPage('announcement-vote-results');
+  wpApi(`/api/announcements/${getAnnouncementNumericId(announcementId)}/vote/results`, {method:'GET', headers:{}})
+    .then(data => {
+      window.__workpulseVoteResults = data.results || null;
+      if(window.__workpulseCurrentPage === 'announcement-vote-results') showPage('announcement-vote-results');
+    })
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function exportAnnouncementVoteResults(announcementId){
+  window.location.href = `/api/announcements/${getAnnouncementNumericId(announcementId)}/vote/results.csv`;
+}
+
+function filterAnnouncementVoteResults(value){
+  window.__workpulseVoteResultsFilter = value || 'all';
+  showPage('announcement-vote-results');
 }
 
 function resetNotificationForm(){
@@ -3685,10 +3810,14 @@ function pageAnnouncements(empView=false){
         <div class="ann-title">${a.title}</div>
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;margin-left:8px;">
           <span class="badge bg-blue">${a.cat}</span>
+          ${a.hasVote ? `<span class="badge ${a.voteStatus === 'closed' ? 'bg-gray' : 'bg-green'}">Vote ${a.voteStatus || 'open'}</span>` : ''}
+          ${empView && a.hasVote ? `<button class="btn btn-sm btn-primary" onclick="window.openAnnouncementVote('${a.id}')">Open Vote</button>` : ''}
+          ${!empView && isSuperAdminRole() && a.hasVote ? `<button class="btn btn-sm" onclick="window.openAnnouncementVoteResults('${a.id}')">Results (${a.voteCount || 0})</button>${a.voteStatus === 'open' ? `<button class="btn btn-sm" onclick="window.closeAnnouncementVote('${a.id}')">Close Vote</button>` : ''}<button class="btn btn-sm" onclick="window.exportAnnouncementVoteResults('${a.id}')">Export CSV</button>` : ''}
           ${!empView && isSuperAdminRole() ? `<button class="btn btn-sm" onclick="window.openAnnouncementModal('${a.id}')">Edit</button><button class="btn btn-sm" style="border-color:#f3c1c1;color:#b42318;background:#fff5f5;" onclick="window.deleteAnnouncement('${a.id}')">Delete</button>` : ''}
         </div>
       </div>
       <div style="font-size:13px;margin-top:6px;">${a.msg}</div>
+      ${a.hasVote ? `<div style="margin-top:10px;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;"><strong>${a.voteQuestion || 'Voting'}</strong><div style="margin-top:6px;color:var(--muted);font-size:12px;">${a.myVoteOptionId ? `Your vote: ${(a.voteOptions || []).find(option => String(option.id) === String(a.myVoteOptionId))?.label || 'Submitted'}` : (a.voteStatus === 'closed' ? 'Voting is closed' : 'Waiting for your vote')}</div>${Array.isArray(a.voteOptions) && a.voteOptions.some(option => option.count !== null) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">${a.voteOptions.map(option => `<span class="badge bg-blue">${option.label}: ${option.count}</span>`).join('')}</div>` : ''}</div>` : ''}
       ${Array.isArray(a.recipients) && a.recipients.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;">${a.recipients.map(recipient => `<span class="badge bg-blue">${recipient.name}</span>`).join('')}</div>` : ''}
       <div class="ann-meta">By ${a.author} (${a.role}) | ${formatDate(a.date)} | Audience: ${a.audience}</div>
     </div>`).join('');
@@ -3696,6 +3825,86 @@ function pageAnnouncements(empView=false){
   return `
   ${!empView?`<div style="display:flex;justify-content:flex-end;margin-bottom:14px;"><button class="btn btn-sm btn-primary" onclick="window.openAnnouncementModal()">+ New Announcement</button></div>`:''}
   ${items||'<div class="card"><p style="color:var(--muted);">No announcements yet.</p></div>'}`;
+}
+
+function pageAnnouncementVote(){
+  const announcement = getAnnouncementById(window.__workpulseVoteDetailAnnouncementId);
+  if(!announcement || !announcement.hasVote){
+    return `<div class="card"><div class="card-title">Vote not found</div><p style="color:var(--muted);margin-top:8px;">This voting announcement is not available.</p><button class="btn btn-sm" style="margin-top:12px;" onclick="window.showPage('emp-announcements')">Back</button></div>`;
+  }
+
+  const closed = announcement.voteStatus === 'closed';
+  const selectedId = String(announcement.myVoteOptionId || '');
+  const options = (announcement.voteOptions || []).map(option => `
+    <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;background:#fff;">
+      <span style="display:flex;align-items:center;gap:8px;">
+        <input type="radio" name="announcement-vote-option" value="${option.id}" ${String(option.id) === selectedId ? 'checked' : ''} ${closed ? 'disabled' : ''}>
+        <span>${option.label}</span>
+      </span>
+      ${option.count !== null ? `<span class="badge bg-blue">${option.count}</span>` : ''}
+    </label>
+  `).join('');
+
+  return `<div class="card">
+    <div class="card-hdr"><div><div class="card-title">${announcement.title}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${closed ? 'Voting closed' : (selectedId ? 'You can update your vote until voting is closed' : 'Choose one option')}</div></div><button class="btn btn-sm" onclick="window.showPage('emp-announcements')">Back</button></div>
+    <div style="margin-top:14px;font-size:15px;font-weight:700;">${announcement.voteQuestion || 'Voting'}</div>
+    <div style="margin-top:12px;">${options}</div>
+    ${closed ? `<div class="alert al-info" style="margin-top:12px;"><span>i</span><div>This vote is closed.</div></div>` : `<button class="btn btn-primary" onclick="window.submitAnnouncementVote('${announcement.id}')">${selectedId ? 'Update Vote' : 'Submit Vote'}</button>`}
+  </div>`;
+}
+
+function pageAnnouncementVoteResults(){
+  const announcementId = window.__workpulseVoteResultsAnnouncementId;
+  const announcement = getAnnouncementById(announcementId);
+  const results = window.__workpulseVoteResults;
+  if(!announcementId || !announcement){
+    return `<div class="card"><div class="card-title">Results not found</div><button class="btn btn-sm" style="margin-top:12px;" onclick="window.showPage('announcements')">Back</button></div>`;
+  }
+  if(!results){
+    return `<div class="card"><div class="card-hdr"><div class="card-title">Vote Results</div><button class="btn btn-sm" onclick="window.showPage('announcements')">Back</button></div><p style="color:var(--muted);margin-top:12px;">Loading results...</p></div>`;
+  }
+
+  const responses = Array.isArray(results.responses) ? results.responses : [];
+  const options = Array.isArray(results.options) ? results.options : [];
+  const noResponseCount = responses.filter(response => !response.optionId).length;
+  const selectedFilter = window.__workpulseVoteResultsFilter || 'all';
+  const filteredResponses = selectedFilter === 'all'
+    ? responses
+    : selectedFilter === 'no-response'
+      ? responses.filter(response => !response.optionId)
+      : responses.filter(response => String(response.optionId) === String(selectedFilter));
+  const selectedOption = options.find(option => String(option.id) === String(selectedFilter));
+  const filterLabel = selectedFilter === 'all'
+    ? 'All responses'
+    : selectedFilter === 'no-response'
+      ? 'No Response'
+      : (selectedOption?.label || 'Selected option');
+  const optionCards = options.map(option => `<div class="stat-card"><div class="stat-label">${option.label}</div><div class="stat-value">${option.count}</div></div>`).join('');
+  const filterOptions = [`<option value="all"${selectedFilter === 'all' ? ' selected' : ''}>All responses (${responses.length})</option>`]
+    .concat(options.map(option => `<option value="${option.id}"${String(selectedFilter) === String(option.id) ? ' selected' : ''}>${option.label} (${option.count})</option>`))
+    .concat([`<option value="no-response"${selectedFilter === 'no-response' ? ' selected' : ''}>No Response (${noResponseCount})</option>`])
+    .join('');
+  const rows = filteredResponses.map(response => `<tr><td>${response.employeeCode || '-'}</td><td>${response.name || '-'}</td><td>${response.department || '-'}</td><td><strong>${response.selectedOption || 'No Response'}</strong></td><td>${response.votedAt ? formatDate(response.votedAt) : '-'}</td></tr>`).join('');
+
+  return `<div class="card">
+    <div class="card-hdr">
+      <div><div class="card-title">${results.title}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${results.question || 'Voting'} | ${results.totalVotes || 0}/${results.totalAudience || 0} responses | ${results.status}</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+        ${announcement.voteStatus === 'open' ? `<button class="btn btn-sm" onclick="window.closeAnnouncementVote('${announcement.id}')">Close Vote</button>` : ''}
+        <button class="btn btn-sm" onclick="window.exportAnnouncementVoteResults('${announcement.id}')">Export CSV</button>
+        <button class="btn btn-sm" onclick="window.showPage('announcements')">Back</button>
+      </div>
+    </div>
+    <div class="stats-grid" style="margin-top:14px;">${optionCards}</div>
+    <div style="display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;">
+      <div>
+        <label class="fl" for="vote-results-filter">Filter by answer</label>
+        <select class="fi" id="vote-results-filter" onchange="window.filterAnnouncementVoteResults(this.value)" style="min-width:240px;">${filterOptions}</select>
+      </div>
+      <div class="badge bg-blue" style="font-size:13px;">${filterLabel}: ${filteredResponses.length}</div>
+    </div>
+    <div class="table-wrap" style="margin-top:14px;"><table><thead><tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Selected Option</th><th>Voted At</th></tr></thead><tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">No employees found for this answer.</td></tr>`}</tbody></table></div>
+  </div>`;
 }
 
 function formatFileSize(bytes){
@@ -3784,7 +3993,7 @@ function pageBackups(){
   const recoveryItems = Array.isArray(DB.recoveryItems) ? DB.recoveryItems : [];
   const latest = backups[0] || null;
   const todayKey = getTodayLocalDate().replace(/-/g, '');
-  const manualBackupsToday = backups.filter(backup => (backup.type || '').toLowerCase() === 'manual' && String(backup.name || backup.id || '').startsWith(`workpulse-${todayKey}-`)).length;
+  const manualBackupsToday = backups.filter(backup => (backup.type || '').toLowerCase() === 'manual' && String(backup.name || backup.id || '').startsWith(`musharp-${todayKey}-`)).length;
   const manualLimitReached = manualBackupsToday >= 5;
   const rows = backups.map((backup, index) => `
     <tr>
@@ -3970,12 +4179,12 @@ window.restoreRecoveryItem = restoreRecoveryItem;
 
 function pageCompany(){
   const company = DB.company || {};
-  const companyName = company.company_name || 'WorkPulse Technologies Pvt. Ltd.';
-  const website = company.website_link || 'www.workpulse.com';
-  const officialEmail = company.official_email || 'info@workpulse.com';
+  const companyName = company.company_name || 'muSharp';
+  const website = company.website_link || 'musharp.com';
+  const officialEmail = company.official_email || 'info@musharp.com';
   const officialContact = company.official_contact_no || '+92 42 35761234';
   const officeLocation = company.office_location || '12 Tech City, Arfa Software Park, Lahore';
-  const linkedin = company.linkedin_page || 'linkedin.com/company/workpulse';
+  const linkedin = company.linkedin_page || 'linkedin.com/company/musharp';
   const latestBackup = Array.isArray(DB.backups) && DB.backups.length ? DB.backups[0] : null;
 
   return `
@@ -3998,7 +4207,7 @@ function pageCompany(){
       <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 01:00 AM</span></div>
       <div class="irow"><span class="ikey">Backup Type</span><span class="ival">Full database + local files</span></div>
       <div class="irow"><span class="ikey">Retention</span><span class="ival">10 days</span></div>
-      <div class="irow"><span class="ikey">Storage</span><span class="ival">Local server storage/app/backups/workpulse</span></div>
+      <div class="irow"><span class="ikey">Storage</span><span class="ival">Local server storage/app/backups/muSharp</span></div>
       <div class="irow"><span class="ikey">RTO</span><span class="ival">&lt; 4 hours</span></div>
       <div class="irow"><span class="ikey">RPO</span><span class="ival">&lt; 24 hours</span></div>
       <div style="margin-top:14px;display:flex;gap:8px;">

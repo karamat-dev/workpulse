@@ -65,7 +65,7 @@ class WorkpulseBackupService
         $reason = $this->normalizeReason($reason);
 
         if (!class_exists(ZipArchive::class)) {
-            throw new RuntimeException('PHP Zip extension is required to create WorkPulse backups.');
+            throw new RuntimeException('PHP Zip extension is required to create muSharp backups.');
         }
 
         $this->ensureBackupDir();
@@ -74,8 +74,8 @@ class WorkpulseBackupService
         }
 
         $timestamp = now()->format('Ymd-His');
-        $name = "workpulse-{$timestamp}-{$reason}.zip";
-        $tempDir = storage_path("app/backups/tmp/workpulse-{$timestamp}-{$reason}");
+        $name = "musharp-{$timestamp}-{$reason}.zip";
+        $tempDir = storage_path("app/backups/tmp/musharp-{$timestamp}-{$reason}");
         $zipPath = $this->backupDir().DIRECTORY_SEPARATOR.$name;
 
         File::ensureDirectoryExists($tempDir);
@@ -85,7 +85,7 @@ class WorkpulseBackupService
             $this->dumpDatabase($databasePath);
 
             File::put($tempDir.DIRECTORY_SEPARATOR.'manifest.json', json_encode([
-                'app' => 'WorkPulse',
+                'app' => 'muSharp',
                 'created_at' => now()->toDateTimeString(),
                 'reason' => $reason,
                 'database' => Config::get('database.default'),
@@ -137,7 +137,7 @@ class WorkpulseBackupService
     public function restore(string $backupName): void
     {
         if (!class_exists(ZipArchive::class)) {
-            throw new RuntimeException('PHP Zip extension is required to restore WorkPulse backups.');
+            throw new RuntimeException('PHP Zip extension is required to restore muSharp backups.');
         }
 
         $backupPath = $this->resolveBackupPath($backupName, true);
@@ -304,7 +304,7 @@ class WorkpulseBackupService
 
     private function pruneSameDayBackups(string $keepPath, string $timestamp, string $reason): void
     {
-        $dayPrefix = 'workpulse-'.substr($timestamp, 0, 8).'-';
+        $dayPrefix = 'musharp-'.substr($timestamp, 0, 8).'-';
         $keepPath = $this->normalizePath($keepPath);
 
         foreach (File::files($this->backupDir()) as $file) {
@@ -434,7 +434,7 @@ class WorkpulseBackupService
 
     private function manualBackupCountToday(): int
     {
-        $dayPrefix = 'workpulse-'.now()->format('Ymd').'-';
+        $dayPrefix = 'musharp-'.now()->format('Ymd').'-';
 
         return collect(File::files($this->backupDir()))
             ->filter(fn ($file) => $file->getExtension() === 'zip')
@@ -452,7 +452,7 @@ class WorkpulseBackupService
 
     private function backupTypeFromName(string $name): string
     {
-        if (preg_match('/workpulse-\d{8}-\d{6}-([a-z0-9_-]+)\.zip$/i', $name, $matches)) {
+        if (preg_match('/(?:workpulse|musharp)-\d{8}-\d{6}-([a-z0-9_-]+)\.zip$/i', $name, $matches)) {
             return strtolower($matches[1]);
         }
 

@@ -726,6 +726,25 @@ class WorkpulseBootstrapController extends Controller
             ->get()
             ->groupBy('announcement_id');
 
+        $announcementVoteOptionsMap = DB::table('announcement_vote_options')
+            ->whereIn('announcement_id', $visibleAnnouncementIds->all())
+            ->orderBy('sort_order')
+            ->get(['id', 'announcement_id', 'label', 'sort_order'])
+            ->groupBy('announcement_id');
+
+        $announcementVoteCountsMap = DB::table('announcement_votes')
+            ->whereIn('announcement_id', $visibleAnnouncementIds->all())
+            ->select('announcement_id', 'option_id', DB::raw('count(*) as total'))
+            ->groupBy('announcement_id', 'option_id')
+            ->get()
+            ->groupBy('announcement_id');
+
+        $currentUserVotes = DB::table('announcement_votes')
+            ->where('user_id', $user->id)
+            ->whereIn('announcement_id', $visibleAnnouncementIds->all())
+            ->get(['announcement_id', 'option_id', 'voted_at'])
+            ->keyBy('announcement_id');
+
         $announcements = DB::table('announcements')
             ->join('users', 'users.id', '=', 'announcements.author_user_id')
             ->select([
@@ -737,18 +756,37 @@ class WorkpulseBootstrapController extends Controller
                 'users.name as author',
                 'users.role',
                 'announcements.published_on as date',
+                'announcements.has_vote',
+                'announcements.vote_question',
+                'announcements.vote_status',
+                'announcements.show_results_to_employees_after_close',
             ])
             ->whereIn('announcements.id', $visibleAnnouncementIds->all())
             ->orderByDesc('announcements.published_on')
             ->limit(50)
             ->get()
-            ->map(function ($announcement) use ($announcementRecipientMap) {
+            ->map(function ($announcement) use ($announcementRecipientMap, $announcementVoteOptionsMap, $announcementVoteCountsMap, $currentUserVotes) {
                 $recipients = $announcementRecipientMap->get($announcement->id, collect())
                     ->map(fn ($recipient) => [
                         'employeeCode' => $recipient->employee_code,
                         'name' => $recipient->name,
                     ])
                     ->values();
+
+                $voteCounts = $announcementVoteCountsMap->get($announcement->id, collect())->keyBy('option_id');
+                $showEmployeeCounts = (bool) $announcement->has_vote
+                    && $announcement->vote_status === 'closed'
+                    && (bool) $announcement->show_results_to_employees_after_close;
+                $voteOptions = $announcementVoteOptionsMap->get($announcement->id, collect())
+                    ->map(fn ($option) => [
+                        'id' => (int) $option->id,
+                        'label' => $option->label,
+                        'count' => $showEmployeeCounts ? (int) ($voteCounts->get($option->id)?->total ?? 0) : null,
+                    ])
+                    ->values();
+
+                $userVote = $currentUserVotes->get($announcement->id);
+                $voteCount = $announcementVoteCountsMap->get($announcement->id, collect())->sum('total');
 
                 $audienceLabel = match (true) {
                     $announcement->audience === 'all' => 'All Employees',
@@ -769,6 +807,14 @@ class WorkpulseBootstrapController extends Controller
                     'role' => $announcement->role,
                     'date' => $announcement->date,
                     'recipients' => $recipients,
+                    'hasVote' => (bool) $announcement->has_vote,
+                    'voteQuestion' => $announcement->vote_question,
+                    'voteStatus' => $announcement->vote_status,
+                    'showResultsToEmployeesAfterClose' => (bool) $announcement->show_results_to_employees_after_close,
+                    'voteOptions' => $voteOptions,
+                    'myVoteOptionId' => $userVote?->option_id ? (int) $userVote->option_id : null,
+                    'myVotedAt' => $userVote?->voted_at,
+                    'voteCount' => (int) $voteCount,
                 ];
             })
             ->values();

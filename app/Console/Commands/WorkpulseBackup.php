@@ -9,7 +9,7 @@ class WorkpulseBackup extends Command
 {
     protected $signature = 'workpulse:backup {--reason=scheduled}';
 
-    protected $description = 'Create a full WorkPulse database and local files backup';
+    protected $description = 'Create a full muSharp database and local files backup';
 
     public function handle(WorkpulseBackupService $backups): int
     {

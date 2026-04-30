@@ -29,10 +29,12 @@ class TransferController extends Controller
         $attendance = DB::table('attendance_days')->orderByDesc('date')->get();
         $leaves = DB::table('leave_requests')->orderByDesc('created_at')->get();
         $announcements = DB::table('announcements')->orderByDesc('published_on')->get();
+        $announcementVoteOptions = DB::table('announcement_vote_options')->orderBy('announcement_id')->orderBy('sort_order')->get();
+        $announcementVotes = DB::table('announcement_votes')->orderBy('announcement_id')->orderBy('user_id')->get();
         $holidays = DB::table('holidays')->orderBy('date')->get();
 
         $payload = [
-            'app' => 'WorkPulse',
+            'app' => 'muSharp',
             'exported_at' => now()->toIso8601String(),
             'company' => $company,
             'employees' => $employees,
@@ -41,12 +43,14 @@ class TransferController extends Controller
             'attendance_days' => $attendance,
             'leave_requests' => $leaves,
             'announcements' => $announcements,
+            'announcement_vote_options' => $announcementVoteOptions,
+            'announcement_votes' => $announcementVotes,
             'holidays' => $holidays,
         ];
 
         return response()->streamDownload(function () use ($payload) {
             echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        }, 'workpulse-transfer-data.json', [
+        }, 'musharp-transfer-data.json', [
             'Content-Type' => 'application/json; charset=UTF-8',
         ]);
     }
@@ -56,14 +60,14 @@ class TransferController extends Controller
         $this->ensureAdmin($request);
 
         $payload = [
-            'app' => 'WorkPulse',
+            'app' => 'muSharp',
             'exported_at' => now()->toIso8601String(),
             'employees' => $this->employeeExportRows(true),
         ];
 
         return response()->streamDownload(function () use ($payload) {
             echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        }, 'workpulse-employee-profiles.json', [
+        }, 'musharp-employee-profiles.json', [
             'Content-Type' => 'application/json; charset=UTF-8',
         ]);
     }
@@ -223,14 +227,14 @@ class TransferController extends Controller
         $this->ensureAdmin($request);
 
         $payload = [
-            'app' => 'WorkPulse',
+            'app' => 'muSharp',
             'exported_at' => now()->toIso8601String(),
             'company' => $this->companyExportRow(),
         ];
 
         return response()->streamDownload(function () use ($payload) {
             echo json_encode($payload, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-        }, 'workpulse-company-details.json', [
+        }, 'musharp-company-details.json', [
             'Content-Type' => 'application/json; charset=UTF-8',
         ]);
     }

@@ -24,7 +24,7 @@ class ManagerDeletionAlertMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'WorkPulse deletion alert: '.$this->label,
+            subject: 'muSharp deletion alert: '.$this->label,
         );
     }
 

@@ -28,6 +28,9 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
+Route::get('/musharp', WorkpulseAppController::class)
+    ->name('musharp');
+
 Route::get('/workpulse', WorkpulseAppController::class)
     ->name('workpulse');
 
@@ -71,6 +74,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/announcements', [AnnouncementsController::class, 'store'])->middleware('perm:announcements.manage');
         Route::patch('/announcements/{announcementId}', [AnnouncementsController::class, 'update'])->middleware('perm:announcements.manage');
         Route::delete('/announcements/{announcementId}', [AnnouncementsController::class, 'destroy'])->middleware('perm:announcements.manage');
+        Route::post('/announcements/{announcementId}/vote', [AnnouncementsController::class, 'vote']);
+        Route::patch('/announcements/{announcementId}/vote/close', [AnnouncementsController::class, 'closeVote'])->middleware('perm:announcements.manage');
+        Route::get('/announcements/{announcementId}/vote/results', [AnnouncementsController::class, 'voteResults'])->middleware('perm:announcements.manage');
+        Route::get('/announcements/{announcementId}/vote/results.csv', [AnnouncementsController::class, 'voteResultsCsv'])->middleware('perm:announcements.manage');
         Route::post('/holidays', [HolidaysController::class, 'store'])->middleware('perm:leave.manage');
         Route::delete('/holidays/{date}', [HolidaysController::class, 'destroy'])->middleware('perm:leave.manage');
 

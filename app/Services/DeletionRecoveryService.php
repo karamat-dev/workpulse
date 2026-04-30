@@ -152,6 +152,23 @@ class DeletionRecoveryService
                 $this->cleanRow($recipient)
             );
         }
+
+        foreach (($payload['voteOptions'] ?? []) as $option) {
+            DB::table('announcement_vote_options')->updateOrInsert(
+                ['id' => $option['id']],
+                $this->cleanRow($option)
+            );
+        }
+
+        foreach (($payload['votes'] ?? []) as $vote) {
+            DB::table('announcement_votes')->updateOrInsert(
+                [
+                    'announcement_id' => $vote['announcement_id'],
+                    'user_id' => $vote['user_id'],
+                ],
+                $this->cleanRow($vote)
+            );
+        }
     }
 
     private function restoreNotification(array $payload): void

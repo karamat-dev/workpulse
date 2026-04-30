@@ -23,7 +23,7 @@ class NewEmployeeCredentialsMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your WorkPulse login details',
+            subject: 'Your muSharp login details',
         );
     }
 

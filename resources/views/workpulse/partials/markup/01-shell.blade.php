@@ -4,12 +4,9 @@
     <div class="login-panel">
       <div class="login-brand-row">
         <div class="login-logo-mark">
-          <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
+          <img src="{{ asset('uploads/logo/logo.png') }}" alt="muSharp Logo">
         </div>
-        <div>
-          <div class="login-logo">Work<span>Pulse</span></div>
-          <div class="login-brand-copy">Build stronger HR operations</div>
-        </div>
+
       </div>
       <div class="login-copy-block">
         <h1 class="login-headline">Modernize your HR operations</h1>
@@ -18,7 +15,7 @@
       <div class="login-form-card">
         <div class="lf-group">
           <label class="lf-label">Email Address <span class="req-star">*</span></label>
-          <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@workpulse.com">
+          <input type="email" class="lf-input" id="l-email" placeholder="Enter your email" value="admin@musharp.com">
         </div>
         <div class="lf-group">
           <label class="lf-label">Password <span class="req-star">*</span></label>
@@ -27,7 +24,7 @@
         <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
         <div class="lf-err" id="forgot-msg" style="display:none;"></div>
         <div class="login-form-meta">
-          <span>Use your official WorkPulse account credentials</span>
+          <span>Use your official muSharp account credentials</span>
           <button type="button" onclick="window.sendForgotPassword && window.sendForgotPassword()" style="border:0;background:transparent;color:var(--accent);font:inherit;font-weight:700;cursor:pointer;padding:0;">Forgot password?</button>
         </div>
         <button class="lf-btn" onclick="window.doLogin()">Sign In</button>
@@ -65,10 +62,10 @@
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 4h12M2 8h12M2 12h12"></path></svg>
       </button>
       <div class="sb-brand-mark">
-        <img src="{{ asset('uploads/logo/logo.png') }}" alt="WorkPulse Logo">
+        <img src="{{ asset('uploads/logo/logo.png') }}" alt="muSharp Logo">
       </div>
       <div class="sb-brand-copy">
-        <h1>WorkPulse</h1>
+        <h1>muSharp</h1>
         <p>People operations workspace</p>
       </div>
     </div>
@@ -93,7 +90,7 @@
             <div class="av av-32 topbar-user-avatar" id="tb-avatar" style="background:var(--accent);color:#fff;">AK</div>
             <div class="topbar-user-copy">
               <strong id="tb-name">Ahmed Karim</strong>
-              <span id="tb-email">hello@workpulse.com</span>
+              <span id="tb-email">hello@musharp.com</span>
             </div>
             <svg class="topbar-user-caret" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6l4 4 4-4"></path></svg>
           </button>
@@ -102,7 +99,7 @@
               <div class="av av-40 topbar-user-dropdown-avatar" id="tb-dropdown-avatar" style="background:var(--accent);color:#fff;">AK</div>
               <div class="topbar-user-dropdown-copy">
                 <strong id="tb-name-menu">Ahmed Karim</strong>
-                <span id="tb-email-menu">hello@workpulse.com</span>
+                <span id="tb-email-menu">hello@musharp.com</span>
               </div>
             </div>
             <button class="topbar-user-dropdown-item" type="button" onclick="window.toggleTopbarUserMenu && window.toggleTopbarUserMenu(false); window.openAccountSettings && window.openAccountSettings()">
@@ -131,7 +128,7 @@
           </button>
         </div>
         <div class="sb-footer-meta">
-          <p>WorkPulse v1.1</p>
+          <p>muSharp v1.1</p>
         </div>
       </div>
     </aside>

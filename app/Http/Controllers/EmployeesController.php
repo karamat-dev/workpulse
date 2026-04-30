@@ -235,7 +235,7 @@ class EmployeesController extends Controller
                 employeeName: $name,
                 email: $email,
                 password: $password,
-                loginUrl: url('/workpulse'),
+                loginUrl: url('/musharp'),
             ));
         } catch (\Throwable $e) {
             report($e);

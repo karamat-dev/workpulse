@@ -116,6 +116,26 @@
     </div>
     <div class="fg" id="ann-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ann-targets" multiple size="6"></select></div>
     <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
+    <div class="fg">
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--text);">
+        <input type="checkbox" id="ann-has-vote" onchange="window.toggleAnnouncementVoteFields()">
+        Enable voting
+      </label>
+    </div>
+    <div id="ann-vote-fields" style="display:none;">
+      <div class="fg"><label class="fl">Voting Question <span class="req-star">*</span></label><input type="text" class="fi" id="ann-vote-question" placeholder="Who wants to attend this dinner?"></div>
+      <div class="fg">
+        <label class="fl">Choices <span class="req-star">*</span></label>
+        <div id="ann-vote-options" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <button type="button" class="btn btn-sm" style="margin-top:8px;" onclick="window.addAnnouncementVoteOption()">+ Add Choice</button>
+      </div>
+      <div class="fg">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);">
+          <input type="checkbox" id="ann-vote-show-results">
+          Show option counts to employees after voting is closed
+        </label>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('announcementModal')">Cancel</button>
       <button class="btn btn-primary" id="announcement-submit-btn" onclick="window.submitAnnouncement()">Publish</button>

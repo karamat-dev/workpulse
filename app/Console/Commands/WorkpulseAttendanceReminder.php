@@ -108,7 +108,7 @@ class WorkpulseAttendanceReminder extends Command
                         employeeName: (string) $employee->name,
                         shiftStart: $shiftStartTime,
                         date: $today,
-                        loginUrl: url('/workpulse'),
+                        loginUrl: url('/musharp'),
                     ));
                 } catch (\Throwable $e) {
                     report($e);

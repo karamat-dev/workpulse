@@ -23,7 +23,7 @@ class ClockInReminderMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'WorkPulse clock-in reminder',
+            subject: 'muSharp clock-in reminder',
         );
     }
 

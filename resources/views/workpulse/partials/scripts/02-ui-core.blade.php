@@ -235,7 +235,7 @@ function doLogin(){
       if(typeof window.bootWorkpulse === 'function'){
         await window.bootWorkpulse();
       } else {
-        window.location.href='/workpulse';
+        window.location.href='/musharp';
       }
     })
     .catch((e)=>{
@@ -317,8 +317,13 @@ function isMobileViewport(){
 function applyMobileViewportState(){
   const app = document.getElementById('app');
   if(!app) return;
-  app.classList.toggle('is-mobile', isMobileViewport());
-  if(!isMobileViewport()){
+  const wasMobile = app.classList.contains('is-mobile');
+  const mobile = isMobileViewport();
+  app.classList.toggle('is-mobile', mobile);
+  if(wasMobile !== mobile && typeof buildTopbarActions === 'function'){
+    buildTopbarActions();
+  }
+  if(!mobile){
     app.classList.remove('mobile-nav-open');
     const backdrop = document.getElementById('mobile-sidebar-backdrop');
     if(backdrop) backdrop.classList.remove('show');
@@ -520,7 +525,7 @@ function openNotificationFromBrowser(){
 function showBrowserNotificationAlert(notification){
   if(!browserNotificationsSupported() || Notification.permission !== 'granted') return;
 
-  const title = normalizeBrokenText(notification?.title || 'WorkPulse Notification');
+  const title = normalizeBrokenText(notification?.title || 'muSharp Notification');
   const body = normalizeBrokenText(notification?.message || notification?.referenceCode || 'You have a new update.');
 
   try{
@@ -750,6 +755,7 @@ function openNotificationsPage(){
 
 function canAccessPage(pageId){
   if(pageId === 'notifications') return true;
+  if(pageId === 'announcement-vote' || pageId === 'announcement-vote-results') return true;
   const nav = getNavForRole(DB.currentRole);
   return nav.some(section => section.items.some(item => item.page === pageId));
 }
@@ -1052,6 +1058,8 @@ const pageTitles = {
   'emp-leaves':'My Leaves','emp-notifications':'Notifications','emp-profile':'My Profile',
   'emp-team':'My Team','emp-announcements':'Announcements','emp-policies':'Company Policies','emp-calendar':'Events & Calendar',
   'emp-profile-detail':'Employee Profile',
+  'announcement-vote':'Announcement Vote',
+  'announcement-vote-results':'Vote Results',
 };
 
 function showPage(id){
@@ -1116,6 +1124,8 @@ function renderPage(id){
       case 'backups': return pageBackups();
       case 'company': return pageCompany();
       case 'notifications': return pageNotifications();
+      case 'announcement-vote': return pageAnnouncementVote();
+      case 'announcement-vote-results': return pageAnnouncementVoteResults();
       // Employee pages
       case 'emp-dashboard': return pageEmpDashboard();
       case 'emp-attendance': return pageEmpAttendance();

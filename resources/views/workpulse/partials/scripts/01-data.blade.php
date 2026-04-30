@@ -6,17 +6,17 @@ const DB = {
   currentRole: null,
 
   users: [
-    {id:'EMP-001',fname:'Ali',lname:'Raza',email:'employee1@workpulse.com',pass:'emp123',role:'employee',dept:'Engineering',desg:'Software Engineer',doj:'2024-01-15',dop:'2024-04-15',manager:'Zainab Hussain',phone:'+92 300 1234567',avatar:'AR',avatarColor:'#2447D0',status:'Active',type:'Permanent'},
-    {id:'EMP-002',fname:'Sara',lname:'Ahmed',email:'hr@workpulse.com',pass:'hr123',role:'hr',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent'},
-    {id:'ADM-001',fname:'Zainab',lname:'Hussain',email:'admin@workpulse.com',pass:'admin123',role:'admin',dept:'Management',desg:'CEO',doj:'2018-01-01',manager:'—',phone:'+92 321 9876543',avatar:'ZH',avatarColor:'#6B3FA0',status:'Active',type:'Permanent'},
+    {id:'EMP-001',fname:'Ali',lname:'Raza',email:'employee1@musharp.com',pass:'emp123',role:'employee',dept:'Engineering',desg:'Software Engineer',doj:'2024-01-15',dop:'2024-04-15',manager:'Zainab Hussain',phone:'+92 300 1234567',avatar:'AR',avatarColor:'#2447D0',status:'Active',type:'Permanent'},
+    {id:'EMP-002',fname:'Sara',lname:'Ahmed',email:'hr@musharp.com',pass:'hr123',role:'hr',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent'},
+    {id:'ADM-001',fname:'Zainab',lname:'Hussain',email:'admin@musharp.com',pass:'admin123',role:'admin',dept:'Management',desg:'CEO',doj:'2018-01-01',manager:'—',phone:'+92 321 9876543',avatar:'ZH',avatarColor:'#6B3FA0',status:'Active',type:'Permanent'},
   ],
 
   employees: [
-    {id:'EMP-001',fname:'Ahmed',lname:'Karim',dept:'Engineering',desg:'Senior Engineer',doj:'2022-01-15',dop:'2022-04-15',manager:'Hassan Ali',phone:'+92 300 1234567',email:'ahmed.k@workpulse.com',avatar:'AK',avatarColor:'#2447D0',status:'Active',type:'Permanent',dob:'1990-03-15',gender:'Male',cnic:'42301-1234567-8',address:'123 Gulberg III, Lahore',blood:'O+',kin:'Fatima Karim',kinRel:'Spouse',kinPhone:'+92 301 7654321',basic:150000,house:40000,transport:10000,tax:8500,bank:'HBL',acct:'****-1234',iban:'PK36HBL...'},
-    {id:'EMP-002',fname:'Sara',lname:'Ahmed',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',email:'sara.a@workpulse.com',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent',dob:'1996-04-10',gender:'Female',cnic:'42301-2345678-9',address:'45 DHA Phase 5, Lahore',blood:'B+',kin:'Ali Ahmed',kinRel:'Father',kinPhone:'+92 333 4567890',basic:120000,house:30000,transport:8000,tax:5500,bank:'MCB',acct:'****-5678',iban:'PK36MCB...'},
-    {id:'EMP-003',fname:'Hassan',lname:'Ali',dept:'Engineering',desg:'Engineering Director',doj:'2019-09-10',manager:'Zainab Hussain',phone:'+92 302 3456789',email:'hassan.a@workpulse.com',avatar:'HA',avatarColor:'#0D7373',status:'Active',type:'Permanent',dob:'1985-07-22',gender:'Male',cnic:'42301-3456789-0',address:'78 Model Town, Lahore',blood:'A+',kin:'Aisha Hassan',kinRel:'Spouse',kinPhone:'+92 344 5678901',basic:200000,house:60000,transport:15000,tax:14000,bank:'HBL',acct:'****-9012',iban:'PK36HBL...'},
-    {id:'EMP-004',fname:'Maria',lname:'Santos',dept:'Product',desg:'UI Designer',doj:'2025-04-10',dop:'2025-07-10',manager:'Khalid PM',phone:'+92 303 4567890',email:'maria.s@workpulse.com',avatar:'MS',avatarColor:'#A05C00',status:'Probation',type:'Probation',dob:'1998-11-05',gender:'Female',cnic:'42301-4567890-1',address:'22 Johar Town, Lahore',blood:'AB+',kin:'Jose Santos',kinRel:'Father',kinPhone:'+92 355 6789012',basic:80000,house:20000,transport:5000,tax:0,bank:'UBL',acct:'****-3456',iban:'PK36UBL...'},
-    {id:'EMP-005',fname:'Omar',lname:'Farooq',dept:'Engineering',desg:'Software Engineer',doj:'2023-06-01',manager:'Hassan Ali',phone:'+92 304 5678901',email:'omar.f@workpulse.com',avatar:'OF',avatarColor:'#C0392B',status:'Active',type:'Permanent',dob:'1994-02-18',gender:'Male',cnic:'42301-5678901-2',address:'15 Wapda Town, Lahore',blood:'O-',kin:'Noor Farooq',kinRel:'Spouse',kinPhone:'+92 366 7890123',basic:100000,house:25000,transport:7000,tax:3500,bank:'Meezan',acct:'****-7890',iban:'PK36MEZ...'},
+    {id:'EMP-001',fname:'Ahmed',lname:'Karim',dept:'Engineering',desg:'Senior Engineer',doj:'2022-01-15',dop:'2022-04-15',manager:'Hassan Ali',phone:'+92 300 1234567',email:'ahmed.k@musharp.com',avatar:'AK',avatarColor:'#2447D0',status:'Active',type:'Permanent',dob:'1990-03-15',gender:'Male',cnic:'42301-1234567-8',address:'123 Gulberg III, Lahore',blood:'O+',kin:'Fatima Karim',kinRel:'Spouse',kinPhone:'+92 301 7654321',basic:150000,house:40000,transport:10000,tax:8500,bank:'HBL',acct:'****-1234',iban:'PK36HBL...'},
+    {id:'EMP-002',fname:'Sara',lname:'Ahmed',dept:'Human Resources',desg:'HR Manager',doj:'2021-03-01',manager:'Zainab Hussain',phone:'+92 301 2345678',email:'sara.a@musharp.com',avatar:'SA',avatarColor:'#1B7A42',status:'Active',type:'Permanent',dob:'1996-04-10',gender:'Female',cnic:'42301-2345678-9',address:'45 DHA Phase 5, Lahore',blood:'B+',kin:'Ali Ahmed',kinRel:'Father',kinPhone:'+92 333 4567890',basic:120000,house:30000,transport:8000,tax:5500,bank:'MCB',acct:'****-5678',iban:'PK36MCB...'},
+    {id:'EMP-003',fname:'Hassan',lname:'Ali',dept:'Engineering',desg:'Engineering Director',doj:'2019-09-10',manager:'Zainab Hussain',phone:'+92 302 3456789',email:'hassan.a@musharp.com',avatar:'HA',avatarColor:'#0D7373',status:'Active',type:'Permanent',dob:'1985-07-22',gender:'Male',cnic:'42301-3456789-0',address:'78 Model Town, Lahore',blood:'A+',kin:'Aisha Hassan',kinRel:'Spouse',kinPhone:'+92 344 5678901',basic:200000,house:60000,transport:15000,tax:14000,bank:'HBL',acct:'****-9012',iban:'PK36HBL...'},
+    {id:'EMP-004',fname:'Maria',lname:'Santos',dept:'Product',desg:'UI Designer',doj:'2025-04-10',dop:'2025-07-10',manager:'Khalid PM',phone:'+92 303 4567890',email:'maria.s@musharp.com',avatar:'MS',avatarColor:'#A05C00',status:'Probation',type:'Probation',dob:'1998-11-05',gender:'Female',cnic:'42301-4567890-1',address:'22 Johar Town, Lahore',blood:'AB+',kin:'Jose Santos',kinRel:'Father',kinPhone:'+92 355 6789012',basic:80000,house:20000,transport:5000,tax:0,bank:'UBL',acct:'****-3456',iban:'PK36UBL...'},
+    {id:'EMP-005',fname:'Omar',lname:'Farooq',dept:'Engineering',desg:'Software Engineer',doj:'2023-06-01',manager:'Hassan Ali',phone:'+92 304 5678901',email:'omar.f@musharp.com',avatar:'OF',avatarColor:'#C0392B',status:'Active',type:'Permanent',dob:'1994-02-18',gender:'Male',cnic:'42301-5678901-2',address:'15 Wapda Town, Lahore',blood:'O-',kin:'Noor Farooq',kinRel:'Spouse',kinPhone:'+92 366 7890123',basic:100000,house:25000,transport:7000,tax:3500,bank:'Meezan',acct:'****-7890',iban:'PK36MEZ...'},
   ],
 
   attendance: [
@@ -50,12 +50,12 @@ const DB = {
   ],
 
   company: {
-    company_name:'WorkPulse Technologies Pvt. Ltd.',
-    website_link:'www.workpulse.com',
-    official_email:'info@workpulse.com',
+    company_name:'muSharp',
+    website_link:'musharp.com',
+    official_email:'info@musharp.com',
     official_contact_no:'+92 42 35761234',
     office_location:'12 Tech City, Arfa Software Park, Lahore',
-    linkedin_page:'linkedin.com/company/workpulse',
+    linkedin_page:'linkedin.com/company/musharp',
   },
 
   companyPolicies: [],

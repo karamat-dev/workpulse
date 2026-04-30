@@ -78,7 +78,7 @@ class TransferCompanyDetailsTest extends TestCase
         $response->assertOk();
         $response->assertStreamed();
         $response->assertHeader('content-type', 'application/json; charset=UTF-8');
-        $response->assertHeader('content-disposition', 'attachment; filename=workpulse-company-details.json');
+        $response->assertHeader('content-disposition', 'attachment; filename=musharp-company-details.json');
         $this->assertStringContainsString('"company_name": "Acme Labs"', $response->streamedContent());
         $this->assertStringContainsString('"official_email": "hello@acme.test"', $response->streamedContent());
     }

@@ -33,7 +33,7 @@ class User extends Authenticatable
 
     public function hasPermission(string $permissionKey): bool
     {
-        // Admin and manager are full-access WorkPulse operators.
+        // Admin and manager are full-access muSharp operators.
         if ($this->isSuperAdmin()) {
             return true;
         }

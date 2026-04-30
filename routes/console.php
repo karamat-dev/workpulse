@@ -12,7 +12,7 @@ Artisan::command('workpulse:generate-events', function () {
     $this->call('workpulse:events:birthday');
     $this->call('workpulse:events:anniversary');
     $this->call('workpulse:events:probation');
-})->purpose('Generate WorkPulse automated events');
+})->purpose('Generate muSharp automated events');
 
 app(Schedule::class)->command('workpulse:generate-events')->dailyAt('00:10');
 app(Schedule::class)->command('workpulse:attendance:remind-missed-clockin')->everyFiveMinutes()->withoutOverlapping();
