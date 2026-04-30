@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TransferController extends Controller
@@ -15,6 +16,48 @@ class TransferController extends Controller
     {
         if (!$request->user()->isSuperAdmin()) {
             abort(403);
+        }
+    }
+
+    private function normalizeEmail(?string $email): string
+    {
+        return Str::lower(trim((string) $email));
+    }
+
+    private function assertDistinctProfileEmails(string $officialEmail, string $personalEmail, ?int $ignoreUserId = null): void
+    {
+        $official = $this->normalizeEmail($officialEmail);
+        $personal = $this->normalizeEmail($personalEmail);
+
+        if ($personal === '') {
+            throw ValidationException::withMessages(['personal_email' => 'Personal email is required for every employee.']);
+        }
+
+        if ($official === $personal) {
+            throw ValidationException::withMessages(['personal_email' => 'Official email and personal email must be different.']);
+        }
+
+        $officialExists = DB::table('users')
+            ->whereRaw('LOWER(email) = ?', [$official])
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+            ->exists();
+        $officialAsPersonalExists = DB::table('employee_profiles')
+            ->whereNotNull('personal_email')
+            ->whereRaw('LOWER(personal_email) = ?', [$official])
+            ->when($ignoreUserId, fn ($query) => $query->where('user_id', '!=', $ignoreUserId))
+            ->exists();
+        $personalAsOfficialExists = DB::table('users')
+            ->whereRaw('LOWER(email) = ?', [$personal])
+            ->when($ignoreUserId, fn ($query) => $query->where('id', '!=', $ignoreUserId))
+            ->exists();
+        $personalExists = DB::table('employee_profiles')
+            ->whereNotNull('personal_email')
+            ->whereRaw('LOWER(personal_email) = ?', [$personal])
+            ->when($ignoreUserId, fn ($query) => $query->where('user_id', '!=', $ignoreUserId))
+            ->exists();
+
+        if ($officialExists || $officialAsPersonalExists || $personalAsOfficialExists || $personalExists) {
+            throw ValidationException::withMessages(['email' => 'Official and personal emails must be unique across all employee accounts.']);
         }
     }
 
@@ -93,6 +136,7 @@ class TransferController extends Controller
             foreach ($rows as $row) {
                 $employeeCode = trim((string) ($row['employee_code'] ?? $row['id'] ?? ''));
                 $email = trim((string) ($row['email'] ?? ''));
+                $personalEmail = trim((string) ($row['personal_email'] ?? $row['personalEmail'] ?? ''));
                 $name = trim((string) ($row['name'] ?? trim(($row['fname'] ?? '').' '.($row['lname'] ?? ''))));
 
                 if ($employeeCode === '' || $email === '' || $name === '') {
@@ -150,6 +194,8 @@ class TransferController extends Controller
                     ->first();
 
                 $userId = $existingUser?->id;
+                $this->assertDistinctProfileEmails($email, $personalEmail, $userId ? (int) $userId : null);
+
                 if ($userId) {
                     DB::table('users')->where('id', $userId)->update([
                         'name' => $name,
@@ -188,7 +234,7 @@ class TransferController extends Controller
                         'cnic_document_path' => null,
                         'cnic_document_name' => null,
                         'personal_phone' => $row['personal_phone'] ?? $row['phone'] ?? null,
-                        'personal_email' => $row['personal_email'] ?? $email,
+                        'personal_email' => $personalEmail,
                         'address' => $row['address'] ?? null,
                         'blood_group' => $row['blood_group'] ?? $row['blood'] ?? null,
                         'next_of_kin_name' => $row['next_of_kin_name'] ?? $row['kin'] ?? null,

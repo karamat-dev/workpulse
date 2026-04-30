@@ -89,6 +89,7 @@ class ReportsController extends Controller
             ->when($userIds->isNotEmpty(), fn ($query) => $query->whereIn('leave_requests.user_id', $userIds))
             ->when($userIds->isEmpty(), fn ($query) => $query->whereRaw('1 = 0'))
             ->select([
+                'leave_requests.id',
                 'leave_requests.user_id',
                 'leave_requests.from_date',
                 'leave_requests.to_date',
@@ -110,7 +111,12 @@ class ReportsController extends Controller
 
             while ($cursor->lte($leaveEnd)) {
                 $dateKey = $cursor->toDateString();
-                if ($dateKey >= $start && $dateKey <= $end) {
+                $isCancelled = DB::table('leave_request_cancellations')
+                    ->where('leave_request_id', $leave->id)
+                    ->where('date', $dateKey)
+                    ->exists();
+
+                if (!$isCancelled && $dateKey >= $start && $dateKey <= $end) {
                     $leaveByUserDate[$leave->user_id][$dateKey] = 'Leave';
                 }
                 $cursor->addDay();
