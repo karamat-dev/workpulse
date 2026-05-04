@@ -114,6 +114,10 @@
       <div class="fg"><label class="fl">Audience</label>
         <select class="fi" id="ann-aud" onchange="window.toggleAnnouncementRecipients()"></select></div>
     </div>
+    <div class="g2">
+      <div class="fg"><label class="fl">Effective From</label><input type="date" class="fi" id="ann-effective-from"></div>
+      <div class="fg"><label class="fl">Effective To</label><input type="date" class="fi" id="ann-effective-to"></div>
+    </div>
     <div class="fg" id="ann-recipient-wrap" style="display:none;"><label class="fl">Specific Employees</label><select class="fi" id="ann-targets" multiple size="6"></select></div>
     <div class="fg"><label class="fl">Message <span class="req-star">*</span></label><textarea class="fi" id="ann-msg" rows="4" placeholder="Type your announcement..."></textarea></div>
     <div class="fg">

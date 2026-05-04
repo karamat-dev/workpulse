@@ -10,7 +10,25 @@
 
     <script>
         (function () {
+            const isAuthenticated = @json(auth()->check());
+
+            function showBootScreen() {
+                const bootScreen = document.getElementById('boot-screen');
+                if (bootScreen) {
+                    bootScreen.style.display = 'flex';
+                }
+            }
+
+            function hideBootScreen() {
+                const bootScreen = document.getElementById('boot-screen');
+                if (bootScreen) {
+                    bootScreen.style.display = 'none';
+                }
+            }
+
             function showLoginScreen() {
+                hideBootScreen();
+
                 const loginScreen = document.getElementById('login-screen');
                 if (loginScreen) {
                     loginScreen.style.display = 'flex';
@@ -57,6 +75,8 @@
                     if (loginScreen) {
                         loginScreen.style.display = 'none';
                     }
+
+                    hideBootScreen();
 
                     const app = document.getElementById('app');
                     if (app) {
@@ -129,9 +149,9 @@
                     }
                 } catch (error) {
                     console.error(error);
-                    showLoginScreen();
 
                     try {
+                        showLoginScreen();
                         showToast('Please sign in to continue.', 'red');
                     } catch (_) {
                     }
@@ -141,8 +161,18 @@
             window.bootWorkpulse = boot;
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', boot);
+                document.addEventListener('DOMContentLoaded', function () {
+                    if (isAuthenticated) {
+                        showBootScreen();
+                    }
+
+                    boot();
+                });
             } else {
+                if (isAuthenticated) {
+                    showBootScreen();
+                }
+
                 boot();
             }
         })();

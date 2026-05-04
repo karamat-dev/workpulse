@@ -208,6 +208,8 @@ class AnnouncementsController extends Controller
             'category' => ['nullable', 'string', 'max:50'],
             'audience' => ['nullable', 'string', 'max:80'],
             'message' => ['required', 'string', 'max:10000'],
+            'effective_from' => ['nullable', 'date'],
+            'effective_to' => ['nullable', 'date'],
             'recipient_employee_codes' => ['nullable', 'array'],
             'recipient_employee_codes.*' => ['string', 'max:30'],
             'has_vote' => ['nullable', 'boolean'],
@@ -222,6 +224,24 @@ class AnnouncementsController extends Controller
         $recipientCodes = collect($validated['recipient_employee_codes'] ?? [])
             ->filter()
             ->values();
+
+        $effectiveFrom = $validated['effective_from'] ?? null;
+        $effectiveTo = $validated['effective_to'] ?? null;
+
+        if ($effectiveFrom && ! $effectiveTo) {
+            $effectiveTo = $effectiveFrom;
+        } elseif ($effectiveTo && ! $effectiveFrom) {
+            $effectiveFrom = $effectiveTo;
+        }
+
+        if ($effectiveFrom && $effectiveTo && $effectiveTo < $effectiveFrom) {
+            throw ValidationException::withMessages([
+                'effective_to' => ['End date must be the same as or after the start date.'],
+            ]);
+        }
+
+        $validated['effective_from'] = $effectiveFrom;
+        $validated['effective_to'] = $effectiveTo;
 
         if ($audience === 'specific' && $recipientCodes->isEmpty()) {
             throw ValidationException::withMessages([
@@ -271,6 +291,8 @@ class AnnouncementsController extends Controller
                     'category' => $validated['category'] ?? null,
                     'audience' => $audience,
                     'message' => $validated['message'],
+                    'effective_from' => $validated['effective_from'],
+                    'effective_to' => $validated['effective_to'],
                     'author_user_id' => $authorUserId,
                     'has_vote' => (bool) ($validated['has_vote'] ?? false),
                     'vote_question' => $validated['has_vote'] ? $validated['vote_question'] : null,
@@ -289,6 +311,8 @@ class AnnouncementsController extends Controller
                 'category' => $validated['category'] ?? null,
                 'audience' => $audience,
                 'message' => $validated['message'],
+                'effective_from' => $validated['effective_from'],
+                'effective_to' => $validated['effective_to'],
                 'author_user_id' => $authorUserId,
                 'has_vote' => (bool) ($validated['has_vote'] ?? false),
                 'vote_question' => $validated['has_vote'] ? $validated['vote_question'] : null,

@@ -1,5 +1,15 @@
+<div id="boot-screen" style="display:{{ auth()->check() ? 'flex' : 'none' }};">
+  <div class="boot-screen-card">
+    <div class="boot-screen-spinner" aria-hidden="true"></div>
+    <div class="boot-screen-copy">
+      <strong>Opening workspace</strong>
+      <span>Please wait a moment while your dashboard loads.</span>
+    </div>
+  </div>
+</div>
+
 <!-- LOGIN SCREEN -->
-<div id="login-screen">
+<div id="login-screen" style="display:{{ auth()->check() ? 'none' : 'flex' }};">
   <div class="login-shell">
     <div class="login-panel">
       <div class="login-brand-row">
