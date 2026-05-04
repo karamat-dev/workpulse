@@ -2738,7 +2738,8 @@ function pageEmployees(){
             <span class="data-pill">Ex-employee <strong>${exCount}</strong></span>
           </div>
         </div>
-        <div style="display:flex;align-items:end;justify-content:flex-end;">
+        <div style="display:flex;align-items:end;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-sm" onclick="window.importEmployeeProfiles()">Import Employees</button>
           <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
         </div>
       </div>
@@ -4236,7 +4237,7 @@ function pageCompany(){
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
       <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Full Employee Profiles JSON</button>
-      <button class="btn" onclick="window.importEmployeeProfiles()">Import Employee Profiles JSON</button>
+      <button class="btn" onclick="window.importEmployeeProfiles()">Import Employee Profiles</button>
       <button class="btn" onclick="window.exportCompanyDetailsJson()">Export Company Details JSON</button>
       <button class="btn" onclick="window.importCompanyDetails()">Import Company Details JSON</button>
       <button class="btn" onclick="window.exportEmployeeCSV()">Employees CSV</button>
@@ -4910,6 +4911,12 @@ function profileTabsMarkup(employee, opts={}){
   const leaveRows = profileLeaveHistory(employee);
   const attendanceRows = profileAttendanceRows(employee);
   const timelineRows = profileTimeline(employee);
+  const customFields = Array.isArray(employee.customFields) ? employee.customFields.filter(field => field && field.label) : [];
+  const customFieldTab = customFields.length ? [{
+    id:'custom-fields',
+    label:'Imported Fields',
+    content:`<div class="pp-main-card" style="padding:0;border:none;box-shadow:none;background:transparent;"><div class="pp-info-grid">${customFields.map(field => profileInfoRow(field.label, field.value)).join('')}</div></div>`
+  }] : [];
 
   return `<div class="pp-tab-shell">${buildTabs(opts.group || 'profileTabs',[
     {id:'leave',label:'Leave',content: leaveCards.length ? `<div class="pp-leave-grid">${leaveCards.map(card=>`<div class="pp-leave-card"><h4>${card.name}</h4><div class="pp-leave-stat"><span>Remaining</span><strong>${formatLeaveBalanceValue(card.remaining)}</strong></div><div class="pp-leave-stat"><span>Entitled</span><strong>${formatLeaveBalanceValue(card.allocated)}</strong></div><div class="pp-leave-stat"><span>Used</span><strong>${formatLeaveBalanceValue(card.used)}</strong></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">No leave balances available yet.</div>`},
@@ -4918,6 +4925,7 @@ function profileTabsMarkup(employee, opts={}){
     {id:'dependent',label:'Dependent',content:`<div class="pp-main-card" style="padding:0;border:none;box-shadow:none;background:transparent;"><div class="pp-info-grid">${profileInfoRow('Next of Kin', employee.kin)}${profileInfoRow('Relationship', employee.kinRel)}${profileInfoRow('Contact Number', employee.kinPhone)}${profileInfoRow('Marital Status', employee.maritalStatus)}</div></div>`},
     {id:'timeline',label:'Timeline',content: timelineRows.length ? `<div class="pp-timeline">${timelineRows.map(item=>`<div class="pp-timeline-item"><div class="pp-timeline-dot"></div><div class="pp-timeline-copy"><div style="font-size:13px;font-weight:700;">${item.title}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${item.meta}</div><div style="font-size:11px;color:var(--muted);margin-top:6px;">${formatDate(item.date)}</div></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">Timeline items will appear here as HR updates are recorded.</div>`},
     {id:'documents',label:'Documents',content: profileDocumentsCard(employee, !!opts.canManageEmployeeDocs, opts.documentButtonLabel || 'Open Document')},
+    ...customFieldTab,
     {id:'assets',label:'Assets',content:`<div class="pp-mini-empty">No company assets have been assigned yet.</div>`},
   ], opts.defaultTab || 'leave')}</div>`;
 }

@@ -326,6 +326,7 @@ class WorkpulseBootstrapController extends Controller
 
         $employeeRows = $employeesQuery->get();
         $offboardingDocumentsByUser = collect();
+        $customFieldValuesByUser = collect();
 
         if ($user->isSuperAdmin() && $employeeRows->isNotEmpty()) {
             $employeeCodesByUser = $employeeRows
@@ -352,9 +353,25 @@ class WorkpulseBootstrapController extends Controller
                         'url' => url('/api/employees/'.$employeeCode.'/offboarding-documents/'.$document->id),
                     ])->values()->all();
                 });
+
+            $customFieldValuesByUser = DB::table('employee_custom_field_values')
+                ->join('employee_custom_fields', 'employee_custom_fields.id', '=', 'employee_custom_field_values.field_id')
+                ->whereIn('employee_custom_field_values.user_id', $employeeRows->pluck('user_id')->filter()->values())
+                ->orderBy('employee_custom_fields.label')
+                ->select([
+                    'employee_custom_field_values.user_id',
+                    'employee_custom_fields.label',
+                    'employee_custom_field_values.value',
+                ])
+                ->get()
+                ->groupBy('user_id')
+                ->map(fn ($values) => $values->map(fn ($value) => [
+                    'label' => $value->label,
+                    'value' => $value->value,
+                ])->values()->all());
         }
 
-        $employees = $employeeRows->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace, $offboardingDocumentsByUser) {
+        $employees = $employeeRows->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace, $offboardingDocumentsByUser, $customFieldValuesByUser) {
             $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
             $fn = $parts[0] ?? $employee->name;
             $ln = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
@@ -397,6 +414,9 @@ class WorkpulseBootstrapController extends Controller
                     : null,
                 'offboardingDocuments' => $user->isSuperAdmin()
                     ? ($offboardingDocumentsByUser->get($employee->user_id) ?? [])
+                    : [],
+                'customFields' => $user->isSuperAdmin()
+                    ? ($customFieldValuesByUser->get($employee->user_id) ?? [])
                     : [],
                 'avatar' => $av,
                 'avatarColor' => $color,

@@ -1071,7 +1071,13 @@ function importEmployeeProfiles(){
   importTransferJson(
     'transfer-import-file',
     '/api/transfer/employees/import',
-    (data)=>`Imported ${data.imported || 0} employee profile(s).`
+    (data)=>{
+      const created = Array.isArray(data.created_fields) && data.created_fields.length
+        ? ` Created ${data.created_fields.length} new field(s).`
+        : '';
+      const skipped = data.skipped ? ` Skipped ${data.skipped}.` : '';
+      return `Imported ${data.imported || 0} employee profile(s).${created}${skipped}`;
+    }
   );
 }
 

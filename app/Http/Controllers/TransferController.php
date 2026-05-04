@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use ZipArchive;
 
 class TransferController extends Controller
 {
@@ -120,30 +121,48 @@ class TransferController extends Controller
         $this->ensureAdmin($request);
 
         $validated = $request->validate([
-            'file' => ['required', 'file', 'mimes:json', 'max:10240'],
+            'file' => ['required', 'file', 'mimes:json,csv,txt,xlsx', 'max:10240'],
         ]);
 
-        $payload = json_decode(file_get_contents($validated['file']->getRealPath()), true);
-        $rows = $payload['employees'] ?? ($payload['data']['employees'] ?? null);
+        [$rows, $sourceColumns] = $this->employeeImportRows($validated['file']);
 
         if (!is_array($rows) || $rows === []) {
-            return response()->json(['ok' => false, 'message' => 'No employee profiles found in import file.'], 422);
+            $columnsMessage = $sourceColumns !== []
+                ? ' Detected columns: '.implode(', ', array_slice($sourceColumns, 0, 8)).(count($sourceColumns) > 8 ? '...' : '')
+                : ' No header columns were detected.';
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'No employee profile rows found. Make sure the first row contains column headers and employee data starts on the next row.'.$columnsMessage,
+            ], 422);
         }
 
         $imported = 0;
+        $skipped = 0;
+        $createdCustomFields = [];
+        $customFieldIds = [];
+        $knownFieldMap = $this->employeeImportFieldMap();
 
-        DB::transaction(function () use ($rows, &$imported) {
+        DB::transaction(function () use ($rows, $knownFieldMap, &$imported, &$skipped, &$createdCustomFields, &$customFieldIds) {
             foreach ($rows as $row) {
+                $row = $this->normalizeEmployeeImportRow($row, $knownFieldMap);
+                $customValues = $row['_custom'] ?? [];
+
                 $employeeCode = trim((string) ($row['employee_code'] ?? $row['id'] ?? ''));
                 $email = trim((string) ($row['email'] ?? ''));
                 $personalEmail = trim((string) ($row['personal_email'] ?? $row['personalEmail'] ?? ''));
                 $name = trim((string) ($row['name'] ?? trim(($row['fname'] ?? '').' '.($row['lname'] ?? ''))));
 
-                if ($employeeCode === '' || $email === '' || $name === '') {
+                if ($email === '' || $name === '') {
+                    $skipped++;
                     continue;
                 }
 
                 $deptName = trim((string) ($row['department'] ?? $row['dept'] ?? 'General'));
+                if ($employeeCode === '') {
+                    $employeeCode = $this->nextEmployeeCodeForTeam($deptName);
+                }
+
                 $departmentId = DB::table('departments')->where('name', $deptName)->value('id');
                 if (!$departmentId) {
                     $departmentId = DB::table('departments')->insertGetId([
@@ -194,6 +213,13 @@ class TransferController extends Controller
                     ->first();
 
                 $userId = $existingUser?->id;
+                if ($personalEmail === '' && $userId) {
+                    $personalEmail = (string) DB::table('employee_profiles')->where('user_id', $userId)->value('personal_email');
+                }
+                if ($personalEmail === '') {
+                    $personalEmail = $this->importPlaceholderPersonalEmail($employeeCode, $email);
+                }
+
                 $this->assertDistinctProfileEmails($email, $personalEmail, $userId ? (int) $userId : null);
 
                 if ($userId) {
@@ -223,12 +249,12 @@ class TransferController extends Controller
                         'manager_user_id' => $managerUserId,
                         'shift_id' => $shiftId,
                         'designation' => $row['designation'] ?? $row['desg'] ?? null,
-                        'date_of_joining' => $row['date_of_joining'] ?? $row['doj'] ?? null,
-                        'probation_end_date' => $row['probation_end_date'] ?? $row['dop'] ?? null,
-                        'last_working_date' => $row['last_working_date'] ?? $row['lwd'] ?? null,
+                        'date_of_joining' => $this->importDate($row['date_of_joining'] ?? $row['doj'] ?? null),
+                        'probation_end_date' => $this->importDate($row['probation_end_date'] ?? $row['dop'] ?? null),
+                        'last_working_date' => $this->importDate($row['last_working_date'] ?? $row['lwd'] ?? null),
                         'employment_type' => $row['employment_type'] ?? $row['type'] ?? null,
                         'status' => $row['status'] ?? 'Active',
-                        'date_of_birth' => $row['date_of_birth'] ?? $row['dob'] ?? null,
+                        'date_of_birth' => $this->importDate($row['date_of_birth'] ?? $row['dob'] ?? null),
                         'gender' => $row['gender'] ?? null,
                         'cnic' => $row['cnic'] ?? null,
                         'cnic_document_path' => null,
@@ -247,6 +273,14 @@ class TransferController extends Controller
                         'bank_name' => $row['bank_name'] ?? $row['bank'] ?? null,
                         'bank_account_no' => $row['bank_account_no'] ?? $row['acct'] ?? null,
                         'bank_iban' => $row['bank_iban'] ?? $row['iban'] ?? null,
+                        'work_location' => $row['work_location'] ?? $row['workLocation'] ?? null,
+                        'confirmation_date' => $this->importDate($row['confirmation_date'] ?? $row['confirmationDate'] ?? null),
+                        'marital_status' => $row['marital_status'] ?? $row['maritalStatus'] ?? null,
+                        'passport_no' => $row['passport_no'] ?? $row['passportNo'] ?? null,
+                        'pay_period' => $row['pay_period'] ?? $row['payPeriod'] ?? null,
+                        'salary_start_date' => $this->importDate($row['salary_start_date'] ?? $row['salaryStartDate'] ?? null),
+                        'contribution_amount' => $row['contribution_amount'] ?? $row['contribution'] ?? null,
+                        'other_deductions' => $row['other_deductions'] ?? $row['otherDeductions'] ?? null,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]
@@ -261,11 +295,29 @@ class TransferController extends Controller
                     ]
                 );
 
+                foreach ($customValues as $label => $value) {
+                    $fieldId = $this->employeeCustomFieldId($label, $customFieldIds, $createdCustomFields);
+                    DB::table('employee_custom_field_values')->updateOrInsert(
+                        ['user_id' => $userId, 'field_id' => $fieldId],
+                        [
+                            'value' => $value,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]
+                    );
+                }
+
                 $imported++;
             }
         });
 
-        return response()->json(['ok' => true, 'imported' => $imported]);
+        return response()->json([
+            'ok' => true,
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'columns' => $sourceColumns,
+            'created_fields' => array_values(array_unique($createdCustomFields)),
+        ]);
     }
 
     public function exportCompany(Request $request): StreamedResponse
@@ -364,7 +416,7 @@ class TransferController extends Controller
             ]);
         }
 
-        return DB::table('users')
+        $rows = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
@@ -374,6 +426,432 @@ class TransferController extends Controller
             ->get()
             ->map(fn ($row) => (array) $row)
             ->all();
+
+        $customValues = DB::table('employee_custom_field_values')
+            ->join('employee_custom_fields', 'employee_custom_fields.id', '=', 'employee_custom_field_values.field_id')
+            ->join('users', 'users.id', '=', 'employee_custom_field_values.user_id')
+            ->select(['users.employee_code', 'employee_custom_fields.label', 'employee_custom_field_values.value'])
+            ->get()
+            ->groupBy('employee_code');
+
+        return array_map(function (array $row) use ($customValues) {
+            $custom = $customValues->get($row['employee_code'] ?? '', collect());
+            foreach ($custom as $fieldValue) {
+                $row[$fieldValue->label] = $fieldValue->value;
+            }
+
+            return $row;
+        }, $rows);
+    }
+
+    private function employeeImportRows($file): array
+    {
+        $extension = Str::lower($file->getClientOriginalExtension());
+
+        if ($extension === 'json') {
+            $payload = json_decode(file_get_contents($file->getRealPath()), true);
+            $rows = $payload['employees'] ?? ($payload['data']['employees'] ?? null);
+            $columns = is_array($rows) && isset($rows[0]) && is_array($rows[0]) ? array_keys($rows[0]) : [];
+
+            return [$rows, $columns];
+        }
+
+        if ($extension === 'xlsx') {
+            return $this->xlsxRows($file->getRealPath());
+        }
+
+        return $this->csvRows($file->getRealPath());
+    }
+
+    private function csvRows(string $path): array
+    {
+        $handle = fopen($path, 'r');
+        if (!$handle) {
+            return [[], []];
+        }
+
+        $delimiter = $this->detectCsvDelimiter($path);
+        $headers = fgetcsv($handle, 0, $delimiter) ?: [];
+        $headers = array_map(fn ($header) => trim((string) $header), $headers);
+        if (isset($headers[0])) {
+            $headers[0] = preg_replace('/^\xEF\xBB\xBF/', '', $headers[0]);
+        }
+
+        $rows = [];
+        while (($values = fgetcsv($handle, 0, $delimiter)) !== false) {
+            $row = [];
+            foreach ($headers as $index => $header) {
+                if ($header === '') {
+                    continue;
+                }
+                $row[$header] = $values[$index] ?? null;
+            }
+            if (array_filter($row, fn ($value) => trim((string) $value) !== '') !== []) {
+                $rows[] = $row;
+            }
+        }
+        fclose($handle);
+
+        return [$rows, $headers];
+    }
+
+    private function detectCsvDelimiter(string $path): string
+    {
+        $sample = (string) file_get_contents($path, false, null, 0, 4096);
+        $firstLine = strtok($sample, "\r\n") ?: $sample;
+        $delimiters = [',', ';', "\t", '|'];
+        $scores = [];
+
+        foreach ($delimiters as $delimiter) {
+            $scores[$delimiter] = substr_count($firstLine, $delimiter);
+        }
+
+        arsort($scores);
+        $delimiter = (string) array_key_first($scores);
+
+        return ($scores[$delimiter] ?? 0) > 0 ? $delimiter : ',';
+    }
+
+    private function xlsxRows(string $path): array
+    {
+        if (!class_exists(ZipArchive::class)) {
+            throw ValidationException::withMessages(['file' => 'XLSX import requires the PHP zip extension.']);
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($path) !== true) {
+            throw ValidationException::withMessages(['file' => 'Unable to open XLSX file.']);
+        }
+
+        $sharedStrings = [];
+        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
+        if ($sharedXml !== false) {
+            $shared = simplexml_load_string($sharedXml);
+            foreach ($shared->si ?? [] as $si) {
+                $parts = [];
+                if (isset($si->t)) {
+                    $parts[] = (string) $si->t;
+                }
+                foreach ($si->r ?? [] as $run) {
+                    $parts[] = (string) $run->t;
+                }
+                $sharedStrings[] = implode('', $parts);
+            }
+        }
+
+        $sheetPath = $this->firstWorksheetPath($zip);
+        $sheetXml = $sheetPath ? $zip->getFromName($sheetPath) : false;
+        $zip->close();
+        if ($sheetXml === false) {
+            return [[], []];
+        }
+
+        $sheet = simplexml_load_string($sheetXml);
+        $grid = [];
+        foreach ($sheet->sheetData->row ?? [] as $row) {
+            $cells = [];
+            foreach ($row->c ?? [] as $cell) {
+                $ref = (string) ($cell['r'] ?? '');
+                preg_match('/([A-Z]+)/', $ref, $matches);
+                $index = $this->xlsxColumnIndex($matches[1] ?? 'A');
+                $type = (string) ($cell['t'] ?? '');
+                $value = (string) ($cell->v ?? '');
+                $cells[$index] = match ($type) {
+                    's' => $sharedStrings[(int) $value] ?? '',
+                    'inlineStr' => (string) ($cell->is->t ?? ''),
+                    'str' => (string) ($cell->v ?? ''),
+                    'b' => $value === '1' ? '1' : '0',
+                    default => $value,
+                };
+            }
+            if ($cells !== []) {
+                ksort($cells);
+                $grid[] = $cells;
+            }
+        }
+
+        $headers = array_values(array_map(fn ($header) => trim((string) $header), $grid[0] ?? []));
+        $rows = [];
+        foreach (array_slice($grid, 1) as $values) {
+            $row = [];
+            foreach ($headers as $index => $header) {
+                if ($header === '') {
+                    continue;
+                }
+                $row[$header] = $values[$index] ?? null;
+            }
+            if (array_filter($row, fn ($value) => trim((string) $value) !== '') !== []) {
+                $rows[] = $row;
+            }
+        }
+
+        return [$rows, $headers];
+    }
+
+    private function firstWorksheetPath(ZipArchive $zip): ?string
+    {
+        $workbookXml = $zip->getFromName('xl/workbook.xml');
+        $relsXml = $zip->getFromName('xl/_rels/workbook.xml.rels');
+
+        if ($workbookXml !== false && $relsXml !== false) {
+            $workbook = simplexml_load_string($workbookXml);
+            $relationships = simplexml_load_string($relsXml);
+            $relationshipMap = [];
+
+            foreach ($relationships->Relationship ?? [] as $relationship) {
+                $id = (string) ($relationship['Id'] ?? '');
+                $target = (string) ($relationship['Target'] ?? '');
+                if ($id !== '' && $target !== '') {
+                    $relationshipMap[$id] = str_starts_with($target, '/')
+                        ? ltrim($target, '/')
+                        : 'xl/'.ltrim($target, '/');
+                }
+            }
+
+            $workbook->registerXPathNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+            $sheets = $workbook->xpath('//sheet') ?: [];
+            foreach ($sheets as $sheet) {
+                $attributes = $sheet->attributes('r', true);
+                $relationshipId = (string) ($attributes['id'] ?? '');
+                if ($relationshipId !== '' && isset($relationshipMap[$relationshipId])) {
+                    return $relationshipMap[$relationshipId];
+                }
+            }
+        }
+
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $name = $zip->getNameIndex($index);
+            if (is_string($name) && preg_match('#^xl/worksheets/sheet\d+\.xml$#', $name)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function xlsxColumnIndex(string $letters): int
+    {
+        $index = 0;
+        foreach (str_split($letters) as $letter) {
+            $index = ($index * 26) + (ord($letter) - 64);
+        }
+
+        return $index - 1;
+    }
+
+    private function normalizeEmployeeImportRow(array $row, array $fieldMap): array
+    {
+        $normalized = ['_custom' => []];
+        foreach ($row as $header => $value) {
+            $header = trim((string) $header);
+            if ($header === '') {
+                continue;
+            }
+
+            $key = $this->normalizeImportHeader($header);
+            $mapped = $fieldMap[$key] ?? null;
+            if ($mapped) {
+                $normalized[$mapped] = is_string($value) ? trim($value) : $value;
+            } else {
+                $normalized['_custom'][$header] = is_scalar($value) || $value === null
+                    ? trim((string) $value)
+                    : json_encode($value);
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function employeeImportFieldMap(): array
+    {
+        $aliases = [
+            'employee_code' => ['employee code', 'employee id', 'emp id', 'emp code', 'id', 'code'],
+            'name' => ['name', 'full name', 'employee name'],
+            'fname' => ['first name', 'fname', 'given name'],
+            'lname' => ['last name', 'lname', 'surname', 'family name'],
+            'email' => ['email', 'official email', 'work email', 'company email'],
+            'personal_email' => ['personal email', 'private email'],
+            'role' => ['role', 'user role'],
+            'department' => ['department', 'dept', 'team'],
+            'designation' => ['designation', 'job title', 'title', 'position'],
+            'date_of_joining' => ['date of joining', 'joining date', 'doj', 'hire date'],
+            'probation_end_date' => ['probation end date', 'probation date', 'dop'],
+            'last_working_date' => ['last working date', 'lwd', 'exit date'],
+            'employment_type' => ['employment type', 'type'],
+            'status' => ['status', 'employee status'],
+            'date_of_birth' => ['date of birth', 'dob', 'birth date'],
+            'gender' => ['gender'],
+            'cnic' => ['cnic', 'national id', 'national id / cnic'],
+            'personal_phone' => ['phone', 'personal phone', 'mobile', 'mobile number', 'contact number'],
+            'address' => ['address'],
+            'blood_group' => ['blood group', 'blood'],
+            'next_of_kin_name' => ['next of kin', 'next of kin name', 'kin'],
+            'next_of_kin_relationship' => ['kin relationship', 'next of kin relationship', 'kin relation'],
+            'next_of_kin_phone' => ['kin phone', 'next of kin phone'],
+            'manager_name' => ['manager', 'line manager', 'reporting manager', 'manager name'],
+            'shift_code' => ['shift code'],
+            'shift_name' => ['shift', 'shift name'],
+            'shift_start' => ['shift start', 'start time'],
+            'shift_end' => ['shift end', 'end time'],
+            'basic_salary' => ['basic salary', 'basic'],
+            'house_allowance' => ['house allowance', 'house'],
+            'transport_allowance' => ['transport allowance', 'transport'],
+            'tax_deduction' => ['tax deduction', 'tax'],
+            'bank_name' => ['bank name', 'bank'],
+            'bank_account_no' => ['bank account no', 'account no', 'account number', 'acct'],
+            'bank_iban' => ['iban', 'bank iban'],
+            'work_location' => ['work location', 'office location', 'location'],
+            'confirmation_date' => ['confirmation date'],
+            'marital_status' => ['marital status'],
+            'passport_no' => ['passport no', 'passport number'],
+            'pay_period' => ['pay period'],
+            'salary_start_date' => ['salary start date'],
+            'contribution_amount' => ['contribution', 'contribution amount'],
+            'other_deductions' => ['other deductions'],
+        ];
+
+        $map = [];
+        foreach ($aliases as $field => $headers) {
+            foreach ($headers as $header) {
+                $map[$this->normalizeImportHeader($header)] = $field;
+            }
+        }
+
+        return $map;
+    }
+
+    private function normalizeImportHeader(string $header): string
+    {
+        return Str::of($header)->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->value();
+    }
+
+    private function importDate($value): ?string
+    {
+        $value = trim((string) ($value ?? ''));
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return $value;
+        }
+
+        if (is_numeric($value) && (float) $value > 0) {
+            return now()->create(1899, 12, 30)->addDays((int) floor((float) $value))->toDateString();
+        }
+
+        $formats = [
+            'd/m/Y',
+            'd-m-Y',
+            'm/d/Y',
+            'm-d-Y',
+            'd/m/y',
+            'd-m-y',
+            'm/d/y',
+            'm-d-y',
+            'd M Y',
+            'd F Y',
+            'M d Y',
+            'F d Y',
+        ];
+
+        foreach ($formats as $format) {
+            try {
+                $date = \Carbon\Carbon::createFromFormat($format, $value);
+                $errors = \Carbon\Carbon::getLastErrors();
+                if ($date && ($errors === false || (($errors['warning_count'] ?? 0) === 0 && ($errors['error_count'] ?? 0) === 0))) {
+                    return $date->toDateString();
+                }
+            } catch (\Throwable) {
+                // Try the next known import date format.
+            }
+        }
+
+        try {
+            return now()->parse($value)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function employeeCustomFieldId(string $label, array &$cache, array &$createdLabels): int
+    {
+        $key = Str::of($label)->lower()->replaceMatches('/[^a-z0-9]+/', '_')->trim('_')->value();
+        $key = $key !== '' ? $key : 'imported_field';
+
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        $existing = DB::table('employee_custom_fields')->where('key', $key)->first();
+        if ($existing) {
+            return $cache[$key] = (int) $existing->id;
+        }
+
+        $createdLabels[] = $label;
+
+        return $cache[$key] = DB::table('employee_custom_fields')->insertGetId([
+            'key' => $key,
+            'label' => $label,
+            'type' => 'text',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    private function importPlaceholderPersonalEmail(string $employeeCode, string $officialEmail): string
+    {
+        $domain = Str::after($officialEmail, '@') ?: 'import.local';
+        $local = Str::of($employeeCode ?: Str::before($officialEmail, '@'))->lower()->replaceMatches('/[^a-z0-9]+/', '.')->trim('.')->value();
+
+        return 'personal+'.($local ?: Str::random(8)).'@'.$domain;
+    }
+
+    private function nextEmployeeCodeForTeam(string $teamName): string
+    {
+        $prefix = $this->teamPrefix($teamName);
+        $existing = DB::table('users')->where('employee_code', 'like', $prefix.'-emp%')->pluck('employee_code');
+        $max = 0;
+        foreach ($existing as $code) {
+            if (preg_match('/^'.preg_quote($prefix, '/').'\-emp(\d+)$/i', (string) $code, $matches)) {
+                $max = max($max, (int) $matches[1]);
+            }
+        }
+
+        return $prefix.'-emp'.str_pad((string) ($max + 1), 3, '0', STR_PAD_LEFT);
+    }
+
+    private function teamPrefix(string $teamName): string
+    {
+        $normalized = Str::of($teamName)->trim()->lower()->replaceMatches('/[^a-z0-9\s]+/', '')->value();
+        $mapped = [
+            'development' => 'Dev',
+            'engineering' => 'Eng',
+            'human resources' => 'HR',
+            'hr' => 'HR',
+            'finance' => 'Fin',
+            'marketing' => 'Mkt',
+            'product' => 'Prd',
+            'operations' => 'Ops',
+            'design' => 'Dsg',
+            'support' => 'Sup',
+            'sales' => 'Sal',
+            'quality assurance' => 'QA',
+            'qa' => 'QA',
+        ][$normalized] ?? null;
+
+        if ($mapped) {
+            return $mapped;
+        }
+
+        $words = preg_split('/\s+/', $normalized, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($words) > 1) {
+            return strtoupper(implode('', array_map(static fn (string $word): string => substr($word, 0, 1), array_slice($words, 0, 3)))) ?: 'Tem';
+        }
+
+        $base = ucfirst(substr($normalized ?: 'team', 0, 3));
+
+        return strlen($base) >= 2 ? $base : 'Tem';
     }
 
     private function companyExportRow(): array

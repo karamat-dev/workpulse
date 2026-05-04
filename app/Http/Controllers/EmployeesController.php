@@ -973,6 +973,23 @@ class EmployeesController extends Controller
             ]);
         }
 
+        if ($includeConfidential) {
+            $payload['customFields'] = DB::table('employee_custom_field_values')
+                ->join('employee_custom_fields', 'employee_custom_fields.id', '=', 'employee_custom_field_values.field_id')
+                ->where('employee_custom_field_values.user_id', $record->user_id)
+                ->orderBy('employee_custom_fields.label')
+                ->get([
+                    'employee_custom_fields.label',
+                    'employee_custom_field_values.value',
+                ])
+                ->map(fn ($field) => [
+                    'label' => $field->label,
+                    'value' => $field->value,
+                ])
+                ->values()
+                ->all();
+        }
+
         return $payload;
     }
 

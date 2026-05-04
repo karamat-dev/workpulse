@@ -449,7 +449,7 @@
   </div>
 </div>
 
-<input type="file" id="transfer-import-file" accept=".json,application/json" style="display:none;">
+<input type="file" id="transfer-import-file" accept=".json,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
 <input type="file" id="company-import-file" accept=".json,application/json" style="display:none;">
 
 <!-- Edit Leave Balance Modal (Admin) -->
