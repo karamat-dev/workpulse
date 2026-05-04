@@ -429,7 +429,7 @@ class AttendanceController extends Controller
         $users = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
-            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
             ->select([
                 'users.id',
                 'users.employee_code',
@@ -660,7 +660,7 @@ class AttendanceController extends Controller
         $employeesQuery = DB::table('users')
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
-            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
             ->select([
                 'users.id as user_id',
                 'users.employee_code',

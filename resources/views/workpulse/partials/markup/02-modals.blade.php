@@ -456,6 +456,27 @@
 <input type="file" id="transfer-import-file" accept=".json,.csv,.xlsx,application/json,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none;">
 <input type="file" id="company-import-file" accept=".json,application/json" style="display:none;">
 
+<div class="modal-overlay" id="employeeImportMapModal">
+  <div class="modal modal-wide">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">Map Employee Import Columns</div>
+        <div class="modal-subtitle" id="employee-import-map-summary" style="margin-top:6px;color:var(--muted);font-size:13px;">Map each source column before importing.</div>
+      </div>
+      <button class="modal-close" onclick="window.closeModal('employeeImportMapModal')">Ã—</button>
+    </div>
+    <div class="import-map-head">
+      <span>Source column</span>
+      <span>Import as</span>
+    </div>
+    <div id="employee-import-map-body" class="import-map-body"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="window.closeModal('employeeImportMapModal')">Cancel</button>
+      <button class="btn btn-primary" id="employee-import-map-confirm" onclick="window.confirmEmployeeImportMapping()">Start Import</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit Leave Balance Modal (Admin) -->
 <div class="modal-overlay" id="editLeaveModal">
   <div class="modal">

@@ -1067,18 +1067,111 @@ function importTransferJson(inputId, endpoint, successMessage){
   input.click();
 }
 
+let employeeImportMappingState = null;
+
+function renderEmployeeImportMappingModal(preview){
+  const body = document.getElementById('employee-import-map-body');
+  const summary = document.getElementById('employee-import-map-summary');
+  if(!body || !summary) return;
+
+  const columns = Array.isArray(preview.columns) ? preview.columns : [];
+  const sample = Array.isArray(preview.sample) ? preview.sample : [];
+  const fields = Array.isArray(preview.fields) ? preview.fields : [];
+  const suggested = preview.suggested_mapping || {};
+  const fieldOptions = [
+    {value:'__skip', label:'Skip this column'},
+    {value:'__custom', label:'Imported custom field'},
+    ...fields
+  ];
+
+  summary.textContent = `${columns.length} source column(s) detected. Map each column, then start the import.`;
+  body.innerHTML = columns.map(column=>{
+    const sampleValues = sample
+      .map(row => row && row[column] !== undefined && row[column] !== null ? String(row[column]).trim() : '')
+      .filter(Boolean)
+      .slice(0, 2)
+      .join(' / ');
+    const selected = suggested[column] || '__custom';
+    return `
+      <div class="import-map-row">
+        <div class="import-map-source">
+          <strong>${escapeHtml(column)}</strong>
+          <span>${escapeHtml(sampleValues || 'No sample value')}</span>
+        </div>
+        <select class="fi import-map-select" data-source="${escapeHtmlAttr(column)}">
+          ${fieldOptions.map(option=>`<option value="${escapeHtmlAttr(option.value)}" ${option.value===selected?'selected':''}>${escapeHtml(option.label)}</option>`).join('')}
+        </select>
+      </div>`;
+  }).join('') || `<div class="empty">No columns detected.</div>`;
+}
+
 function importEmployeeProfiles(){
-  importTransferJson(
-    'transfer-import-file',
-    '/api/transfer/employees/import',
-    (data)=>{
-      const created = Array.isArray(data.created_fields) && data.created_fields.length
-        ? ` Created ${data.created_fields.length} new field(s).`
-        : '';
-      const skipped = data.skipped ? ` Skipped ${data.skipped}.` : '';
-      return `Imported ${data.imported || 0} employee profile(s).${created}${skipped}`;
+  const input = document.getElementById('transfer-import-file');
+  if(!input) return;
+  input.value = '';
+  input.onchange = async function(){
+    const file = input.files?.[0];
+    if(!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('preview', '1');
+
+    try{
+      const preview = await wpApi('/api/transfer/employees/import', {method:'POST', body: formData});
+      employeeImportMappingState = {file, preview};
+      renderEmployeeImportMappingModal(preview);
+      openModal('employeeImportMapModal');
+    }catch(e){
+      employeeImportMappingState = null;
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
-  );
+  };
+  input.click();
+}
+
+async function confirmEmployeeImportMapping(){
+  if(!employeeImportMappingState?.file){
+    showToast('Choose an import file first.','red');
+    return;
+  }
+
+  const mapping = {};
+  document.querySelectorAll('#employee-import-map-body .import-map-select').forEach(select=>{
+    mapping[select.dataset.source || ''] = select.value || '__skip';
+  });
+
+  const mappedValues = Object.values(mapping);
+  const hasEmail = mappedValues.includes('email');
+  const hasName = mappedValues.includes('name') || (mappedValues.includes('fname') && mappedValues.includes('lname'));
+  if(!hasEmail || !hasName){
+    showToast('Map Official Email and either Full Name or First Name + Last Name before importing.','red');
+    return;
+  }
+
+  const button = document.getElementById('employee-import-map-confirm');
+  if(button) button.disabled = true;
+
+  const formData = new FormData();
+  formData.append('file', employeeImportMappingState.file);
+  formData.append('column_mapping', JSON.stringify(mapping));
+
+  try{
+    const data = await wpApi('/api/transfer/employees/import', {method:'POST', body: formData});
+    await wpReload();
+    closeModal('employeeImportMapModal');
+    employeeImportMappingState = null;
+    const created = Array.isArray(data.created_fields) && data.created_fields.length
+      ? ` Created ${data.created_fields.length} new field(s).`
+      : '';
+    const skipped = data.skipped ? ` Skipped ${data.skipped}.` : '';
+    showToast(`Imported ${data.imported || 0} employee profile(s).${created}${skipped}`,'green');
+    if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }finally{
+    if(button) button.disabled = false;
+  }
 }
 
 function importCompanyDetails(){

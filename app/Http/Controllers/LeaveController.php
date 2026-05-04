@@ -519,7 +519,7 @@ class LeaveController extends Controller
     private function syncBalancesForPolicyYear(int $year, array $leaveTypeIds = []): void
     {
         $users = DB::table('users')
-            ->whereIn('role', ['employee', 'manager', 'hr', 'admin'])
+            ->whereIn('role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
             ->pluck('id');
 
         $policiesQuery = DB::table('leave_policies')->where('year', $year);

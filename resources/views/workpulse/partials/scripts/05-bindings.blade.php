@@ -86,6 +86,7 @@ window.exportEmployeeCSV = exportEmployeeCSV;
 window.exportTransferData = exportTransferData;
 window.exportEmployeeProfilesJson = exportEmployeeProfilesJson;
 window.importEmployeeProfiles = importEmployeeProfiles;
+window.confirmEmployeeImportMapping = confirmEmployeeImportMapping;
 window.exportCompanyDetailsJson = exportCompanyDetailsJson;
 window.importCompanyDetails = importCompanyDetails;
 window.uploadCompanyPolicy = uploadCompanyPolicy;

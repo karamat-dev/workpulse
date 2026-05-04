@@ -122,6 +122,8 @@ class TransferController extends Controller
 
         $validated = $request->validate([
             'file' => ['required', 'file', 'mimes:json,csv,txt,xlsx', 'max:10240'],
+            'preview' => ['nullable', 'boolean'],
+            'column_mapping' => ['nullable', 'string'],
         ]);
 
         [$rows, $sourceColumns] = $this->employeeImportRows($validated['file']);
@@ -137,6 +139,22 @@ class TransferController extends Controller
             ], 422);
         }
 
+        if ($request->boolean('preview')) {
+            return response()->json([
+                'ok' => true,
+                'preview' => true,
+                'columns' => $sourceColumns,
+                'sample' => array_slice($rows, 0, 3),
+                'fields' => $this->employeeImportFieldOptions(),
+                'suggested_mapping' => $this->suggestEmployeeImportMapping($sourceColumns),
+            ]);
+        }
+
+        $columnMapping = $this->decodeEmployeeColumnMapping((string) ($validated['column_mapping'] ?? ''));
+        if ($columnMapping !== []) {
+            $rows = $this->applyEmployeeColumnMapping($rows, $columnMapping);
+        }
+
         $imported = 0;
         $skipped = 0;
         $createdCustomFields = [];
@@ -147,6 +165,12 @@ class TransferController extends Controller
             foreach ($rows as $row) {
                 $row = $this->normalizeEmployeeImportRow($row, $knownFieldMap);
                 $customValues = $row['_custom'] ?? [];
+                foreach ($this->employeeImportCustomFieldLabels() as $field => $label) {
+                    $value = $row[$field] ?? null;
+                    if (trim((string) ($value ?? '')) !== '') {
+                        $customValues[$label] = $value;
+                    }
+                }
 
                 $employeeCode = trim((string) ($row['employee_code'] ?? $row['id'] ?? ''));
                 $email = trim((string) ($row['email'] ?? ''));
@@ -383,14 +407,18 @@ class TransferController extends Controller
             'employee_profiles.last_working_date',
             'employee_profiles.employment_type',
             'employee_profiles.status',
+            'employee_profiles.work_location',
+            'employee_profiles.confirmation_date',
             'employee_profiles.date_of_birth',
             'employee_profiles.gender',
             'employee_profiles.cnic',
             'employee_profiles.cnic_document_path',
             'employee_profiles.cnic_document_name',
+            'employee_profiles.passport_no',
             'employee_profiles.personal_phone',
             'employee_profiles.personal_email',
             'employee_profiles.address',
+            'employee_profiles.marital_status',
             'employee_profiles.blood_group',
             'employee_profiles.next_of_kin_name',
             'employee_profiles.next_of_kin_relationship',
@@ -409,6 +437,10 @@ class TransferController extends Controller
                 'employee_profiles.basic_salary',
                 'employee_profiles.house_allowance',
                 'employee_profiles.transport_allowance',
+                'employee_profiles.pay_period',
+                'employee_profiles.salary_start_date',
+                'employee_profiles.contribution_amount',
+                'employee_profiles.other_deductions',
                 'employee_profiles.tax_deduction',
                 'employee_profiles.bank_name',
                 'employee_profiles.bank_account_no',
@@ -662,6 +694,126 @@ class TransferController extends Controller
         return $normalized;
     }
 
+    private function decodeEmployeeColumnMapping(string $mappingJson): array
+    {
+        if (trim($mappingJson) === '') {
+            return [];
+        }
+
+        $mapping = json_decode($mappingJson, true);
+        if (!is_array($mapping)) {
+            throw ValidationException::withMessages(['column_mapping' => 'Column mapping must be valid JSON.']);
+        }
+
+        $allowedFields = array_column($this->employeeImportFieldOptions(), 'value');
+        $allowed = array_fill_keys($allowedFields, true);
+        $allowed['__skip'] = true;
+        $allowed['__custom'] = true;
+
+        $clean = [];
+        foreach ($mapping as $source => $target) {
+            $source = trim((string) $source);
+            $target = trim((string) $target);
+            if ($source === '' || $target === '' || !isset($allowed[$target])) {
+                continue;
+            }
+            $clean[$source] = $target;
+        }
+
+        return $clean;
+    }
+
+    private function applyEmployeeColumnMapping(array $rows, array $mapping): array
+    {
+        return array_map(function (array $row) use ($mapping) {
+            $mappedRow = [];
+            foreach ($mapping as $source => $target) {
+                if (!array_key_exists($source, $row) || $target === '__skip') {
+                    continue;
+                }
+
+                $mappedRow[$target === '__custom' ? $source : $target] = $row[$source];
+            }
+
+            return $mappedRow;
+        }, $rows);
+    }
+
+    private function suggestEmployeeImportMapping(array $columns): array
+    {
+        $knownFieldMap = $this->employeeImportFieldMap();
+        $suggestions = [];
+        foreach ($columns as $column) {
+            $key = $this->normalizeImportHeader((string) $column);
+            $suggestions[$column] = $knownFieldMap[$key] ?? '__custom';
+        }
+
+        return $suggestions;
+    }
+
+    private function employeeImportFieldOptions(): array
+    {
+        return [
+            ['value' => 'employee_code', 'label' => 'Employee Code'],
+            ['value' => 'name', 'label' => 'Full Name'],
+            ['value' => 'fname', 'label' => 'First Name'],
+            ['value' => 'lname', 'label' => 'Last Name'],
+            ['value' => 'email', 'label' => 'Official Email'],
+            ['value' => 'personal_email', 'label' => 'Personal Email'],
+            ['value' => 'role', 'label' => 'Role'],
+            ['value' => 'department', 'label' => 'Team / Department'],
+            ['value' => 'designation', 'label' => 'Designation'],
+            ['value' => 'date_of_joining', 'label' => 'Hired Date / Date of Joining'],
+            ['value' => 'probation_end_date', 'label' => 'Probation End Date'],
+            ['value' => 'last_working_date', 'label' => 'Last Working Date'],
+            ['value' => 'employment_type', 'label' => 'Employment Type'],
+            ['value' => 'status', 'label' => 'Status'],
+            ['value' => 'date_of_birth', 'label' => 'Date of Birth'],
+            ['value' => 'age', 'label' => 'Age'],
+            ['value' => 'gender', 'label' => 'Gender'],
+            ['value' => 'cnic', 'label' => 'CNIC / National ID'],
+            ['value' => 'personal_phone', 'label' => 'Personal Phone'],
+            ['value' => 'work_phone', 'label' => 'Work Phone'],
+            ['value' => 'address', 'label' => 'Address'],
+            ['value' => 'blood_group', 'label' => 'Blood Group'],
+            ['value' => 'next_of_kin_name', 'label' => 'Emergency Contact / Next of Kin Name'],
+            ['value' => 'next_of_kin_relationship', 'label' => 'Next of Kin Relationship'],
+            ['value' => 'next_of_kin_phone', 'label' => 'Emergency Phone / Next of Kin Phone'],
+            ['value' => 'manager_name', 'label' => 'Manager Name'],
+            ['value' => 'shift_code', 'label' => 'Shift Code'],
+            ['value' => 'shift_name', 'label' => 'Shift Name'],
+            ['value' => 'shift_start', 'label' => 'Shift Start'],
+            ['value' => 'shift_end', 'label' => 'Shift End'],
+            ['value' => 'basic_salary', 'label' => 'Basic Salary'],
+            ['value' => 'house_allowance', 'label' => 'House Allowance'],
+            ['value' => 'transport_allowance', 'label' => 'Transport Allowance'],
+            ['value' => 'tax_deduction', 'label' => 'Tax Deduction'],
+            ['value' => 'bank_name', 'label' => 'Bank Name'],
+            ['value' => 'bank_branch', 'label' => 'Branch'],
+            ['value' => 'bank_branch_code', 'label' => 'Branch Code'],
+            ['value' => 'bank_account_no', 'label' => 'Bank Account No'],
+            ['value' => 'bank_iban', 'label' => 'Bank IBAN'],
+            ['value' => 'work_location', 'label' => 'Work Location'],
+            ['value' => 'confirmation_date', 'label' => 'Confirmation Date'],
+            ['value' => 'marital_status', 'label' => 'Marital Status'],
+            ['value' => 'passport_no', 'label' => 'Passport No'],
+            ['value' => 'pay_period', 'label' => 'Pay Period'],
+            ['value' => 'salary_start_date', 'label' => 'Salary Start Date'],
+            ['value' => 'contribution_amount', 'label' => 'Contribution Amount'],
+            ['value' => 'other_deductions', 'label' => 'Other Deductions'],
+        ];
+    }
+
+    private function employeeImportCustomFieldLabels(): array
+    {
+        return [
+            'age' => 'Age',
+            'work_phone' => 'Work Phone',
+            'bank_branch' => 'Branch',
+            'bank_branch_code' => 'Branch Code',
+        ];
+    }
+
     private function employeeImportFieldMap(): array
     {
         $aliases = [
@@ -674,20 +826,22 @@ class TransferController extends Controller
             'role' => ['role', 'user role'],
             'department' => ['department', 'dept', 'team'],
             'designation' => ['designation', 'job title', 'title', 'position'],
-            'date_of_joining' => ['date of joining', 'joining date', 'doj', 'hire date'],
+            'date_of_joining' => ['date of joining', 'joining date', 'doj', 'hire date', 'hired date'],
             'probation_end_date' => ['probation end date', 'probation date', 'dop'],
             'last_working_date' => ['last working date', 'lwd', 'exit date'],
             'employment_type' => ['employment type', 'type'],
             'status' => ['status', 'employee status'],
             'date_of_birth' => ['date of birth', 'dob', 'birth date'],
+            'age' => ['age'],
             'gender' => ['gender'],
             'cnic' => ['cnic', 'national id', 'national id / cnic'],
-            'personal_phone' => ['phone', 'personal phone', 'mobile', 'mobile number', 'contact number'],
+            'personal_phone' => ['phone', 'personal phone', 'mobile', 'mobile number', 'contact number', 'home phone'],
+            'work_phone' => ['work phone'],
             'address' => ['address'],
             'blood_group' => ['blood group', 'blood'],
-            'next_of_kin_name' => ['next of kin', 'next of kin name', 'kin'],
+            'next_of_kin_name' => ['next of kin', 'next of kin name', 'kin', 'emergency contact'],
             'next_of_kin_relationship' => ['kin relationship', 'next of kin relationship', 'kin relation'],
-            'next_of_kin_phone' => ['kin phone', 'next of kin phone'],
+            'next_of_kin_phone' => ['kin phone', 'next of kin phone', 'emergency phone'],
             'manager_name' => ['manager', 'line manager', 'reporting manager', 'manager name'],
             'shift_code' => ['shift code'],
             'shift_name' => ['shift', 'shift name'],
@@ -698,6 +852,8 @@ class TransferController extends Controller
             'transport_allowance' => ['transport allowance', 'transport'],
             'tax_deduction' => ['tax deduction', 'tax'],
             'bank_name' => ['bank name', 'bank'],
+            'bank_branch' => ['branch', 'bank branch'],
+            'bank_branch_code' => ['branch code', 'bank branch code'],
             'bank_account_no' => ['bank account no', 'account no', 'account number', 'acct'],
             'bank_iban' => ['iban', 'bank iban'],
             'work_location' => ['work location', 'office location', 'location'],

@@ -61,7 +61,7 @@ class ReportsController extends Controller
                 $join->on('attendance_days.user_id', '=', 'users.id')
                     ->whereBetween('attendance_days.date', [$start, $end]);
             })
-            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
             ->when($employeeCode, fn ($query) => $query->where('users.employee_code', $employeeCode))
             ->select([
                 'users.id as user_id',

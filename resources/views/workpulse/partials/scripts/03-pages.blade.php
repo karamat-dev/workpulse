@@ -1989,6 +1989,7 @@ function pageAdminDashboard(){
       totalEmployees: Number(d.count || 0),
       markedAttendance: Number(d.present || 0)
     }));
+    const visibleDeptAttendanceItems = deptAttendanceItems.slice(0, 3);
     const pendingLeaveRequests = leaves
       .filter(l => l.status === 'Pending')
       .slice(0, 4)
@@ -2058,13 +2059,16 @@ function pageAdminDashboard(){
         </div>
       </div>
       <div class="card">
-        <div class="card-hdr"><div class="card-title">Team Attendance</div></div>
+        <div class="card-hdr">
+          <div class="card-title">Team Attendance</div>
+          ${deptAttendanceItems.length > 3 ? `<button class="dashboard-card-link" type="button" onclick="window.showPage('realtime')">Show more</button>` : ''}
+        </div>
         <div class="dept-summary-card">
           <div class="dept-donut-wrap">
             <div id="dept-attendance-chart" class="dept-chart-canvas" aria-label="Department attendance breakdown"></div>
           </div>
           <div class="dept-summary-list">
-            ${deptAttendanceItems.map(item=>`
+            ${visibleDeptAttendanceItems.map(item=>`
             <div class="dept-summary-item">
               <div class="dept-summary-meta">
                 <span class="dept-summary-dot" style="background:${item.color};"></span>
@@ -2853,6 +2857,7 @@ function formatUserRole(role){
   const labels = {
     employee: 'Employee',
     manager: 'Super-Admin',
+    super_admin: 'Super-Admin',
     admin: 'Admin',
   };
   return labels[value] || 'Employee';
@@ -2863,6 +2868,7 @@ function roleBadge(role){
   const cls = {
     employee: 'bg-blue',
     manager: 'bg-amber',
+    super_admin: 'bg-amber',
     admin: 'bg-red',
   }[value] || 'bg-blue';
   return `<span class="badge ${cls}">${formatUserRole(value)}</span>`;
@@ -2872,7 +2878,7 @@ function getRoleCounts(){
   const employees = Array.isArray(DB.employees) ? DB.employees : [];
   return {
     employee: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'employee').length,
-    manager: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'manager').length,
+    manager: employees.filter(e => ['manager','super_admin'].includes(String(e.role || 'employee').toLowerCase())).length,
     admin: employees.filter(e => String(e.role || 'employee').toLowerCase() === 'admin').length,
   };
 }
@@ -2880,7 +2886,7 @@ function getRoleCounts(){
 function pageRoles(){
   const counts = getRoleCounts();
   const employees = (Array.isArray(DB.employees) ? DB.employees : []).slice().sort((a,b)=>{
-    const roleOrder = {admin: 1, manager: 2, employee: 3, hr: 4};
+    const roleOrder = {admin: 1, manager: 2, super_admin: 2, employee: 3, hr: 4};
     const roleDiff = (roleOrder[String(a.role || 'employee').toLowerCase()] || 99) - (roleOrder[String(b.role || 'employee').toLowerCase()] || 99);
     if(roleDiff !== 0) return roleDiff;
     return `${a.fname || ''} ${a.lname || ''}`.localeCompare(`${b.fname || ''} ${b.lname || ''}`);

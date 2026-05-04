@@ -303,7 +303,7 @@ class WorkpulseBootstrapController extends Controller
             ->leftJoin('users as mgr', 'mgr.id', '=', 'employee_profiles.manager_user_id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
             ->where(function ($query) use ($user) {
-                $query->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+                $query->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
                     ->orWhere('users.id', $user->id);
             })
             ->select($employeeSelect)

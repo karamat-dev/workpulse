@@ -30,7 +30,7 @@ class WorkpulseAttendanceReminder extends Command
         $employees = DB::table('users')
             ->join('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('shifts', 'shifts.id', '=', 'employee_profiles.shift_id')
-            ->whereIn('users.role', ['employee', 'manager', 'hr', 'admin'])
+            ->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
             ->whereIn('employee_profiles.status', ['Active', 'Probation'])
             ->select([
                 'users.id',
