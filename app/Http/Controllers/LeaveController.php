@@ -1170,6 +1170,22 @@ class LeaveController extends Controller
                 );
             }
 
+<<<<<<< ours
+            $this->createEmployeeNotification(
+                (int) $requestRow->user_id,
+                'leave_review',
+                $title,
+                $message,
+                'leave_request',
+                (string) $requestRow->code,
+                [
+                    'step' => 'hr',
+                    'decision' => $validated['status'],
+                    'final_status' => $finalStatus,
+                    'reviewer_id' => $user->id,
+                ],
+            );
+=======
             foreach ($leavePlan as $leaveDay) {
                 $this->createEmployeeNotification(
                     (int) $requestRow->user_id,
@@ -1187,6 +1203,7 @@ class LeaveController extends Controller
                     ],
                 );
             }
+>>>>>>> theirs
         });
 
         return response()->json(['ok' => true]);

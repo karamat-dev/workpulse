@@ -135,22 +135,30 @@ function openModal(id, options = {}){
   }
   normalizeMojibake(modal);
 }
+
 function resetModalForm(id){
   if(id === 'leaveModal' && typeof resetLeaveForm === 'function') resetLeaveForm();
   if(id === 'regulationModal' && typeof resetRegulationForm === 'function') resetRegulationForm();
 }
+
+function isPasswordChangeRequired(){
+  return Boolean(window.__passwordChangeRequired || DB.currentUser?.mustChangePassword);
+}
+
 function closeModal(id){
+  if(id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
   document.getElementById(id).classList.remove('open');
   resetModalForm(id);
 }
+
 setTimeout(() => normalizeMojibake(document.body), 0);
 setTimeout(() => observeMojibakeChanges(), 0);
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{
-    if(e.target===m){
-      m.classList.remove('open');
-      resetModalForm(m.id);
-    }
+    if(e.target !== m) return;
+    if(m.id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
+    m.classList.remove('open');
+    resetModalForm(m.id);
   });
 });
 
