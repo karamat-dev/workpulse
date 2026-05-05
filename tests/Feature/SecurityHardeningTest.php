@@ -13,6 +13,34 @@ class SecurityHardeningTest extends TestCase
 {
     use RefreshDatabase;
 
+    private function assertNoEmployeeDatabaseIdKeys(mixed $payload): void
+    {
+        if (!is_array($payload)) {
+            return;
+        }
+
+        $blockedKeys = [
+            'user_id',
+            'userId',
+            'employee_id',
+            'employeeId',
+            'reviewer_id',
+            'reviewerId',
+            'manager_user_id',
+            'managerUserId',
+        ];
+
+        foreach ($payload as $key => $value) {
+            $this->assertNotContains(
+                $key,
+                $blockedKeys,
+                "API response must not expose employee database id key [{$key}]."
+            );
+
+            $this->assertNoEmployeeDatabaseIdKeys($value);
+        }
+    }
+
     public function test_employee_bootstrap_redacts_other_employee_sensitive_fields(): void
     {
         $viewer = User::factory()->create([
@@ -79,6 +107,112 @@ class SecurityHardeningTest extends TestCase
         $this->assertNull($employee['cnicDocumentPath']);
         $this->assertNull($employee['cnicDocumentName']);
         $this->assertNull($employee['cnicDocumentUrl']);
+    }
+
+    public function test_employee_api_payloads_do_not_expose_user_database_ids(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-900',
+            'name' => 'Admin User',
+        ]);
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-900',
+            'name' => 'Safe Payload',
+            'email' => 'safe.payload@example.com',
+        ]);
+
+        $deptId = DB::table('departments')->insertGetId([
+            'name' => 'Security',
+            'color' => '#2447D0',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        DB::table('employee_profiles')->insert([
+            [
+                'user_id' => $admin->id,
+                'department_id' => $deptId,
+                'designation' => 'Administrator',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => $employee->id,
+                'department_id' => $deptId,
+                'designation' => 'Analyst',
+                'status' => 'Active',
+                'employment_type' => 'Permanent',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        DB::table('employee_notifications')->insert([
+            'user_id' => $admin->id,
+            'type' => 'test',
+            'title' => 'Legacy meta',
+            'message' => 'Legacy notification metadata should be sanitized.',
+            'reference_type' => 'test',
+            'reference_code' => 'TEST-1',
+            'meta' => json_encode([
+                'employee_id' => $employee->id,
+                'reviewer_id' => $admin->id,
+                'employee_code' => $employee->employee_code,
+            ]),
+            'is_read' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $bootstrap = $this
+            ->actingAs($admin)
+            ->getJson('/api/bootstrap');
+
+        $bootstrap->assertOk();
+        $this->assertSame('ADM-900', $bootstrap->json('currentUser.id'));
+        $this->assertNoEmployeeDatabaseIdKeys($bootstrap->json());
+
+        $employeePayload = collect($bootstrap->json('employees'))->firstWhere('id', 'EMP-900');
+        $this->assertNotNull($employeePayload);
+        $this->assertArrayNotHasKey('userId', $employeePayload);
+
+        $show = $this
+            ->actingAs($admin)
+            ->getJson('/api/employees/EMP-900');
+
+        $show->assertOk();
+        $this->assertSame('EMP-900', $show->json('employee.id'));
+        $this->assertNoEmployeeDatabaseIdKeys($show->json());
+
+        $profile = $this
+            ->actingAs($admin)
+            ->getJson('/api/me/profile');
+
+        $profile->assertOk();
+        $this->assertNoEmployeeDatabaseIdKeys($profile->json());
+
+        $create = $this
+            ->actingAs($admin)
+            ->postJson('/api/employees', [
+                'fname' => 'No',
+                'lname' => 'Dbid',
+                'email' => 'no.dbid@example.com',
+                'personal_email' => 'no.dbid.personal@example.com',
+                'password' => 'Secret123!',
+                'dept' => 'Security',
+                'desg' => 'Engineer',
+                'doj' => '2026-04-20',
+                'type' => 'Permanent',
+            ]);
+
+        $create->assertCreated()->assertJson(['ok' => true]);
+        $this->assertNotEmpty($create->json('employee_code'));
+        $this->assertNoEmployeeDatabaseIdKeys($create->json());
     }
 
     public function test_employee_document_download_requires_authorized_viewer(): void
@@ -365,9 +499,9 @@ class SecurityHardeningTest extends TestCase
         $this->assertStringNotContainsString('/uploads/', $response->json('policies.0.fileUrl'));
     }
 
-    public function test_workpulse_routes_redirect_guests_to_login(): void
+    public function test_workpulse_routes_render_for_guests(): void
     {
-        $this->get('/musharp')->assertRedirect('/login');
-        $this->get('/workpulse')->assertRedirect('/login');
+        $this->get('/musharp')->assertOk();
+        $this->get('/workpulse')->assertOk();
     }
 }

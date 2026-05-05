@@ -821,7 +821,7 @@ class AttendanceController extends Controller
                 'attendance_regulation',
                 $code,
                 [
-                    'employee_id' => $requester->id,
+                    'employee_code' => $requester->employee_code,
                     'employee_name' => $requester->name,
                     'date' => $validated['date'],
                     'type' => $type,
@@ -881,7 +881,7 @@ class AttendanceController extends Controller
                 (string) $regulation->code,
                 [
                     'decision' => $validated['status'],
-                    'reviewer_id' => $reviewer->id,
+                    'reviewer_employee_code' => $reviewer->employee_code,
                     'date' => $regulation->date,
                 ],
             );

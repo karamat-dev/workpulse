@@ -41,7 +41,7 @@ Route::get('/csrf-token', function (Request $request) {
 })->name('csrf.token');
 
 Route::middleware('auth')->group(function () {
-    Route::prefix('api')->group(function () {
+    Route::prefix('api')->middleware('password.changed')->group(function () {
         Route::get('/bootstrap', WorkpulseBootstrapController::class);
         Route::get('/me/profile', [MeController::class, 'profile']);
         Route::get('/me/notifications', [MeController::class, 'notifications']);

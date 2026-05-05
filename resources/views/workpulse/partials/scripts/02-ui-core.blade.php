@@ -130,11 +130,22 @@ function openModal(id){
   }
   normalizeMojibake(document.getElementById(id));
 }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+function isPasswordChangeRequired(){
+  return Boolean(window.__passwordChangeRequired || DB.currentUser?.mustChangePassword);
+}
+
+function closeModal(id){
+  if(id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
+  document.getElementById(id).classList.remove('open');
+}
 setTimeout(() => normalizeMojibake(document.body), 0);
 setTimeout(() => observeMojibakeChanges(), 0);
 document.querySelectorAll('.modal-overlay').forEach(m=>{
-  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+  m.addEventListener('click',e=>{
+    if(e.target !== m) return;
+    if(m.id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
+    m.classList.remove('open');
+  });
 });
 
 function getCookieValue(name){
@@ -203,6 +214,13 @@ async function fetchWithCsrfRetry(url, options = {}){
   });
 
   return response;
+}
+
+function showRequestError(error, fallback = 'Unable to complete the request. Please try again.'){
+  const message = error && typeof error.message === 'string' && error.message.trim()
+    ? error.message
+    : fallback;
+  showToast(message, 'red');
 }
 
 // ══════════════════════════════════════════════════
@@ -708,6 +726,10 @@ function initApp(){
   showPage(getDefaultPageForRole(DB.currentRole));
   buildTopbarActions();
   normalizeMojibake(document.body);
+
+  if(isPasswordChangeRequired() && typeof window.showPasswordChangeRequired === 'function'){
+    window.showPasswordChangeRequired();
+  }
 }
 
 function getDefaultPageForRole(role){
@@ -1068,6 +1090,12 @@ const pageTitles = {
 function showPage(id){
   closeTopbarUserMenu();
   toggleMobileNav(false);
+  if(isPasswordChangeRequired()){
+    if(typeof window.showPasswordChangeRequired === 'function'){
+      window.showPasswordChangeRequired();
+    }
+    return;
+  }
   if(!canAccessPage(id) && id!=='emp-profile-detail'){
     id = getDefaultPageForRole(DB.currentRole);
   }
@@ -1085,7 +1113,7 @@ function showPage(id){
     main.innerHTML = renderPage(id);
   }catch(err){
     console.error('showPage/renderPage error for', id, err);
-    main.innerHTML = `<div class="card"><div class="card-title">Render Error</div><p style="margin-top:8px;color:var(--muted);">Could not render page: ${id}</p><p style="margin-top:6px;color:var(--red);font-size:12px;">${String(err && err.message ? err.message : err)}</p></div>`;
+    main.innerHTML = `<div class="card"><div class="card-title">Page unavailable</div><p style="margin-top:8px;color:var(--muted);">We could not load this page. Please refresh and try again.</p></div>`;
   }
   startClock(); // re-hook clock elements
   if(typeof window.setupLiveAttendanceRefresh === 'function'){
@@ -1144,7 +1172,7 @@ function renderPage(id){
     }
   }catch(err){
     console.error('renderPage internal error', id, err);
-    return `<div class="card"><div class="card-title">Page Error</div><p style="margin-top:8px;color:var(--muted);">Failed to render <strong>${id}</strong>.</p><p style="margin-top:6px;color:var(--red);font-size:12px;">${String(err && err.message ? err.message : err)}</p></div>`;
+    return `<div class="card"><div class="card-title">Page unavailable</div><p style="margin-top:8px;color:var(--muted);">We could not load this page. Please refresh and try again.</p></div>`;
   }
 }
 

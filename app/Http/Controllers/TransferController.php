@@ -261,6 +261,7 @@ class TransferController extends Controller
                         'employee_code' => $employeeCode,
                         'role' => $row['role'] ?? 'employee',
                         'password' => Hash::make(Str::random(16)),
+                        'password_must_change' => ($row['role'] ?? 'employee') === 'employee',
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);

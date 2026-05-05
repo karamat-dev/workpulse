@@ -1041,7 +1041,7 @@ class LeaveController extends Controller
                     'step' => 'hr',
                     'decision' => $validated['status'],
                     'final_status' => $finalStatus,
-                    'reviewer_id' => $user->id,
+                    'reviewer_employee_code' => $user->employee_code,
                 ],
             );
         });

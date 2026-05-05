@@ -27,7 +27,7 @@ class MeController extends Controller
                 'message' => $notification->message,
                 'referenceType' => $notification->reference_type,
                 'referenceCode' => $notification->reference_code,
-                'meta' => $notification->meta ? json_decode((string) $notification->meta, true) : null,
+                'meta' => NotificationsController::sanitizeNotificationMeta($notification->meta),
                 'isRead' => (bool) $notification->is_read,
                 'readAt' => $notification->read_at,
                 'createdAt' => $notification->created_at,
@@ -80,7 +80,6 @@ class MeController extends Controller
             'employee_profiles.date_of_joining as doj',
             'employee_profiles.probation_end_date as dop',
             'employee_profiles.last_working_date as lwd',
-            'employee_profiles.manager_user_id',
             'employee_profiles.shift_id',
             'mgr.name as manager',
             'employee_profiles.employment_type as type',
@@ -164,12 +163,21 @@ class MeController extends Controller
     public function updateAccount(Request $request): JsonResponse
     {
         $user = $request->user();
+        $passwordChangeRequired = (bool) $user->password_must_change;
 
         $validated = $request->validate([
             'current_password' => ['nullable', 'current_password', 'required_with:password'],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'password' => ['nullable', 'string', 'min:8', 'confirmed', 'different:current_password'],
             'profile_photo' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
+
+        if ($passwordChangeRequired && empty($validated['password'])) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please set a new password before continuing.',
+                'passwordChangeRequired' => true,
+            ], 422);
+        }
 
         if (empty($validated['password']) && !$request->hasFile('profile_photo')) {
             return response()->json([
@@ -182,6 +190,7 @@ class MeController extends Controller
             if (!empty($validated['password'])) {
                 DB::table('users')->where('id', $user->id)->update([
                     'password' => Hash::make($validated['password']),
+                    'password_must_change' => false,
                     'updated_at' => now(),
                 ]);
             }
@@ -212,6 +221,7 @@ class MeController extends Controller
         return response()->json([
             'ok' => true,
             'message' => 'Account updated successfully.',
+            'passwordChangeRequired' => false,
         ]);
     }
 

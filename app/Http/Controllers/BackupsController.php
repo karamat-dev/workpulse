@@ -13,6 +13,7 @@ use Throwable;
 class BackupsController extends Controller
 {
     private const LIST_LIMIT = 70;
+    private const GENERIC_ERROR = 'Unable to complete the backup request. Please try again.';
 
     public function index(Request $request, WorkpulseBackupService $backups): JsonResponse
     {
@@ -38,8 +39,9 @@ class BackupsController extends Controller
             report($e);
 
             $status = str_contains($e->getMessage(), 'Manual backup limit reached') ? 422 : 500;
+            $message = $status === 422 ? $e->getMessage() : self::GENERIC_ERROR;
 
-            return response()->json(['ok' => false, 'message' => $e->getMessage()], $status);
+            return response()->json(['ok' => false, 'message' => $message], $status);
         }
     }
 
@@ -57,7 +59,7 @@ class BackupsController extends Controller
         } catch (Throwable $e) {
             report($e);
 
-            return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['ok' => false, 'message' => self::GENERIC_ERROR], 500);
         }
     }
 
@@ -75,7 +77,7 @@ class BackupsController extends Controller
         } catch (Throwable $e) {
             report($e);
 
-            return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
+            return response()->json(['ok' => false, 'message' => self::GENERIC_ERROR], 500);
         }
     }
 

@@ -86,6 +86,7 @@
                     if (typeof DB === 'object' && DB) {
                         DB.currentUser = data.currentUser;
                         DB.currentRole = data.currentRole;
+                        window.__passwordChangeRequired = Boolean(data.passwordChangeRequired || data.currentUser?.mustChangePassword);
                         DB.users = [data.currentUser];
                         DB.employees = data.employees || [];
                         DB.departments = data.departments || [];
@@ -103,6 +104,11 @@
                         DB.notifications = data.notifications || [];
                         DB.notificationCount = data.notificationCount || 0;
                         DB.customNotifications = data.customNotifications || [];
+                    }
+
+                    if (window.__passwordChangeRequired && typeof window.showPasswordChangeRequired === 'function') {
+                        showPasswordChangeRequired();
+                        return;
                     }
 
                     // Load full persisted profile for employee self-profile views
