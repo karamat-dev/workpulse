@@ -866,17 +866,13 @@ class AttendanceController extends Controller
                 $this->applyLeaveCancellationForApprovedRegulation($regulation);
             }
 
-            $decision = strtolower($validated['status']);
             $this->createEmployeeNotification(
                 (int) $regulation->user_id,
                 'regulation_review',
-                $validated['status'] === 'Approved' ? 'Attendance Request Approved' : 'Attendance Request Rejected',
-                sprintf(
-                    'Your %s request for %s was %s.',
-                    (string) $regulation->type,
-                    (string) $regulation->date,
-                    $decision
-                ),
+                $validated['status'] === 'Approved' ? 'Attendance Request Accepted' : 'Attendance Request Rejected',
+                $validated['status'] === 'Approved'
+                    ? 'Your attendance regulation request has been accepted.'
+                    : 'Your attendance regulation request has been rejected.',
                 'attendance_regulation',
                 (string) $regulation->code,
                 [

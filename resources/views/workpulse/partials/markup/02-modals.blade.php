@@ -5,7 +5,9 @@
   <div class="modal modal-xl">
     <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
     <div class="fg"><label class="fl">Leave Type <span class="req-star">*</span></label>
-      <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select></div>
+      <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select>
+      <div id="lv-quota" class="modal-note" style="margin-top:8px;display:none;"></div>
+    </div>
     <div class="g2">
       <div class="fg"><label class="fl">From Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-from"></div>
       <div class="fg"><label class="fl">To Date <span class="req-star">*</span></label><input type="date" class="fi" id="lv-to"></div>
@@ -529,7 +531,18 @@
 <div class="modal-overlay" id="accountSettingsModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Account Settings</div><button class="modal-close" onclick="window.closeModal('accountSettingsModal')">Ã—</button></div>
-    <div class="fg"><label class="fl">Profile Picture</label><input type="file" class="fi" id="acc-profile-photo" accept=".jpg,.jpeg,.png,.webp"></div>
+    <div class="fg">
+      <label class="fl">Profile Picture</label>
+      <div class="profile-photo-edit">
+        <div class="profile-photo-preview" id="acc-profile-photo-preview"></div>
+        <div class="profile-photo-copy">
+          <strong id="acc-profile-photo-title">No profile picture uploaded</strong>
+          <span id="acc-profile-photo-status">Choose a JPG, PNG, or WebP image.</span>
+        </div>
+        <button type="button" class="btn btn-sm" onclick="document.getElementById('acc-profile-photo')?.click()">Edit</button>
+      </div>
+      <input type="file" id="acc-profile-photo" accept=".jpg,.jpeg,.png,.webp" style="display:none;">
+    </div>
     <div class="fg"><label class="fl">Current Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-current-password" placeholder="Required only when changing password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
     <div class="fg"><label class="fl">New Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
     <div class="fg"><label class="fl">Confirm New Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>

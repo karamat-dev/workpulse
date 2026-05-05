@@ -756,6 +756,11 @@ function submitLeave(){
   renderLeaveBreakdownRows();
   const dailyBreakdown = getLeaveDailyBreakdown();
   if(!from||!to||!reason){ showToast('Please fill all required fields','red'); return; }
+  const weekendDates = getLeaveWeekendDates();
+  if(weekendDates.length){
+    showToast('Weekend dates cannot be used for leave: '+weekendDates.map(formatDate).join(', '),'red');
+    return;
+  }
   if(!dailyBreakdown.length){ showToast('Choose leave duration for each selected day','red'); return; }
   wpApi('/api/leave/apply', {
     method:'POST',
@@ -815,6 +820,38 @@ function getLeaveDateRange(){
   return getDateRangeValues(from, to);
 }
 
+function isWeekendDateValue(date){
+  const day = new Date(date+'T00:00:00').getDay();
+  return day === 0 || day === 6;
+}
+
+function getLeaveWeekendDates(){
+  return getLeaveDateRange().filter(isWeekendDateValue);
+}
+
+function updateLeaveQuotaDisplay(){
+  const quotaEl = document.getElementById('lv-quota');
+  const typeCode = document.getElementById('lv-type')?.value || '';
+  if(!quotaEl || !typeCode) return;
+
+  const type = getLeaveTypesList().find(item => item.code === typeCode);
+  const balance = typeof findLeaveBalance === 'function' ? findLeaveBalance(typeCode) : null;
+  if(balance){
+    quotaEl.style.display = 'block';
+    quotaEl.innerHTML = `Available quota: <strong>${formatLeaveBalanceValue(balance.remaining)}</strong> day(s) remaining from ${formatLeaveBalanceValue(balance.allocated)} entitled. Used: ${formatLeaveBalanceValue(balance.used)}.`;
+    return;
+  }
+
+  if(type && type.paid === false){
+    quotaEl.style.display = 'block';
+    quotaEl.innerHTML = 'Unpaid leave does not use paid leave quota.';
+    return;
+  }
+
+  quotaEl.style.display = 'block';
+  quotaEl.innerHTML = 'Available quota will appear after your leave balance is loaded.';
+}
+
 function renderLeaveBreakdownRows(){
   const wrap = document.getElementById('lv-breakdown-wrap');
   const tbody = document.getElementById('lv-breakdown-rows');
@@ -829,6 +866,13 @@ function renderLeaveBreakdownRows(){
   }
 
   wrap.style.display = 'block';
+  const weekendDates = dates.filter(isWeekendDateValue);
+  if(weekendDates.length){
+    tbody.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--red);padding:20px;">Weekend dates cannot be used for leave: ${weekendDates.map(formatDate).join(', ')}.</td></tr>`;
+    calcLeaveDays();
+    return;
+  }
+
   const existing = new Map(
     Array.from(tbody.querySelectorAll('tr[data-leave-date]')).map(row => [
       row.getAttribute('data-leave-date'),
@@ -867,6 +911,24 @@ function getLeaveDailyBreakdown(){
   });
 }
 
+function resetLeaveForm(){
+  const typeSelect = document.getElementById('lv-type');
+  if(typeSelect && typeSelect.options.length) typeSelect.selectedIndex = 0;
+  ['lv-from','lv-to','lv-reason','lv-handover'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const wrap = document.getElementById('lv-breakdown-wrap');
+  const rows = document.getElementById('lv-breakdown-rows');
+  if(wrap) wrap.style.display = 'none';
+  if(rows) rows.innerHTML = `<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:20px;">Choose leave dates to build the leave plan.</td></tr>`;
+  const calc = document.getElementById('lv-calc');
+  const days = document.getElementById('lv-days');
+  if(calc) calc.style.display = 'none';
+  if(days) days.textContent = '0';
+  if(typeof updateLeaveQuotaDisplay === 'function') updateLeaveQuotaDisplay();
+}
+
 function calcLeaveDays(){
   const rows = getLeaveDailyBreakdown();
   const days = rows.reduce((sum, row) => sum + (row.duration_type === 'half_day' ? 0.5 : 1), 0);
@@ -879,6 +941,7 @@ function calcLeaveDays(){
 }
 
 document.getElementById('leaveModal').addEventListener('input',calcLeaveDays);
+document.getElementById('lv-type')?.addEventListener('change',updateLeaveQuotaDisplay);
 document.getElementById('lv-from')?.addEventListener('change',renderLeaveBreakdownRows);
 document.getElementById('lv-to')?.addEventListener('change',renderLeaveBreakdownRows);
 document.getElementById('reg-from')?.addEventListener('change',syncRegulationDateLimits);
@@ -923,18 +986,29 @@ function syncRegulationDateLimits(){
 function openRegulationModal(){
   const user = DB.currentUser || {};
   const today = getTodayLocalDate();
+  resetRegulationForm();
   const employeeField = document.getElementById('reg-employee');
   const fromField = document.getElementById('reg-from');
   const toField = document.getElementById('reg-to');
   const rows = document.getElementById('reg-rows');
   if(employeeField) employeeField.value = `${user.fname || ''} ${user.lname || ''}`.trim() || user.name || '-';
-  if(fromField) fromField.value = fromField.value || today;
-  if(toField) toField.value = toField.value || today;
+  if(fromField) fromField.value = today;
+  if(toField) toField.value = today;
   syncRegulationDateLimits();
   if(rows){
     rows.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Choose a date range and click Fetch Attendance.</td></tr>`;
   }
   openModal('regulationModal');
+}
+
+function resetRegulationForm(){
+  ['reg-from','reg-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const rows = document.getElementById('reg-rows');
+  if(rows) rows.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:24px;">Choose a date range and click Fetch Attendance.</td></tr>`;
+  syncRegulationDateLimits();
 }
 
 function toggleRegulationRow(checkbox){
@@ -1562,6 +1636,18 @@ function reviewRegulationRequest(id, decision){
 
 async function markAllNotificationsRead(){
   await wpApi('/api/me/notifications/read-all', {method:'PATCH'});
+  await wpReload();
+  if(window.__workpulseCurrentPage === 'emp-notifications' || window.__workpulseCurrentPage === 'notifications'){
+    showPage(window.__workpulseCurrentPage);
+  }
+}
+
+async function setNotificationReadState(notificationId, isRead, event){
+  if(event) event.stopPropagation();
+  await wpApi('/api/me/notifications/'+encodeURIComponent(notificationId)+'/read-state', {
+    method:'PATCH',
+    body: JSON.stringify({is_read: Boolean(isRead)}),
+  });
   await wpReload();
   if(window.__workpulseCurrentPage === 'emp-notifications' || window.__workpulseCurrentPage === 'notifications'){
     showPage(window.__workpulseCurrentPage);
@@ -2515,7 +2601,7 @@ function pageLeave(){
         </select>
         <button class="btn btn-sm" onclick="window.openEditLeave(document.getElementById('lv-balance-emp')?.value)">Edit Balance</button>
       </div>`
-    : `<button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button>`;
+    : `<button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">Apply Leave</button>`;
 
   const pendingRows=pending.map(l=>`
     <tr>
@@ -2635,7 +2721,7 @@ function pageLeave(){
 
   return buildTabs('lv',[
     {id:'all',label:'All Requests',content:`
-      <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+      <div class="card"><div class="card-hdr"><div class="card-title">All Leave Requests</div><button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Applied</th><th>HR</th><th>Status</th></tr></thead>
       <tbody>${allRows}</tbody></table></div></div>`},
     {id:'today',label:`On Leave Today (${onLeaveToday.length})`,content:onLeaveTodayHTML},
@@ -4818,7 +4904,7 @@ function pageEmpLeaves(){
   return `
   <div class="g2" style="margin-bottom:14px;">
     <div class="card">
-      <div class="card-hdr"><div class="card-title">My Leave Balance 2025</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
+      <div class="card-hdr"><div class="card-title">My Leave Balance 2025</div><button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">Apply Leave</button></div>
       ${leaveBalances.map(([n,r,t,c])=>`
       <div class="ltr">
         <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${formatLeaveBalanceValue(r)}/${formatLeaveBalanceValue(t)} days remaining</span></div>
@@ -4836,7 +4922,7 @@ function pageEmpLeaves(){
     </div>
   </div>
   <div class="card">
-    <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-primary" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
+    <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
     <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>HR</th><th>Status</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
   </div>`;
@@ -4868,6 +4954,9 @@ function pageNotifications(employeeView=false){
     const target = getNotificationTarget(notification);
     const clickAttr = target ? ` onclick="window.openNotificationTarget(${Number(notification.id)})" title="Open linked page"` : '';
 
+    const readActionLabel = notification.isRead ? 'Mark Unread' : 'Mark Read';
+    const readActionValue = notification.isRead ? 'false' : 'true';
+
     return `<div class="notif-card${toneClass}" style="${target ? 'cursor:pointer;' : ''}"${clickAttr}>
       <div class="notif-card-head">
         <div>
@@ -4878,6 +4967,9 @@ function pageNotifications(employeeView=false){
       </div>
       <div class="notif-card-body">${escapeHtml(message)}</div>
       ${notification.referenceCode ? `<div class="notif-card-ref">Reference: ${escapeHtml(notification.referenceCode)}</div>` : ''}
+      <div style="display:flex;justify-content:flex-end;margin-top:10px;">
+        <button class="btn btn-sm" onclick="window.setNotificationReadState(${Number(notification.id)}, ${readActionValue}, event).catch(e=>showToast(e?.message||'Failed','red'))">${readActionLabel}</button>
+      </div>
     </div>`;
   }).join('');
 

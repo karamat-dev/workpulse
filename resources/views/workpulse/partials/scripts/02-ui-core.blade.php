@@ -110,7 +110,12 @@ function observeMojibakeChanges(){
 }
 
 function openModal(id){
-  document.getElementById(id).classList.add('open');
+  const modal = document.getElementById(id);
+  if(!modal) return;
+  if(id === 'leaveModal' && typeof resetLeaveForm === 'function'){
+    try{ resetLeaveForm(); }catch(e){ console.error('resetLeaveForm failed', e); }
+  }
+  modal.classList.add('open');
   if(id === 'addEmpModal' && typeof syncEmployeeManagerOptions === 'function'){
     syncEmployeeManagerOptions('ne-manager', '');
   }
@@ -128,8 +133,17 @@ function openModal(id){
     if(typeof syncNotificationAudienceOptions === 'function') syncNotificationAudienceOptions();
     if(typeof syncNotificationRecipientOptions === 'function') syncNotificationRecipientOptions();
   }
-  normalizeMojibake(document.getElementById(id));
+  normalizeMojibake(modal);
 }
+function resetModalForm(id){
+  if(id === 'leaveModal' && typeof resetLeaveForm === 'function') resetLeaveForm();
+  if(id === 'regulationModal' && typeof resetRegulationForm === 'function') resetRegulationForm();
+}
+function closeModal(id){
+  document.getElementById(id).classList.remove('open');
+  resetModalForm(id);
+}
+<<<<<<< ours
 function isPasswordChangeRequired(){
   return Boolean(window.__passwordChangeRequired || DB.currentUser?.mustChangePassword);
 }
@@ -138,13 +152,22 @@ function closeModal(id){
   if(id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
   document.getElementById(id).classList.remove('open');
 }
+=======
+>>>>>>> theirs
 setTimeout(() => normalizeMojibake(document.body), 0);
 setTimeout(() => observeMojibakeChanges(), 0);
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   m.addEventListener('click',e=>{
+<<<<<<< ours
     if(e.target !== m) return;
     if(m.id === 'accountSettingsModal' && isPasswordChangeRequired()) return;
     m.classList.remove('open');
+=======
+    if(e.target===m){
+      m.classList.remove('open');
+      resetModalForm(m.id);
+    }
+>>>>>>> theirs
   });
 });
 
@@ -852,7 +875,7 @@ function buildTopbarActions(){
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3v10M3 8h10"></path></svg>
         </button>
         <div class="topbar-quick-actions-menu" role="menu">
-          <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openModal('leaveModal')">
+          <button class="topbar-quick-actions-item btn-apply-leave" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openModal('leaveModal')">
             <span>Apply Leave</span>
           </button>
           <button class="topbar-quick-actions-item" type="button" onclick="window.toggleTopbarQuickActions && window.toggleTopbarQuickActions(false); window.openRegulationModal()">
@@ -861,7 +884,7 @@ function buildTopbarActions(){
         </div>
       </div>`;
     } else {
-      el.innerHTML=`<button class="btn btn-sm" onclick="window.openModal('leaveModal')">Apply Leave</button>
+      el.innerHTML=`<button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">Apply Leave</button>
       <button class="btn btn-sm btn-ghost" onclick="window.openRegulationModal()">Regulation</button>`;
     }
   } else if(DB.currentRole==='manager'){

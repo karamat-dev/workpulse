@@ -712,11 +712,22 @@ body{
 .btn-primary{background:linear-gradient(135deg,#2C93A0 0%, #268693 55%, #1F6F7A 100%);border-color:transparent;color:#fff;box-shadow:0 14px 24px rgba(38,134,147,.18);}
 .btn-primary:hover{background:linear-gradient(135deg,#258592 0%, #207985 55%, #195F69 100%);border-color:transparent;color:#fff;}
 .btn-green{background:linear-gradient(180deg,var(--green) 0%, var(--green-dark) 100%);border-color:var(--green);color:#fff;}
+.btn-apply-leave,
+.topbar-quick-actions-item.btn-apply-leave{background:#268693;border-color:#268693;color:#fff;box-shadow:0 14px 24px rgba(38,134,147,.18);}
+.btn-apply-leave:hover,
+.topbar-quick-actions-item.btn-apply-leave:hover{background:#1F6F7A;border-color:#1F6F7A;color:#fff;}
 .btn-red{background:var(--red);border-color:var(--red);color:#fff;}
 .btn-danger{border-color:var(--red);color:var(--red);}
 .btn-danger:hover{background:var(--red);color:#fff;}
 .btn-ghost{border-color:transparent;background:transparent;}
 .btn-ghost:hover{background:var(--surface2);border-color:var(--border);}
+
+.profile-photo-edit{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border);background:var(--surface2);border-radius:var(--radius-ui);}
+.profile-photo-preview{width:52px;height:52px;border-radius:50%;background:var(--accent-bg);color:var(--accent-dark);display:flex;align-items:center;justify-content:center;font-weight:800;overflow:hidden;flex:0 0 auto;border:2px solid #fff;box-shadow:0 8px 18px rgba(103,118,173,.10);}
+.profile-photo-preview img{width:100%;height:100%;object-fit:cover;display:block;}
+.profile-photo-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;}
+.profile-photo-copy strong{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.profile-photo-copy span{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 /* ── CARDS ── */
 .card{

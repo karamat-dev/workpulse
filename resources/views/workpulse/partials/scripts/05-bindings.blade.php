@@ -20,6 +20,8 @@ window.breakOut = breakOut;
 window.breakIn = breakIn;
 window.submitLeave = submitLeave;
 window.submitRegulation = submitRegulation;
+window.resetLeaveForm = resetLeaveForm;
+window.resetRegulationForm = resetRegulationForm;
 window.submitAnnouncement = submitAnnouncement;
 window.toggleAnnouncementRecipients = toggleAnnouncementRecipients;
 window.toggleAnnouncementVoteFields = toggleAnnouncementVoteFields;
@@ -40,6 +42,7 @@ window.reviewRegulationRequest = reviewRegulationRequest;
 window.openNotificationModal = openNotificationModal;
 window.deleteNotification = deleteNotification;
 window.markAllNotificationsRead = markAllNotificationsRead;
+window.setNotificationReadState = setNotificationReadState;
 window.openNotificationTarget = openNotificationTarget;
 window.deleteEmployee = deleteEmployee;
 window.cancelRegulation = cancelRegulation;
@@ -113,6 +116,17 @@ document.querySelectorAll('[data-password-toggle]').forEach(function(btn) {
   syncPasswordToggleIcon(btn, input?.type === 'text');
 });
 
+function clearLoginCredentials() {
+  const email = document.getElementById('l-email');
+  const password = document.getElementById('l-pass');
+  if (email) email.value = '';
+  if (password) password.value = '';
+}
+
+clearLoginCredentials();
+window.addEventListener('pageshow', clearLoginCredentials);
+setTimeout(clearLoginCredentials, 100);
+
 document.addEventListener('click', function(e) {
   const btn = e.target.closest('[data-password-toggle]');
   if (!btn) return;
@@ -131,6 +145,7 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') {
     document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
       m.classList.remove('open');
+      if(typeof resetModalForm === 'function') resetModalForm(m.id);
     });
   }
   if (e.key === 'Enter') {
