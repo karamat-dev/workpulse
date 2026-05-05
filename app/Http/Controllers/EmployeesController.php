@@ -615,6 +615,79 @@ class EmployeesController extends Controller
         return $this->downloadPrivateFile((string) $record->profile_photo_path, (string) ($record->profile_photo_name ?: 'profile-photo'));
     }
 
+    public function storeDocuments(Request $request, string $employeeCode): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => ['nullable', 'string', 'max:255'],
+            'documents' => ['required', 'array', 'min:1'],
+            'documents.*' => ['file', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,webp', 'max:10240'],
+        ]);
+
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        $created = [];
+        foreach ($request->file('documents', []) as $file) {
+            $meta = $this->storeEmployeeProfileFile($file, $employeeCode, (int) $record->user_id);
+            $documentId = DB::table('employee_documents')->insertGetId([
+                'user_id' => $record->user_id,
+                'uploaded_by' => $request->user()->id,
+                'title' => $validated['title'] ?: pathinfo($meta['name'], PATHINFO_FILENAME),
+                'file_path' => $meta['path'],
+                'file_name' => $meta['name'],
+                'mime_type' => $meta['mime'],
+                'file_size' => $meta['size'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            $created[] = $this->formatEmployeeDocument(
+                DB::table('employee_documents')->where('id', $documentId)->first(),
+                $employeeCode
+            );
+        }
+
+        return response()->json(['ok' => true, 'documents' => $created], 201);
+    }
+
+    public function downloadDocument(Request $request, string $employeeCode, int $documentId)
+    {
+        $record = $this->employeeQuery(false)
+            ->where('users.employee_code', $employeeCode)
+            ->first();
+
+        if (!$record || !$this->canViewEmployeeRecord($request->user(), $record)) {
+            abort(403);
+        }
+
+        $document = $this->employeeDocumentForEmployee((int) $record->user_id, $documentId);
+        if (!$document) {
+            abort(404);
+        }
+
+        return $this->downloadPrivateFile((string) $document->file_path, (string) $document->file_name);
+    }
+
+    public function deleteDocument(Request $request, string $employeeCode, int $documentId): JsonResponse
+    {
+        $record = $this->employeeForManagedOffboarding($request, $employeeCode);
+        if ($record instanceof JsonResponse) {
+            return $record;
+        }
+
+        $document = $this->employeeDocumentForEmployee((int) $record->user_id, $documentId);
+        if (!$document) {
+            return response()->json(['ok' => false, 'message' => 'Document not found'], 404);
+        }
+
+        $this->deleteStoredFile((string) $document->file_path);
+        DB::table('employee_documents')->where('id', $documentId)->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function storeOffboardingDocument(Request $request, string $employeeCode): JsonResponse
     {
         $validated = $request->validate([
@@ -933,9 +1006,10 @@ class EmployeesController extends Controller
             'gender' => $includeSensitiveProfile ? $record->gender : null,
             'cnic' => $includeSensitiveProfile ? $record->cnic : null,
             'passportNo' => $includeSensitiveProfile ? $record->passport_no : null,
-            'cnicDocumentPath' => $includeSensitiveProfile ? $record->cnic_document_path : null,
-            'cnicDocumentName' => $includeSensitiveProfile ? $record->cnic_document_name : null,
-            'cnicDocumentUrl' => ($includeSensitiveProfile && $record->cnic_document_path) ? url('/api/employees/'.$record->employee_code.'/cnic-document') : null,
+            'cnicDocumentPath' => $record->cnic_document_path,
+            'cnicDocumentName' => $record->cnic_document_name,
+            'cnicDocumentUrl' => $record->cnic_document_path ? url('/api/employees/'.$record->employee_code.'/cnic-document') : null,
+            'employeeDocuments' => $this->employeeDocumentsForEmployee((int) $record->user_id, (string) $record->employee_code),
             'profilePhotoPath' => $record->profile_photo_path,
             'profilePhotoName' => $record->profile_photo_name,
             'profilePhotoUrl' => $record->profile_photo_path ? url('/api/employees/'.$record->employee_code.'/profile-photo') : null,
@@ -1027,6 +1101,22 @@ class EmployeesController extends Controller
         ];
     }
 
+    private function storeEmployeeProfileFile($file, string $employeeCode, int $userId): array
+    {
+        $extension = strtolower((string) $file->getClientOriginalExtension()) ?: 'bin';
+        $filename = sprintf('employee-%s-%s.%s', $employeeCode ?: $userId, Str::lower(Str::random(10)), $extension);
+        $path = 'employee-documents/'.$filename;
+
+        Storage::putFileAs('employee-documents', $file, $filename);
+
+        return [
+            'path' => $path,
+            'name' => $file->getClientOriginalName(),
+            'mime' => $file->getClientMimeType(),
+            'size' => $file->getSize(),
+        ];
+    }
+
     private function employeeForManagedOffboarding(Request $request, string $employeeCode)
     {
         $record = $this->employeeQuery($request->user()->isSuperAdmin())
@@ -1050,6 +1140,44 @@ class EmployeesController extends Controller
             ->where('id', $documentId)
             ->where('user_id', $userId)
             ->first();
+    }
+
+    private function employeeDocumentForEmployee(int $userId, int $documentId): ?object
+    {
+        return DB::table('employee_documents')
+            ->where('id', $documentId)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    private function employeeDocumentsForEmployee(int $userId, string $employeeCode): array
+    {
+        return DB::table('employee_documents')
+            ->where('user_id', $userId)
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn ($document) => $this->formatEmployeeDocument($document, $employeeCode))
+            ->values()
+            ->all();
+    }
+
+    private function formatEmployeeDocument(?object $document, string $employeeCode): ?array
+    {
+        if (!$document) {
+            return null;
+        }
+
+        return [
+            'id' => $document->id,
+            'title' => $document->title,
+            'fileName' => $document->file_name,
+            'mimeType' => $document->mime_type,
+            'fileSize' => $document->file_size !== null ? (int) $document->file_size : null,
+            'uploadedAt' => $document->created_at,
+            'updatedAt' => $document->updated_at,
+            'url' => url('/api/employees/'.$employeeCode.'/documents/'.$document->id),
+        ];
     }
 
     private function offboardingDocumentsForEmployee(int $userId, string $employeeCode): array

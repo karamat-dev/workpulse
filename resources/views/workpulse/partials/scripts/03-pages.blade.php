@@ -1,5 +1,5 @@
-//  PUNCH SYSTEM (fully functional)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+﻿//  PUNCH SYSTEM (fully functional)
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 async function wpApi(path, opts={}){
   const csrf = typeof getCsrfToken === 'function'
     ? getCsrfToken()
@@ -212,7 +212,7 @@ function getCurrentShiftPolicy(){
   const lateAt = new Date();
   lateAt.setHours(startHour || 0, (startMinute || 0) + shiftGrace, 0, 0);
   const lateLabel = lateAt.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-  return `${shiftStart} - ${shiftEnd} Â· ${breakLabel} Â· Late after ${lateLabel}`;
+  return `${shiftStart} - ${shiftEnd} Ã‚Â· ${breakLabel} Ã‚Â· Late after ${lateLabel}`;
 }
 
 function getEmployeeShiftSummary(employee){
@@ -220,7 +220,7 @@ function getEmployeeShiftSummary(employee){
   const shiftEnd = employee?.shiftEnd || '20:00';
   const shiftBreak = Number.isFinite(Number(employee?.shiftBreak)) ? Number(employee.shiftBreak) : 60;
   const breakLabel = shiftBreak === 60 ? '1h break' : `${shiftBreak} min break`;
-  return `${shiftStart} - ${shiftEnd} Â· ${breakLabel}`;
+  return `${shiftStart} - ${shiftEnd} Ã‚Â· ${breakLabel}`;
 }
 
 function getEmployeeWorkingDays(employee){
@@ -242,7 +242,7 @@ function getBreakMinutesFromAttendanceRecord(record){
 
 function formatBreakMinutesLabel(minutes){
   const safeMinutes = Math.max(0, Number(minutes || 0));
-  if(!safeMinutes) return 'â€”';
+  if(!safeMinutes) return 'Ã¢â‚¬â€';
   if(safeMinutes % 60 === 0){
     return `${safeMinutes / 60}h`;
   }
@@ -513,8 +513,21 @@ async function wpAutoCloseStaleAttendance(){
 }
 
 function getTodayLocalDate(){
-  const now = new Date();
-  return formatLocalDateValue(now);
+  return getPakistanDateValue(new Date());
+}
+
+function getPakistanDateValue(date){
+  if(!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Karachi',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function formatLocalDateValue(date){
@@ -726,9 +739,9 @@ function refreshPunchUI(){
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 //  TOAST
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 function showToast(msg, type='green'){
   const colors={green:'var(--green)',red:'var(--red)',amber:'var(--amber)'};
   const t=document.createElement('div');
@@ -738,10 +751,11 @@ function showToast(msg, type='green'){
   setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300);},2500);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 //  SUBMIT ACTIONS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 function submitLeave(){
+  const editCode=(document.getElementById('lv-edit-code')?.value || '').trim();
   const typeCode=document.getElementById('lv-type').value;
   const from=document.getElementById('lv-from').value;
   const to=document.getElementById('lv-to').value;
@@ -756,8 +770,8 @@ function submitLeave(){
     return;
   }
   if(!dailyBreakdown.length){ showToast('Choose leave duration for each selected day','red'); return; }
-  wpApi('/api/leave/apply', {
-    method:'POST',
+  wpApi(editCode ? `/api/leave/${encodeURIComponent(editCode)}` : '/api/leave/apply', {
+    method: editCode ? 'PATCH' : 'POST',
     body: JSON.stringify({
       leave_type_code: typeCode || 'annual',
       from_date: from,
@@ -771,10 +785,14 @@ function submitLeave(){
     .then(()=>{
       const page = DB.currentRole==='employee' ? 'emp-leaves' : 'leave';
       closeModal('leaveModal');
-      showToast('Leave request submitted!','green');
+      showToast(editCode ? 'Leave request updated!' : 'Leave request submitted!','green');
       if(document.getElementById('page-title').textContent===pageTitles[page]) showPage(page);
     })
     .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
+}
+
+function findLeaveRequestByCode(code){
+  return (Array.isArray(DB.leaves) ? DB.leaves : []).find(item => String(item.id) === String(code));
 }
 
 function formatLeaveDuration(leave){
@@ -893,6 +911,22 @@ function renderLeaveBreakdownRows(){
   calcLeaveDays();
 }
 
+function setLeaveDailyBreakdown(dailyBreakdown){
+  const selections = new Map((Array.isArray(dailyBreakdown) ? dailyBreakdown : []).map(row => {
+    const duration = (row.durationType || row.duration_type) === 'half_day'
+      ? (row.halfDaySlot || row.half_day_slot || 'first_half')
+      : 'full_day';
+    return [row.date, duration];
+  }));
+
+  document.querySelectorAll('#lv-breakdown-rows tr[data-leave-date]').forEach(row => {
+    const date = row.getAttribute('data-leave-date');
+    const select = row.querySelector('select[data-leave-day-duration]');
+    if(select && selections.has(date)) select.value = selections.get(date);
+  });
+  calcLeaveDays();
+}
+
 function getLeaveDailyBreakdown(){
   return Array.from(document.querySelectorAll('#lv-breakdown-rows tr[data-leave-date]')).map(row => {
     const date = row.getAttribute('data-leave-date');
@@ -906,6 +940,12 @@ function getLeaveDailyBreakdown(){
 }
 
 function resetLeaveForm(){
+  const editCode = document.getElementById('lv-edit-code');
+  if(editCode) editCode.value = '';
+  const modalTitle = document.getElementById('leave-modal-title');
+  if(modalTitle) modalTitle.textContent = 'Apply for Leave';
+  const submitBtn = document.getElementById('leave-submit-btn');
+  if(submitBtn) submitBtn.textContent = 'Submit Request';
   const typeSelect = document.getElementById('lv-type');
   if(typeSelect && typeSelect.options.length) typeSelect.selectedIndex = 0;
   ['lv-from','lv-to','lv-reason','lv-handover'].forEach(id => {
@@ -921,6 +961,66 @@ function resetLeaveForm(){
   if(calc) calc.style.display = 'none';
   if(days) days.textContent = '0';
   if(typeof updateLeaveQuotaDisplay === 'function') updateLeaveQuotaDisplay();
+}
+
+function openEditLeaveRequest(code){
+  const leave = findLeaveRequestByCode(code);
+  if(!leave){
+    showToast('Leave request not found.','red');
+    return;
+  }
+  if(leave.status !== 'Pending'){
+    showToast('Only pending leave requests can be edited.','red');
+    return;
+  }
+
+  const editCode = document.getElementById('lv-edit-code');
+  const modalTitle = document.getElementById('leave-modal-title');
+  const submitBtn = document.getElementById('leave-submit-btn');
+  if(editCode) editCode.value = leave.id;
+  if(modalTitle) modalTitle.textContent = 'Edit Leave Request';
+  if(submitBtn) submitBtn.textContent = 'Update Request';
+
+  const typeSelect = document.getElementById('lv-type');
+  if(typeSelect){
+    const typeCode = leave.typeCode || leave.type_code || '';
+    if(typeCode && Array.from(typeSelect.options).some(option => option.value === typeCode)){
+      typeSelect.value = typeCode;
+    }else{
+      const match = Array.from(typeSelect.options).find(option => option.textContent.trim() === String(leave.type || '').trim());
+      if(match) typeSelect.value = match.value;
+    }
+  }
+  const fromEl = document.getElementById('lv-from');
+  const toEl = document.getElementById('lv-to');
+  const reasonEl = document.getElementById('lv-reason');
+  const handoverEl = document.getElementById('lv-handover');
+  if(fromEl) fromEl.value = leave.from || '';
+  if(toEl) toEl.value = leave.to || '';
+  if(reasonEl) reasonEl.value = leave.reason || '';
+  if(handoverEl) handoverEl.value = leave.handover || '';
+  renderLeaveBreakdownRows();
+  setLeaveDailyBreakdown(leave.dailyBreakdown || leave.daily_breakdown || []);
+  updateLeaveQuotaDisplay();
+  openModal('leaveModal', {skipReset:true});
+}
+
+async function deleteLeaveRequest(code){
+  const leave = findLeaveRequestByCode(code);
+  if(!leave || leave.status !== 'Pending'){
+    showToast('Only pending leave requests can be deleted.','red');
+    return;
+  }
+  if(!confirm('Delete this pending leave request?')) return;
+
+  try{
+    await wpApi(`/api/leave/${encodeURIComponent(code)}`, {method:'DELETE'});
+    await wpReload();
+    showToast('Leave request deleted.','green');
+    showPage(DB.currentRole==='employee' ? 'emp-leaves' : (window.__workpulseCurrentPage || 'leave'));
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
 }
 
 function calcLeaveDays(){
@@ -1597,9 +1697,9 @@ function openApproval(leaveId){
       <div class="irow"><span class="ikey">Employee</span><span class="ival">${escapeHtml(lv.empName)}</span></div>
           <div class="irow"><span class="ikey">Team</span><span class="ival">${escapeHtml(lv.dept)}</span></div>
       <div class="irow"><span class="ikey">Leave Type</span><span class="ival">${escapeHtml(lv.type)}</span></div>
-      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} â†’ ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
+      <div class="irow"><span class="ikey">Duration</span><span class="ival">${formatDate(lv.from)} Ã¢â€ â€™ ${formatDate(lv.to)} (${formatLeaveDuration(lv)})</span></div>
       <div class="irow"><span class="ikey">Reason</span><span class="ival">${escapeHtml(lv.reason)}</span></div>
-      <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Handover</span><span class="ival">${lv.handover||'Ã¢â‚¬â€'}</span></div>
     </div>`;
   openModal('approvalModal');
 }
@@ -1716,18 +1816,20 @@ function formatNotificationAudienceLabel(audience){
   return audience;
 }
 
-function deleteEmployee(id){
+function deleteEmployee(id, skipConfirm=false){
   const target = (DB.employees || []).find(employee => employee.id === id);
   if(target?.role === 'manager' && DB.currentRole !== 'manager'){
     showToast('Only a Super-Admin can delete Super-Admin accounts','red');
-    return;
+    return Promise.reject(new Error('Only a Super-Admin can delete Super-Admin accounts'));
   }
-  if(!confirm('Are you sure you want to remove this employee from the active directory? This will move the record to Ex-employee.')) return;
-  wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'})
+  if(!skipConfirm && !confirm('Are you sure you want to remove this employee from the active directory? This will move the record to Ex-employee.')) return Promise.resolve(false);
+  const request = wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'});
+  if(skipConfirm) return request;
+  return request
     .then(()=>wpReload())
     .then(()=>{ if(document.getElementById('page-title').textContent==='Employees') showPage('employees'); })
-    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
-  showToast('Employee moved to Ex-employee','amber');
+    .then(()=>{ showToast('Employee moved to Ex-employee','amber'); return true; })
+    .catch(e=>{ showToast('Backend error: '+(e?.message||'Failed'),'red'); throw e; });
 }
 
 function filterTable(inputId, tableId){
@@ -1737,9 +1839,9 @@ function filterTable(inputId, tableId){
   });
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 //  TAB SWITCHER
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 function switchTab(group, tab){
   window.__workpulseTabState = window.__workpulseTabState || {};
   window.__workpulseTabState[group] = tab;
@@ -1766,9 +1868,9 @@ function buildTabs(group, tabs, activeTab){
   return `<div class="tabs">${tabHtml}</div>${contentHtml}`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ ADMIN PAGES â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+//  Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë† ADMIN PAGES Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 function dashboardWeekDays(){
   const now = new Date();
@@ -1911,17 +2013,17 @@ function dashboardRecentActivity(){
     .map(a=>{
       const emp = DB.employees.find(e=>e.id===a.empId);
       const name = emp ? `${emp.fname} ${emp.lname}` : a.empId;
-      const dept = emp?.dept || 'â€”';
+      const dept = emp?.dept || 'Ã¢â‚¬â€';
       const label = a.out ? `${name} clocked out` : `${name} clocked in`;
-      const time = a.out || a.in || 'â€”';
-      return {label, meta:`${time} Â· ${dept}`, color:'var(--green)', sortKey:`${a.date} ${time}`};
+      const time = a.out || a.in || 'Ã¢â‚¬â€';
+      return {label, meta:`${time} Ã‚Â· ${dept}`, color:'var(--green)', sortKey:`${a.date} ${time}`};
     });
 
   const leaveEvents = DB.leaves
     .filter(l=>l.status==='Pending')
     .map(l=>({
       label:`Leave request: ${l.empName}`,
-      meta:`${l.type} Â· Awaiting approval`,
+      meta:`${l.type} Ã‚Â· Awaiting approval`,
       color:'var(--amber)',
       sortKey:`${l.applied||l.from} 00:00`
     }));
@@ -1930,7 +2032,7 @@ function dashboardRecentActivity(){
     .filter(r=>r.status==='Pending')
     .map(r=>({
       label:`Regulation request: ${r.empId}`,
-      meta:`${r.type} Â· ${formatDate(r.date)}`,
+      meta:`${r.type} Ã‚Â· ${formatDate(r.date)}`,
       color:'var(--purple)',
       sortKey:`${r.date} 00:00`
     }));
@@ -2045,7 +2147,7 @@ function dashboardUpcomingItems(){
     .filter(item => item.date && item.date >= today);
   const approvedLeaves = (DB.leaves||[])
     .filter(l=>l.status==='Approved' && l.from>=today)
-    .map(l=>({title:`${l.empName} â€” ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
+    .map(l=>({title:`${l.empName} Ã¢â‚¬â€ ${l.type}`, sub:`Leave ${formatDate(l.from)} to ${formatDate(l.to)}`, date:l.from, badge:'bg-purple'}));
   return [...birthdays, ...holidays, ...events, ...approvedLeaves].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,8);
 }
 
@@ -2105,7 +2207,7 @@ function pageAdminDashboard(){
     <div class="dash-welcome-copy">
       <div class="dash-kicker">Operations Overview</div>
       <h2>Hello ${currentUser.fname || 'Team'},</h2>
-      <p>Track attendance, approvals, leave coverage, and today’s team movement from one polished workspace.</p>
+      <p>Track attendance, approvals, leave coverage, and todayâ€™s team movement from one polished workspace.</p>
     </div>
     <div class="dash-welcome-pills">
       <span class="dash-pill soft">${present} present now</span>
@@ -2188,7 +2290,7 @@ function pageAdminDashboard(){
                 <span>${item.range}</span>
               </div>
             </div>
-            <span class="dashboard-leave-request-arrow">›</span>
+            <span class="dashboard-leave-request-arrow">â€º</span>
           </button>`).join('') || `<div class="dashboard-leave-request-empty compact">No pending leave requests right now.</div>`}
         </div>
       </div>
@@ -2289,7 +2391,7 @@ function pageHrDashboard(){
     .slice(0,5);
 
   return `
-  <div class="alert al-info"><span>â„¹ï¸</span><div><strong>HR Focus:</strong> ${pendingLeaves} pending leave request(s), ${probationEmployees} employee(s) on probation, and ${newJoiners} new joiner(s) this month.</div></div>
+  <div class="alert al-info"><span>Ã¢â€žÂ¹Ã¯Â¸Â</span><div><strong>HR Focus:</strong> ${pendingLeaves} pending leave request(s), ${probationEmployees} employee(s) on probation, and ${newJoiners} new joiner(s) this month.</div></div>
 
   <div class="g4" style="margin-bottom:14px;">
     <div class="stat-card"><div class="stat-label">Active Employees</div><div class="stat-val">${activeEmployees}</div><div class="stat-sub" onclick="window.showPage('employees')" style="cursor:pointer;color:var(--accent);">Open directory</div></div>
@@ -2367,7 +2469,7 @@ function pageAttendance(){
     punchButtons = `
       <button class="punch-btn pb-out" onclick="punchOut()">Clock Out</button>
       ${ps.onBreak
-        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break Out â€” End Break</button>`
+        ? `<button class="punch-btn pb-break-in" style="margin-top:6px;" onclick="breakIn()">Break Out Ã¢â‚¬â€ End Break</button>`
         : `<button class="punch-btn pb-break" style="margin-top:6px;" onclick="breakOut()">Break In</button>`
       }`;
   } else {
@@ -2383,13 +2485,13 @@ function pageAttendance(){
       <td>${a.breakIn||'-'}</td>
       <td>${a.out||'-'}</td>
       <td>${calcWorkHours(a)}</td>
-      <td>${a.overtime?'+'+a.overtime+'m':'â€”'}</td>
+      <td>${a.overtime?'+'+a.overtime+'m':'Ã¢â‚¬â€'}</td>
       <td>${statusBadge(a.late?'Late':a.status)}</td>
     </tr>`).join('');
 
   const regRows = DB.regulations.filter(r=>r.empId===u.id).map(r=>`
     <tr><td>${formatDate(r.date)}</td><td>${escapeHtml(r.type)}</td><td>${escapeHtml(r.orig)}</td><td>${escapeHtml(r.req)}</td><td>${escapeHtml(r.reason)}</td><td>${statusBadge(r.status)}</td>
-    <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'â€”'}</td></tr>`).join('');
+    <td>${r.status==='Pending'?`<button class="btn btn-sm bg-red" onclick="cancelRegulation('${r.id}')">Cancel</button>`:'Ã¢â‚¬â€'}</td></tr>`).join('');
 
   const logTimeline = ps.sessionLogs.map(l=>`
     <div class="tl-item"><div class="tl-dot" style="background:var(--accent);"></div><div class="tl-line"></div>
@@ -2507,10 +2609,10 @@ function pageRealtime(){
   const teamOptions = getRealtimeMonitorTeamOptions(realtimeFilters.team);
   const cards=DB.liveAttendance.map(e=>{
     const dot={in:'md-in',break:'md-break',out:'md-out',leave:'md-leave'}[e.status]||'md-out';
-    const lbl={in:'In since '+e.since,break:'On Break â€” '+e.since,out:'Clocked Out '+e.since,leave:'On Leave â€” '+e.since}[e.status];
+    const lbl={in:'In since '+e.since,break:'On Break Ã¢â‚¬â€ '+e.since,out:'Clocked Out '+e.since,leave:'On Leave Ã¢â‚¬â€ '+e.since}[e.status];
     return`<div class="mon-card" data-status="${e.status || 'out'}" data-team="${e.dept || ''}"><div class="mon-dot ${dot}"></div>
       <div style="min-width:0;"><div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.name}</div>
-      <div style="font-size:11px;color:var(--muted);">${e.dept} Â· ${lbl}</div></div></div>`;
+      <div style="font-size:11px;color:var(--muted);">${e.dept} Ã‚Â· ${lbl}</div></div></div>`;
   }).join('');
 
   return `
@@ -2676,7 +2778,7 @@ function pageLeave(){
   const balanceHTML=`
     <div class="g2">
       <div class="card">
-        <div class="card-hdr"><div class="card-title">Leave Balances â€” 2025</div>${leaveBalanceActions}</div>
+        <div class="card-hdr"><div class="card-title">Leave Balances Ã¢â‚¬â€ 2025</div>${leaveBalanceActions}</div>
         ${leaveBalances.map(([n,r,t,c]) => {
           const safeRemaining = Number.isFinite(Number(r)) ? Number(r) : 0;
           const safeTotal = Math.max(1, Number.isFinite(Number(t)) ? Number(t) : 1);
@@ -2696,7 +2798,7 @@ function pageLeave(){
         ${leavePolicies.map(policy => `
           <div class="irow"><span class="ikey">${policy.name} Quota</span><span class="ival">${policy.quota_days} days/year</span></div>
         `).join('')}
-        <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">Janâ€“Dec (Annual)</span></div>
+        <div class="irow"><span class="ikey">Leave Year Basis</span><span class="ival">JanÃ¢â‚¬â€œDec (Annual)</span></div>
         <div class="irow"><span class="ikey">Pro-Rata Calculation</span><span class="ival"><span class="badge ${leavePolicies.some(policy => policy.pro_rata) ? 'bg-green' : 'bg-red'}">${leavePolicies.some(policy => policy.pro_rata) ? 'Enabled' : 'Disabled'}</span></span></div>
         <div class="irow"><span class="ikey">Carry Forward</span><span class="ival">Configured per leave type</span></div>
         <div class="irow"><span class="ikey">Approval Workflow</span><span class="ival">Employee -> HR</span></div>
@@ -2752,6 +2854,22 @@ function pageLeave(){
   ],'pending');
 }
 
+function getEmployeeLifecycleStage(employee){
+  const today = new Date().toISOString().slice(0, 10);
+  const status = String(employee?.status || '').toLowerCase();
+  const lastWorkingDate = String(employee?.lwd || '');
+  if(status === 'offboarding') return 'offboarding';
+  if(status === 'inactive' || status === 'resigned') return 'ex';
+  if(lastWorkingDate){
+    return lastWorkingDate < today ? 'ex' : 'offboarding';
+  }
+  return 'current';
+}
+
+function isCurrentEmployeeRecord(employee){
+  return getEmployeeLifecycleStage(employee) !== 'ex';
+}
+
 function pageEmployees(){
   const employees = Array.isArray(DB.employees) ? DB.employees : [];
   const today = new Date().toISOString().slice(0, 10);
@@ -2772,16 +2890,6 @@ function pageEmployees(){
     { value: '11', label: 'November' },
     { value: '12', label: 'December' },
   ];
-  const getEmployeeLifecycleStage = (employee) => {
-    const status = String(employee?.status || '').toLowerCase();
-    const lastWorkingDate = String(employee?.lwd || '');
-    if(status === 'offboarding') return 'offboarding';
-    if(status === 'inactive' || status === 'resigned') return 'ex';
-    if(lastWorkingDate){
-      return lastWorkingDate < today ? 'ex' : 'offboarding';
-    }
-    return 'current';
-  };
   const currentEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='current');
   const offboardingEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='offboarding');
   const exEmployees = employees.filter(e=>getEmployeeLifecycleStage(e)==='ex');
@@ -2790,10 +2898,11 @@ function pageEmployees(){
   const offboardingCount = offboardingEmployees.length;
   const exCount = exEmployees.length;
   const renderDirectoryRows = (items, emptyLabel, allowRemove = false) => items.map(e=>`
-    <tr data-birth-month="${String(e.dob || '').slice(5, 7)}">
+    <tr data-birth-month="${String(e.dob || '').slice(5, 7)}" data-employee-id="${e.id}">
+      <td><input type="checkbox" data-employee-select value="${e.id}" onchange="window.updateEmployeeBulkSelection()"></td>
       <td>${e.id}</td>
       <td><div class="ucell"><div class="av av-32" style="background:${e.avatarColor}22;color:${e.avatarColor};">${e.avatar}</div>
-      <div class="ucell-info"><div class="n">${e.fname} ${e.lname}</div><div class="s">${e.email}</div></div></div></td>
+      <div class="ucell-info"><button type="button" class="emp-name-link" onclick="window.viewEmpProfile('${e.id}')">${e.fname} ${e.lname}</button><div class="s">${e.email}</div></div></div></td>
       <td>
         <div style="display:flex;flex-direction:column;gap:4px;">
           <span>${e.desg}</span>
@@ -2809,7 +2918,7 @@ function pageEmployees(){
         ${canModifyEmployee(e) ? `<button class="btn btn-sm btn-ghost" onclick="window.openEditEmployee('${e.id}')">Edit</button>` : ''}
         ${allowRemove && canModifyEmployee(e) ? `<button class="btn btn-sm btn-danger" onclick="deleteEmployee('${e.id}')">Remove</button>` : ''}
       </div></td>
-    </tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">${emptyLabel}</td></tr>`;
+    </tr>`).join('') || `<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:20px;">${emptyLabel}</td></tr>`;
 
   return `
   <div class="hero-panel" style="margin-bottom:14px;">
@@ -2874,6 +2983,8 @@ function pageEmployees(){
           </div>
         </div>
         <div class="toolbar-field-action" style="display:flex;align-items:end;justify-content:flex-end;gap:8px;flex-wrap:wrap;">
+          <span class="data-pill" id="emp-selected-count">Selected <strong>0</strong></span>
+          <button class="btn btn-sm" onclick="window.bulkRemoveSelectedEmployees()">Move Selected to Ex-employee</button>
           <button class="btn btn-sm" onclick="window.importEmployeeProfiles()">Import Employees</button>
           <button class="btn btn-sm btn-primary" onclick="window.openModal('addEmpModal')">+ Add Employee</button>
         </div>
@@ -2881,18 +2992,21 @@ function pageEmployees(){
     </div>
     ${buildTabs('employees-directory',[
       {id:'current',label:`Employees (${currentEmployees.length})`,content:`
+        <div class="employee-table-actions"><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-current', -1)">Left</button><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-current', 1)">Right</button></div>
         <div class="soft-table"><div class="table-wrap"><table id="emp-table-current">
-          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th><input type="checkbox" onchange="window.toggleEmployeeDirectorySelection(this)"></th><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>${renderDirectoryRows(currentEmployees, 'No active employees found.', true)}</tbody>
         </table></div></div>`},
       {id:'offboarding',label:`Offboarding (${offboardingEmployees.length})`,content:`
+        <div class="employee-table-actions"><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-offboarding', -1)">Left</button><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-offboarding', 1)">Right</button></div>
         <div class="soft-table"><div class="table-wrap"><table id="emp-table-offboarding">
-          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th><input type="checkbox" onchange="window.toggleEmployeeDirectorySelection(this)"></th><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>${renderDirectoryRows(offboardingEmployees, 'No employees are currently in offboarding.')}</tbody>
         </table></div></div>`},
       {id:'ex',label:`Ex-employee (${exEmployees.length})`,content:`
+        <div class="employee-table-actions"><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-ex', -1)">Left</button><button class="btn btn-sm" onclick="window.scrollEmployeeDirectory('emp-table-ex', 1)">Right</button></div>
         <div class="soft-table"><div class="table-wrap"><table id="emp-table-ex">
-          <thead><tr><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
+          <thead><tr><th><input type="checkbox" onchange="window.toggleEmployeeDirectorySelection(this)"></th><th>Employee Code</th><th>Employee</th><th>Job Title / Role</th><th>Team</th><th>Office Location</th><th>Line Manager</th><th>Status</th><th>Action</th></tr></thead>
           <tbody>${renderDirectoryRows(exEmployees, 'No ex-employee records found.')}</tbody>
         </table></div></div>`},
     ], 'current')}
@@ -2931,6 +3045,81 @@ function applyEmployeeDirectoryFilters(){
         row.style.display = '';
       });
     });
+  updateEmployeeBulkSelection();
+}
+
+function getActiveEmployeeDirectoryTable(){
+  const activeTab = (window.__workpulseTabState && window.__workpulseTabState['employees-directory']) || 'current';
+  const tableId = {
+    current: 'emp-table-current',
+    offboarding: 'emp-table-offboarding',
+    ex: 'emp-table-ex',
+  }[activeTab] || 'emp-table-current';
+  return document.getElementById(tableId);
+}
+
+function getSelectedEmployeeDirectoryIds(){
+  const table = getActiveEmployeeDirectoryTable();
+  if(!table) return [];
+  return Array.from(table.querySelectorAll('tbody tr'))
+    .filter(row => row.style.display !== 'none')
+    .map(row => row.querySelector('input[data-employee-select]:checked')?.value)
+    .filter(Boolean);
+}
+
+function updateEmployeeBulkSelection(){
+  const selectedCount = getSelectedEmployeeDirectoryIds().length;
+  const countEl = document.getElementById('emp-selected-count');
+  if(countEl) countEl.innerHTML = `Selected <strong>${selectedCount}</strong>`;
+}
+
+function toggleEmployeeDirectorySelection(master){
+  const table = master?.closest('table');
+  if(!table) return;
+  table.querySelectorAll('tbody tr').forEach(row => {
+    if(row.style.display === 'none') return;
+    const checkbox = row.querySelector('input[data-employee-select]');
+    if(checkbox) checkbox.checked = master.checked;
+  });
+  updateEmployeeBulkSelection();
+}
+
+async function bulkRemoveSelectedEmployees(){
+  const selectedIds = getSelectedEmployeeDirectoryIds();
+  if(!selectedIds.length){
+    showToast('Select at least one employee.','amber');
+    return;
+  }
+
+  const removableIds = selectedIds.filter(id => {
+    const employee = (DB.employees || []).find(item => item.id === id);
+    return employee && isCurrentEmployeeRecord(employee) && canModifyEmployee(employee);
+  });
+
+  if(!removableIds.length){
+    showToast('Selected employees cannot be moved to Ex-employee.','red');
+    return;
+  }
+
+  if(!confirm(`Move ${removableIds.length} selected employee(s) to Ex-employee?`)) return;
+
+  try{
+    for(const id of removableIds){
+      await deleteEmployee(id, true);
+    }
+    await wpReload();
+    showToast('Selected employees moved to Ex-employee.','amber');
+    showPage('employees');
+  }catch(e){
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
+  }
+}
+
+function scrollEmployeeDirectory(tableId, direction){
+  const table = document.getElementById(tableId);
+  const wrap = table?.closest('.table-wrap');
+  if(!wrap) return;
+  wrap.scrollBy({left: (direction || 1) * Math.round(wrap.clientWidth * 0.82), behavior:'smooth'});
 }
 
 function filterEmpDept(val){
@@ -3096,10 +3285,10 @@ function pageEmpProfileDetail(){
     <div class="av av-64" style="background:${e.avatarColor}33;color:${e.avatarColor};border:3px solid ${e.avatarColor}44;">${e.avatar}</div>
     <div style="flex:1;">
       <div class="ph-name">${e.fname} ${e.lname}</div>
-      <div class="ph-role">${e.desg} Â· ${e.id}</div>
+      <div class="ph-role">${e.desg} Ã‚Â· ${e.id}</div>
       <div class="ph-tags">${statusBadge(e.status)}<span class="badge bg-blue">${e.dept}</span></div>
     </div>
-    <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);" onclick="window.showPage('employees')">â† Back</button>
+    <button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);" onclick="window.showPage('employees')">Ã¢â€ Â Back</button>
   </div>
   ${buildTabs('epd',[
     {id:'personal',label:'Personal',content:`
@@ -3107,17 +3296,17 @@ function pageEmpProfileDetail(){
         <div class="card"><div class="card-title" style="margin-bottom:13px;">Personal Details</div>
           <div class="irow"><span class="ikey">Full Name</span><span class="ival">${e.fname} ${e.lname}</span></div>
           <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(e.dob)}</span></div>
-          <div class="irow"><span class="ikey">Gender</span><span class="ival">${e.gender||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">CNIC</span><span class="ival">${e.cnic||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Gender</span><span class="ival">${e.gender||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">CNIC</span><span class="ival">${e.cnic||'Ã¢â‚¬â€'}</span></div>
           <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${e.phone}</span></div>
           <div class="irow"><span class="ikey">Personal Email</span><span class="ival">${e.email}</span></div>
-          <div class="irow"><span class="ikey">Address</span><span class="ival">${e.address||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${e.blood||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Address</span><span class="ival">${e.address||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${e.blood||'Ã¢â‚¬â€'}</span></div>
         </div>
         <div class="card"><div class="card-title" style="margin-bottom:13px;">Next of Kin</div>
-          <div class="irow"><span class="ikey">Name</span><span class="ival">${e.kin||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">Relationship</span><span class="ival">${e.kinRel||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">Contact</span><span class="ival">${e.kinPhone||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Name</span><span class="ival">${e.kin||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">Relationship</span><span class="ival">${e.kinRel||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">Contact</span><span class="ival">${e.kinPhone||'Ã¢â‚¬â€'}</span></div>
         </div>
       </div>`},
     {id:'job',label:'Job & HR',content:`
@@ -3138,8 +3327,8 @@ function pageEmpProfileDetail(){
         </div>
         <div class="card"><div class="card-title" style="margin-bottom:13px;">HR Details</div>
           <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
-          <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 â€“ 20:00</span></div>
-          <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon â€“ Fri</span></div>
+          <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 Ã¢â‚¬â€œ 20:00</span></div>
+          <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon Ã¢â‚¬â€œ Fri</span></div>
           <div class="irow"><span class="ikey">Weekly Hours</span><span class="ival">45 hrs</span></div>
           <div class="irow"><span class="ikey">Contract Type</span><span class="ival">${e.type}</span></div>
         </div>
@@ -3155,9 +3344,9 @@ function pageEmpProfileDetail(){
           <div class="irow"><span class="ikey">Net Salary</span><span class="ival" style="color:var(--green);font-weight:700;">${confidentialValue(`PKR ${net.toLocaleString()}`)}</span></div>
         </div>
         <div class="card"><div class="card-hdr"><div class="card-title">Bank Details <span class="badge bg-red" style="margin-left:6px;">Confidential</span></div></div>
-          <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'â€”'}</span></div>
-          <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'â€”'}</span></div>
+          <div class="irow"><span class="ikey">Bank Name</span><span class="ival">${e.bank||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">Account No</span><span class="ival">${e.acct||'Ã¢â‚¬â€'}</span></div>
+          <div class="irow"><span class="ikey">IBAN</span><span class="ival">${e.iban||'Ã¢â‚¬â€'}</span></div>
           <div class="irow"><span class="ikey">Payment Method</span><span class="ival">${confidentialValue('Bank Transfer')}</span></div>
         </div>
       </div>`},
@@ -3167,7 +3356,7 @@ function pageEmpProfileDetail(){
           <tr><td>CNIC Copy</td><td>Identity</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
           <tr><td>Degree Certificate</td><td>Education</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
           <tr><td>Offer Letter</td><td>Employment</td><td>${formatDate(e.doj)}</td><td>${statusBadge('Approved')}</td></tr>
-          <tr><td>Medical Certificate</td><td>Medical</td><td>â€”</td><td><span class="badge bg-amber">Pending</span></td></tr>
+          <tr><td>Medical Certificate</td><td>Medical</td><td>Ã¢â‚¬â€</td><td><span class="badge bg-amber">Pending</span></td></tr>
         </tbody></table></div>
       </div>`},
   ],'personal')}`;
@@ -3351,44 +3540,59 @@ function getCalendarEventLabelMeta(item){
 
   if(rawType === 'announcement'){
     if(rawLabel.includes('policy') || rawDescription.includes('policy')){
-      return { tag:'Policy', icon:'✓', helper:'Policy update' };
+      return { tag:'Policy', icon:'âœ“', helper:'Policy update' };
     }
     if(rawLabel.includes('holiday') || rawDescription.includes('holiday') || rawLabel.includes('eid')){
-      return { tag:'Holiday', icon:'🎉', helper:'Holiday notice' };
+      return { tag:'Holiday', icon:'ðŸŽ‰', helper:'Holiday notice' };
     }
-    return { tag:'Announcement', icon:'📢', helper:'Announcement' };
+    return { tag:'Announcement', icon:'ðŸ“¢', helper:'Announcement' };
   }
 
   if(rawType === 'event'){
     if(rawLabel.includes('meeting') || rawLabel.includes('town hall')){
-      return { tag:'Event', icon:'📅', helper:'Company event' };
+      return { tag:'Event', icon:'ðŸ“…', helper:'Company event' };
     }
-    return { tag:'Reminder', icon:'⏰', helper:'Reminder' };
+    return { tag:'Reminder', icon:'â°', helper:'Reminder' };
   }
 
-  return { tag:'Update', icon:'•', helper:'Update' };
+  return { tag:'Update', icon:'â€¢', helper:'Update' };
 }
 
 function formatEventCardDate(dateValue){
-  if(!dateValue) return '—';
+  if(!dateValue) return 'â€”';
   const raw = String(dateValue).trim();
-  if(!raw) return '—';
+  if(!raw) return 'â€”';
   const normalized = /^\d{4}-\d{2}-\d{2}$/.test(raw)
     ? `${raw}T00:00:00`
     : raw.replace(' ', 'T');
   const parsed = new Date(normalized);
-  if(Number.isNaN(parsed.getTime())) return '—';
+  if(Number.isNaN(parsed.getTime())) return 'â€”';
   return parsed.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 
 function pageCalendar(empView=false){
-  const today=new Date();
+  const pakistanToday = getPakistanDateValue(new Date());
+  const today=new Date(`${pakistanToday}T00:00:00`);
   const month=today.getMonth(), year=today.getFullYear();
   const firstDay=(new Date(year,month,1).getDay()+6)%7;
   const daysInMonth=new Date(year,month+1,0).getDate();
   const todayDate=today.getDate();
   const events = getCalendarEventFeed();
   const calendarRangeEvents = getAudienceAnnouncementEvents(true);
+  const todayKey = pakistanToday;
+  const visibleHolidays = (Array.isArray(DB.holidays) ? DB.holidays : [])
+    .filter(holiday => !empView || String(holiday.date || '') >= todayKey)
+    .sort((a,b) => String(a.date || '').localeCompare(String(b.date || '')));
+  const upcomingEvents = events
+    .filter(event => String(event.date || '') >= todayKey)
+    .concat(visibleHolidays.map(holiday => ({
+      date: holiday.date,
+      label: holiday.name,
+      description: holiday.type ? `${holiday.type}${holiday.region ? ` | ${holiday.region}` : ''}` : 'Pakistan holiday',
+      badge: 'bg-amber',
+      type: 'holiday',
+    })))
+    .sort((a,b) => String(a.date || '').localeCompare(String(b.date || '')));
   const birthdayItems = !empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole()
     ? getBirthdayEventFeed().slice(0, 6).map(item => {
         const employee = (Array.isArray(DB.employees) ? DB.employees : []).find(entry => String(entry.id) === String(item.employeeId)) || {};
@@ -3407,22 +3611,22 @@ function pageCalendar(empView=false){
   for(let d=1;d<=daysInMonth;d++){
     const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=d===todayDate;
-    const isHoliday=DB.holidays.some(h=>h.date===dateStr);
+    const isHoliday=visibleHolidays.some(h=>h.date===dateStr);
     const hasLeave=DB.leaves.some(l=>l.status==='Approved'&&l.from<=dateStr&&l.to>=dateStr);
     const hasEvent=events.some(ev=>ev.date===dateStr) || calendarRangeEvents.some(ev=>ev.date===dateStr);
     const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':hasEvent?'cal-event':'';
     const title=isHoliday
-      ? DB.holidays.find(h=>h.date===dateStr).name
+      ? visibleHolidays.find(h=>h.date===dateStr).name
       : ([...events.filter(ev=>ev.date===dateStr), ...calendarRangeEvents.filter(ev=>ev.date===dateStr)].map(ev=>ev.label).join(' | ') || '');
     calDays+=`<div class="cal-day ${cls}" title="${title}">${d}</div>`;
   }
 
   const legacyEvents=[
-    {date:'Today',label:'ðŸŽ‚ Sara Ahmed Birthday',badge:'bg-amber'},
-    {date:'Apr 20â€“22',label:'ðŸ–ï¸ Eid-ul-Fitr Holiday',badge:'bg-amber'},
-    {date:'Apr 22',label:'ðŸ“‹ Q2 Town Hall',badge:'bg-purple'},
-    {date:'Apr 25',label:'âš™ï¸ Zara Khan Probation',badge:'bg-blue'},
-    {date:'May 1',label:'ðŸŒ Labour Day',badge:'bg-green'},
+    {date:'Today',label:'Ã°Å¸Å½â€š Sara Ahmed Birthday',badge:'bg-amber'},
+    {date:'Apr 20Ã¢â‚¬â€œ22',label:'Ã°Å¸Ââ€“Ã¯Â¸Â Eid-ul-Fitr Holiday',badge:'bg-amber'},
+    {date:'Apr 22',label:'Ã°Å¸â€œâ€¹ Q2 Town Hall',badge:'bg-purple'},
+    {date:'Apr 25',label:'Ã¢Å¡â„¢Ã¯Â¸Â Zara Khan Probation',badge:'bg-blue'},
+    {date:'May 1',label:'Ã°Å¸Å’Â Labour Day',badge:'bg-green'},
   ];
 
   return `
@@ -3430,8 +3634,7 @@ function pageCalendar(empView=false){
   <div class="g2">
     <div class="card">
       <div class="card-hdr">
-        <div class="card-title">${today.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
-        <div style="display:flex;gap:5px;"><button class="btn btn-sm">â€¹</button><button class="btn btn-sm">â€º</button></div>
+        <div class="card-title">${today.toLocaleDateString('en-GB',{month:'long',year:'numeric', timeZone:'Asia/Karachi'})}</div>
       </div>
       <div class="cal-grid">
         ${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dh">${d}</div>`).join('')}
@@ -3446,7 +3649,7 @@ function pageCalendar(empView=false){
     </div>
     <div class="card">
       <div class="card-hdr"><div class="card-title">Events & Reminders</div></div>
-      ${events.slice(0,6).map(ev=>{
+      ${upcomingEvents.slice(0,6).map(ev=>{
         const meta = getCalendarEventLabelMeta(ev);
         return `
       <div class="event-feed-item">
@@ -3457,11 +3660,12 @@ function pageCalendar(empView=false){
         </div>
         <span class="badge ${ev.badge}">${ev.effectiveFrom && ev.effectiveTo && ev.effectiveTo !== ev.effectiveFrom ? `${formatDate(ev.effectiveFrom)} - ${formatDate(ev.effectiveTo)}` : formatEventCardDate(ev.date)}</span>
       </div>`;
-      }).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
+      }).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No upcoming events yet.</span></div>`}
       <div style="margin-top:14px;">
         <div class="card-title" style="margin-bottom:10px;">National Holidays</div>
-        ${DB.holidays.slice(0,5).map(h=>`
+        ${visibleHolidays.slice(0,5).map(h=>`
         <div class="irow"><span style="font-size:13px;">${h.name}</span><span class="badge bg-amber">${formatDate(h.date)}</span></div>`).join('')}
+        ${!visibleHolidays.length ? `<div class="irow"><span style="font-size:13px;color:var(--muted);">No upcoming holidays.</span></div>` : ''}
       </div>
       ${!empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole() ? `
       <div style="margin-top:14px;">
@@ -3487,13 +3691,13 @@ function pageReports(){
           </div>
         </div>
         <div class="g4" style="margin-bottom:14px;">
-          <div class="stat-card"><div class="stat-label">Present Days (Total)</div><div class="stat-val" id="rp-present">â€”</div></div>
-          <div class="stat-card"><div class="stat-label">Late Days (Total)</div><div class="stat-val" id="rp-late" style="color:var(--amber);">â€”</div></div>
-          <div class="stat-card"><div class="stat-label">Absent Days (Total)</div><div class="stat-val" id="rp-absent" style="color:var(--red);">â€”</div></div>
-          <div class="stat-card"><div class="stat-label">Overtime (Minutes)</div><div class="stat-val" id="rp-ot" style="color:var(--green);">â€”</div></div>
+          <div class="stat-card"><div class="stat-label">Present Days (Total)</div><div class="stat-val" id="rp-present">Ã¢â‚¬â€</div></div>
+          <div class="stat-card"><div class="stat-label">Late Days (Total)</div><div class="stat-val" id="rp-late" style="color:var(--amber);">Ã¢â‚¬â€</div></div>
+          <div class="stat-card"><div class="stat-label">Absent Days (Total)</div><div class="stat-val" id="rp-absent" style="color:var(--red);">Ã¢â‚¬â€</div></div>
+          <div class="stat-card"><div class="stat-label">Overtime (Minutes)</div><div class="stat-val" id="rp-ot" style="color:var(--green);">Ã¢â‚¬â€</div></div>
         </div>
         <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Dept</th><th>Present</th><th>Absent</th><th>Leave</th><th>Late</th><th>Overtime (min)</th></tr></thead>
-        <tbody id="rp-att-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
+        <tbody id="rp-att-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">LoadingÃ¢â‚¬Â¦</td></tr></tbody></table></div>
       </div>`},
     {id:'lv',label:'Leave',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Leave Report</div><button class="btn btn-sm btn-primary" onclick="window.exportLeaveCSV()">Export</button></div>
@@ -3503,13 +3707,13 @@ function pageReports(){
       </div>`},
     {id:'monthly',label:'Monthly Summary',content:`
       <div class="g3" style="margin-bottom:14px;">
-        <div class="stat-card"><div class="stat-label">Month</div><div class="stat-val" id="rp-m-month" style="font-size:18px;">â€”</div></div>
-        <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val" id="rp-m-emps">â€”</div></div>
-        <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-val" id="rp-m-att">â€”</div></div>
+        <div class="stat-card"><div class="stat-label">Month</div><div class="stat-val" id="rp-m-month" style="font-size:18px;">Ã¢â‚¬â€</div></div>
+        <div class="stat-card"><div class="stat-label">Employees</div><div class="stat-val" id="rp-m-emps">Ã¢â‚¬â€</div></div>
+        <div class="stat-card"><div class="stat-label">Attendance %</div><div class="stat-val" id="rp-m-att">Ã¢â‚¬â€</div></div>
       </div>
       <div class="card"><div class="card-hdr"><div class="card-title">By Team</div><button class="btn btn-sm btn-primary" onclick="window.loadMonthlySummary()">Refresh</button></div>
       <div class="table-wrap"><table><thead><tr><th>Team</th><th>Employees</th><th>Avg Present</th><th>Total Absent</th><th>Total Leave</th><th>OT Hours</th><th>Attendance %</th></tr></thead>
-          <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
+          <tbody id="rp-dept-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">LoadingÃ¢â‚¬Â¦</td></tr></tbody></table></div>
       </div>`},
     {id:'empdata',label:'Employee Data',content:`
       <div class="card"><div class="card-hdr"><div class="card-title">Employee Records</div>
@@ -3518,7 +3722,7 @@ function pageReports(){
         </div>
       </div>
         <div class="table-wrap"><table><thead><tr><th>ID</th><th>Name</th><th>Dept</th><th>Designation</th><th>DOJ</th><th>Type</th><th>Status</th></tr></thead>
-        <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">Loadingâ€¦</td></tr></tbody></table></div>
+        <tbody id="rp-emp-tbody"><tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">LoadingÃ¢â‚¬Â¦</td></tr></tbody></table></div>
       </div>`},
   ],'att');
 }
@@ -3538,7 +3742,7 @@ async function loadAttendanceReport(){
     tb.innerHTML = rows.map(r=>`
       <tr>
         <td>${r.name}</td>
-        <td>${r.department||'â€”'}</td>
+        <td>${r.department||'Ã¢â‚¬â€'}</td>
         <td>${r.present_days}</td>
         <td>${r.absent_days}</td>
         <td>${r.leave_days}</td>
@@ -4401,6 +4605,7 @@ window.restoreRecoveryItem = restoreRecoveryItem;
 
 function pageCompany(){
   const company = DB.company || {};
+  const canManageCompany = DB.currentRole !== 'employee';
   const companyName = company.company_name || 'muSharp';
   const website = company.website_link || 'musharp.com';
   const officialEmail = company.official_email || 'info@musharp.com';
@@ -4423,7 +4628,7 @@ function pageCompany(){
       <div class="irow"><span class="ikey">Industry</span><span class="ival">Software & Technology</span></div>
       <div class="irow"><span class="ikey">Incorporated</span><span class="ival">2018</span></div>
     </div>
-    <div class="card">
+    ${canManageCompany ? `<div class="card">
       <div class="card-title" style="margin-bottom:14px;">Backup & Disaster Recovery</div>
       <div class="alert ${latestBackup ? 'al-success' : 'al-info'}"><span>Info</span><div><strong>Last Backup:</strong> ${latestBackup ? `${latestBackup.createdAt} - ${latestBackup.sizeLabel}` : 'No backup found yet'}</div></div>
       <div class="irow"><span class="ikey">Backup Frequency</span><span class="ival">Daily at 01:00 AM</span></div>
@@ -4436,8 +4641,9 @@ function pageCompany(){
         <button class="btn btn-sm btn-primary" onclick="window.runBackupNow()">Run Backup Now</button>
         <button class="btn btn-sm" onclick="window.showPage('backups')">Open Backups</button>
       </div>
-    </div>
+    </div>` : ''}
   </div>
+  ${canManageCompany ? `
   <div class="card" style="margin-top:14px;">
     <div class="card-hdr">
       <div>
@@ -4452,7 +4658,7 @@ function pageCompany(){
       <div class="stat-card"><div class="stat-label">Leave Records</div><div class="stat-val">${DB.leaves.length}</div><div class="stat-sub">Requests and approvals</div></div>
       <div class="stat-card"><div class="stat-label">Shifts</div><div class="stat-val">${(DB.shifts||[]).length}</div><div class="stat-sub">Standard schedules available</div></div>
     </div>
-  <div class="alert al-info"><span>â‡„</span><div><strong>Transfer package:</strong> includes company details, employees, teams, attendance, leave, holidays, announcements, and other operational data in one JSON file.</div></div>
+  <div class="alert al-info"><span>Ã¢â€¡â€ž</span><div><strong>Transfer package:</strong> includes company details, employees, teams, attendance, leave, holidays, announcements, and other operational data in one JSON file.</div></div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
       <button class="btn btn-primary" onclick="window.exportTransferData()">Download Full Transfer Data</button>
       <button class="btn" onclick="window.exportEmployeeProfilesJson()">Export Full Employee Profiles JSON</button>
@@ -4465,15 +4671,15 @@ function pageCompany(){
     </div>
     <div class="panel-card" style="margin-top:14px;">
       <div class="panel-head"><div class="panel-title">Standard Shifts</div><button class="btn btn-sm btn-primary" onclick="window.openCreateShift()">+ Add Shift</button></div>
-      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Code</th><th>Time</th><th>Grace</th><th>Working Days</th><th>Status</th><th>Actions</th></tr></thead>
+      <div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Name</th><th>Code</th><th>Time</th><th>Grace</th><th>Break</th><th>Working Days</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${(DB.shifts||[]).map(shift => `<tr><td>${shift.name}</td><td>${shift.code}</td><td>${shift.start} - ${shift.end}</td><td>${shift.grace} min</td><td>${shift.break || 60} min</td><td>${shift.workingDays||'-'}</td><td>${shift.active ? statusBadge('Active') : statusBadge('Inactive')}</td><td><div style="display:flex;gap:6px;"><button class="btn btn-sm" onclick="window.openEditShift(${shift.id})">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteShift(${shift.id})">Delete</button></div></td></tr>`).join('') || `<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No shifts configured.</td></tr>`}</tbody></table></div></div>
     </div>
-  </div>`;
+  </div>` : ''}`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ EMPLOYEE PAGES â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆ
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+//  Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë† EMPLOYEE PAGES Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†Ã¢â€“Ë†
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 function renderEmployeeWorkspaceTabs(activePage){
   const tabs = [
     {label:'Dashboard', page:'emp-dashboard'},
@@ -4481,6 +4687,7 @@ function renderEmployeeWorkspaceTabs(activePage){
     {label:'Team Profile', page:'emp-team'},
     {label:'Attendance', page:'emp-attendance'},
     {label:'Calendar', page:'emp-calendar'},
+    {label:'Company Details', page:'company'},
   ];
 
   return `<div class="emp-pp-tabs">
@@ -4667,7 +4874,7 @@ function pageEmpDashboard(){
             <div class="emp-pp-leaf">
               <div>
                 <span>${card.name}</span>
-                <div class="emp-pp-leaf-meta">Quota: ${formatLeaveBalanceValue(card.quota)} Days Â· Used: ${formatLeaveBalanceValue(card.used)} Days</div>
+                <div class="emp-pp-leaf-meta">Quota: ${formatLeaveBalanceValue(card.quota)} Days Ã‚Â· Used: ${formatLeaveBalanceValue(card.used)} Days</div>
               </div>
               <strong>${formatLeaveBalanceValue(card.left)} Left</strong>
             </div>
@@ -4830,9 +5037,12 @@ function pageEmpLeaves(){
   const leaveBalances = leaveBalanceList.length
     ? leaveBalanceList.map(balance => [balance.name, balance.remaining, balance.allocated || balance.remaining || 1, 'var(--accent)'])
     : [['Annual Leave',18,21,'var(--accent)'],['Sick Leave',7,10,'var(--green)'],['Casual Leave',3,5,'var(--purple)'],['Paternity Leave',5,5,'var(--amber)'],['Marriage Leave',7,7,'var(--red)'],['Bereavement Leave',3,3,'var(--muted)']];
+  const renderLeaveActions = leave => leave.status === 'Pending'
+    ? `<div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn btn-sm" onclick="window.openEditLeaveRequest('${leave.id}')">Edit</button><button class="btn btn-sm btn-danger" onclick="window.deleteLeaveRequest('${leave.id}')">Delete</button></div>`
+    : '-';
   const rows=myLeaves.map(l=>`
     <tr><td>${l.type}</td><td>${formatDate(l.from)}</td><td>${formatDate(l.to)}</td><td>${formatLeaveDuration(l)}</td>
-    <td>${formatDate(l.applied)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td></tr>`).join('');
+    <td>${formatDate(l.applied)}</td><td>${statusBadge(l.hrStatus)}</td><td>${statusBadge(l.status)}</td><td>${renderLeaveActions(l)}</td></tr>`).join('');
 
   return `
   <div class="g2" style="margin-bottom:14px;">
@@ -4843,7 +5053,7 @@ function pageEmpLeaves(){
         <div class="ltr-hdr"><span class="ltr-name">${n}</span><span class="ltr-cnt">${formatLeaveBalanceValue(r)}/${formatLeaveBalanceValue(t)} days remaining</span></div>
         <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(r/t*100)}%;background:${c};"></div></div>
       </div>`).join('')}
-      <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: Janâ€“Dec. Carry forward: max 5 days.</div>
+      <div style="margin-top:12px;font-size:12px;color:var(--muted);">Pro-rata accrual active. Leave year: JanÃ¢â‚¬â€œDec. Carry forward: max 5 days.</div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:12px;">Approval Workflow</div>
@@ -4856,8 +5066,8 @@ function pageEmpLeaves(){
   </div>
   <div class="card">
     <div class="card-hdr"><div class="card-title">My Leave History</div><button class="btn btn-sm btn-apply-leave" onclick="window.openModal('leaveModal')">+ Apply Leave</button></div>
-    <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>HR</th><th>Status</th></tr></thead>
-    <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
+    <div class="table-wrap"><table><thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Applied</th><th>HR</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:20px;">No leave requests yet</td></tr>'}</tbody></table></div>
   </div>`;
 }
 
@@ -4918,7 +5128,7 @@ function pageNotifications(employeeView=false){
           <div class="notif-card-head">
             <div>
               <div class="notif-card-title">${escapeHtml(notification.title || 'Notification')}</div>
-              <div class="notif-card-meta">Audience: ${formatNotificationAudienceLabel(notification.audience)} • Recipients: ${notification.recipientCount || 0} • ${formatDateTime(notification.updatedAt || notification.createdAt)}</div>
+              <div class="notif-card-meta">Audience: ${formatNotificationAudienceLabel(notification.audience)} â€¢ Recipients: ${notification.recipientCount || 0} â€¢ ${formatDateTime(notification.updatedAt || notification.createdAt)}</div>
             </div>
             <span class="badge bg-teal">${escapeHtml(notification.referenceCode)}</span>
           </div>
@@ -4967,7 +5177,7 @@ function pageEmpProfile(){
     <div class="av av-64" style="background:${u.avatarColor}33;color:${u.avatarColor};border:3px solid ${u.avatarColor}55;">${u.avatar}</div>
     <div>
       <div class="ph-name">${u.fname} ${u.lname}</div>
-      <div class="ph-role">${u.desg} Â· ${u.id||emp?.id}</div>
+      <div class="ph-role">${u.desg} Ã‚Â· ${u.id||emp?.id}</div>
       <div class="ph-tags"><span class="badge bg-green">Active</span><span class="badge bg-blue">${u.dept}</span></div>
     </div>
   </div>
@@ -4982,22 +5192,22 @@ function pageEmpProfile(){
       <div class="irow"><span class="ikey">Reporting To</span><span class="ival">${u.manager}</span></div>
       <div class="irow"><span class="ikey">Office Email</span><span class="ival">${u.email}</span></div>
       <div class="irow"><span class="ikey">Personal Phone</span><span class="ival">${u.phone}</span></div>
-      <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(emp?.dob)||'â€”'}</span></div>
-      <div class="irow"><span class="ikey">CNIC</span><span class="ival">${emp?.cnic||'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Address</span><span class="ival">${emp?.address||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Date of Birth</span><span class="ival">${formatDate(emp?.dob)||'Ã¢â‚¬â€'}</span></div>
+      <div class="irow"><span class="ikey">CNIC</span><span class="ival">${emp?.cnic||'Ã¢â‚¬â€'}</span></div>
+      <div class="irow"><span class="ikey">Address</span><span class="ival">${emp?.address||'Ã¢â‚¬â€'}</span></div>
     </div>
     <div class="card">
       <div class="card-title" style="margin-bottom:13px;">Employment Details</div>
       <div class="irow"><span class="ikey">Employment Type</span><span class="ival">${emp?.type||'Permanent'}</span></div>
-      <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 â€“ 20:00</span></div>
-      <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon â€“ Fri</span></div>
+      <div class="irow"><span class="ikey">Shift</span><span class="ival">11:00 Ã¢â‚¬â€œ 20:00</span></div>
+      <div class="irow"><span class="ikey">Working Days</span><span class="ival">Mon Ã¢â‚¬â€œ Fri</span></div>
       <div class="irow"><span class="ikey">Status</span><span class="ival">${statusBadge(emp?.status||'Active')}</span></div>
       <div class="irow"><span class="ikey">Notice Period</span><span class="ival">1 Month</span></div>
-      <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Blood Group</span><span class="ival">${emp?.blood||'Ã¢â‚¬â€'}</span></div>
       <div class="card-title" style="margin:16px 0 10px;">Next of Kin</div>
-      <div class="irow"><span class="ikey">Name</span><span class="ival">${emp?.kin||'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Relationship</span><span class="ival">${emp?.kinRel||'â€”'}</span></div>
-      <div class="irow"><span class="ikey">Contact</span><span class="ival">${emp?.kinPhone||'â€”'}</span></div>
+      <div class="irow"><span class="ikey">Name</span><span class="ival">${emp?.kin||'Ã¢â‚¬â€'}</span></div>
+      <div class="irow"><span class="ikey">Relationship</span><span class="ival">${emp?.kinRel||'Ã¢â‚¬â€'}</span></div>
+      <div class="irow"><span class="ikey">Contact</span><span class="ival">${emp?.kinPhone||'Ã¢â‚¬â€'}</span></div>
     </div>
   </div>`;
 }
@@ -5082,7 +5292,7 @@ function profileTimeline(employee){
   if(latestLeave){
     items.push({
       title:`${latestLeave.type} request ${String(latestLeave.status||'Pending').toLowerCase()}`,
-      meta:`${formatDate(latestLeave.from)} to ${formatDate(latestLeave.to)} â€¢ ${formatLeaveDuration(latestLeave)}`,
+      meta:`${formatDate(latestLeave.from)} to ${formatDate(latestLeave.to)} Ã¢â‚¬Â¢ ${formatLeaveDuration(latestLeave)}`,
       date: latestLeave.applied || latestLeave.from,
     });
   }
@@ -5093,6 +5303,13 @@ function profileTimeline(employee){
 }
 
 function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='Open Document'){
+  const employeeDocuments = Array.isArray(employee.employeeDocuments) ? employee.employeeDocuments : [];
+  const employeeDocumentRows = employeeDocuments.length
+    ? employeeDocuments.map(doc => `<div class="pp-doc-actions" style="justify-content:space-between;">
+        <div><strong>${escapeHtml(doc.title || doc.fileName || 'Employee document')}</strong><div class="meta">${escapeHtml(doc.fileName || '')}</div></div>
+        <a class="btn btn-sm" href="${doc.url}" target="_blank" rel="noopener">Open</a>
+      </div>`).join('')
+    : `<div class="pp-mini-empty">No employee documents have been uploaded yet.</div>`;
   const cnicDocument = employee.cnicDocumentUrl
     ? `<div class="pp-doc-actions"><a class="btn btn-sm btn-primary" href="${employee.cnicDocumentUrl}" target="_blank" rel="noopener">${selfLabel}</a>${canManageEmployeeDocs ? `<button class="btn btn-sm btn-danger" onclick="window.deleteEmployeeCnicDocument('${employee.id}')">Delete Document</button>` : ''}</div>`
     : `<div class="pp-mini-empty">No profile document has been uploaded yet.</div>`;
@@ -5106,7 +5323,13 @@ function profileDocumentsCard(employee, canManageEmployeeDocs=false, selfLabel='
 
   return `<div class="pp-doc-grid">
     <div class="pp-doc-card">
-      <div class="panel-title">Profile Document</div>
+      <div class="panel-title">Employee Documents</div>
+      <div class="meta">Uploaded profile and employment documents</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">${employeeDocumentRows}</div>
+      ${canManageEmployeeDocs ? `<div style="margin-top:10px;"><button class="btn btn-sm btn-primary" onclick="window.openEditEmployee('${employee.id}')">Manage Documents</button></div>` : ''}
+    </div>
+    <div class="pp-doc-card">
+      <div class="panel-title">Legacy Profile Document</div>
       <div class="meta">${employee.cnicDocumentName || 'Employee document record'}</div>
       <div style="margin-top:10px;">${profileInfoRow('National ID', employee.cnic)}</div>
       ${cnicDocument}
@@ -5155,7 +5378,7 @@ function profileTabsMarkup(employee, opts={}){
 function renderProfileWorkspace(employee, options={}){
   const isSelf = !!options.isSelf;
   const canSeeSalary = !!options.canSeeSalary;
-  const reportingTeam = (DB.employees||[]).filter(emp=>emp.manager===`${employee.fname} ${employee.lname}` && emp.id!==employee.id).slice(0,6);
+  const reportingTeam = (DB.employees||[]).filter(emp=>emp.manager===`${employee.fname} ${employee.lname}` && emp.id!==employee.id && isCurrentEmployeeRecord(emp)).slice(0,6);
   const gross = Number(employee.basic||0) + Number(employee.house||0) + Number(employee.transport||0);
   const totalDeductions = Number(employee.contribution||0) + Number(employee.otherDeductions||0) + Number(employee.tax||0);
   const net = gross - totalDeductions;
@@ -5202,7 +5425,7 @@ function renderProfileWorkspace(employee, options={}){
       <div class="pp-summary-body">
         <div class="pp-avatar-stage">${renderAvatarDisplay(employee, 'av av-64', `background:${employee.avatarColor}22;color:${employee.avatarColor};border:4px solid #fff;`)}</div>
         <div class="pp-name">${escapeHtml(employee.id || '-')} : ${escapeHtml(employee.fname)} ${escapeHtml(employee.lname)}</div>
-        <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` â€¢ ${employee.workLocation}` : ''}</div>
+        <div class="pp-role">${profileValue(employee.desg)}${employee.workLocation ? ` Ã¢â‚¬Â¢ ${employee.workLocation}` : ''}</div>
         <div class="pp-chipbar">${statusBadge(employee.status || 'Active')}<span class="badge bg-blue">${profileValue(employee.dept)}</span></div>
         <div class="pp-meta-list">
           <div class="pp-meta-row"><div class="pp-meta-key">Login ID</div><div class="pp-meta-val">${profileValue(employee.id)}</div></div>
@@ -5228,7 +5451,7 @@ function renderProfileWorkspace(employee, options={}){
           ${profileInfoRow('Hire Date', employee.doj, formatDate)}
           ${profileInfoRow('Joining Date', employee.doj, formatDate)}
           ${profileInfoRow('Confirmation Date', employee.confirmationDate, formatDate)}
-          ${profileInfoRow('Work Location', employee.workLocation)}
+          ${profileInfoRow('Work Model', employee.workLocation)}
           ${profileInfoRow('Designation', employee.desg)}
 ${profileInfoRow('Team', employee.dept)}
           ${profileInfoRow('Line Manager', employee.manager)}
@@ -5261,7 +5484,7 @@ function pageEmpProfileDetail(){
     canManageEmployeeDocs: isSuperAdminRole(),
     documentButtonLabel: 'Open Document',
     tabGroup: 'epdPlus',
-    headerAction: `<button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>`,
+    headerAction: `${isSuperAdminRole() && canModifyEmployee(e) ? `<button class="btn btn-sm btn-primary" onclick="window.openEditEmployee('${e.id}')">Edit Employee</button>` : ''}<button class="btn btn-sm" style="color:#fff;border-color:rgba(255,255,255,.25);background:rgba(255,255,255,.08);" onclick="window.showPage('employees')">Back to Directory</button>`,
     sideAction: isSuperAdminRole() && canModifyEmployee(e) ? `<button class="btn btn-sm" onclick="window.openEditEmployee('${e.id}')">Edit Profile</button>` : '',
   });
 }
@@ -5283,7 +5506,7 @@ function pageEmpProfile(){
 
 function pageEmpTeam(){
   const u=DB.currentUser;
-  const teamMembers=DB.employees.filter(e=>e.dept===u.dept&&e.email!==u.email);
+  const teamMembers=DB.employees.filter(e=>e.dept===u.dept&&e.email!==u.email&&isCurrentEmployeeRecord(e));
   const liveMap={};
   const teamTabs = renderEmployeeWorkspaceTabs('emp-team');
   DB.liveAttendance.forEach(l=>{ liveMap[l.name]={status:l.status,since:l.since}; });
@@ -5311,12 +5534,12 @@ function pageEmpTeam(){
 
   return `
   ${teamTabs}
-  <div class="alert al-info"><span>â„¹ï¸</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
+  <div class="alert al-info"><span>Ã¢â€žÂ¹Ã¯Â¸Â</span><div>Showing basic team info only. Salary, bank, and confidential HR data is not visible here.</div></div>
   <div class="card" style="margin-bottom:14px;">
-    <div class="card-hdr"><div class="card-title">My Team â€” ${u.dept}</div></div>
-    <div class="irow"><span class="ikey">Team Lead</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'â€”'}</span></div>
-    <div class="irow"><span class="ikey">Total Members</span><span class="ival">${DB.employees.filter(e=>e.dept===u.dept).length}</span></div>
-    <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'â€”'}</span></div>
+    <div class="card-hdr"><div class="card-title">My Team Ã¢â‚¬â€ ${u.dept}</div></div>
+    <div class="irow"><span class="ikey">Team Lead</span><span class="ival">${DB.departments.find(d=>d.name===u.dept)?.head||'Ã¢â‚¬â€'}</span></div>
+    <div class="irow"><span class="ikey">Total Members</span><span class="ival">${DB.employees.filter(e=>e.dept===u.dept&&isCurrentEmployeeRecord(e)).length}</span></div>
+    <div class="irow"><span class="ikey">Present Today</span><span class="ival" style="color:var(--green);">${DB.departments.find(d=>d.name===u.dept)?.present||'Ã¢â‚¬â€'}</span></div>
   </div>
   <div class="g2">${cards||'<div class="card"><p style="color:var(--muted);">No other team members found.</p></div>'}</div>`;
 }
@@ -5357,7 +5580,7 @@ function setupLiveAttendanceRefresh(pageId){
     }, 3000);
   }
 
-  if(DB.currentRole === 'employee' && ['emp-dashboard','emp-leaves','emp-profile','emp-calendar','emp-announcements'].includes(pageId)){
+  if(DB.currentRole === 'employee' && ['emp-dashboard','emp-leaves','emp-profile','emp-calendar','emp-announcements','company'].includes(pageId)){
     __employeeLeaveSyncTimer = setInterval(()=>{
       refreshEmployeeWorkspaceSnapshot(pageId);
     }, 10000);
@@ -5424,4 +5647,4 @@ function pageRealtimeLive(){
   </div>`;
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â

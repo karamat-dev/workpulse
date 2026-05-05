@@ -661,6 +661,15 @@ class AttendanceController extends Controller
             ->leftJoin('employee_profiles', 'employee_profiles.user_id', '=', 'users.id')
             ->leftJoin('departments', 'departments.id', '=', 'employee_profiles.department_id')
             ->whereIn('users.role', ['employee', 'manager', 'super_admin', 'hr', 'admin'])
+            ->where(function ($query) {
+                $query->whereNull('employee_profiles.status')
+                    ->orWhereNotIn('employee_profiles.status', ['Inactive', 'Resigned']);
+            })
+            ->where(function ($query) use ($today) {
+                $query->whereNull('employee_profiles.last_working_date')
+                    ->orWhere('employee_profiles.last_working_date', '>=', $today)
+                    ->orWhere('employee_profiles.status', 'Offboarding');
+            })
             ->select([
                 'users.id as user_id',
                 'users.employee_code',

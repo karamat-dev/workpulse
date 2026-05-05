@@ -109,10 +109,10 @@ function observeMojibakeChanges(){
   });
 }
 
-function openModal(id){
+function openModal(id, options = {}){
   const modal = document.getElementById(id);
   if(!modal) return;
-  if(id === 'leaveModal' && typeof resetLeaveForm === 'function'){
+  if(id === 'leaveModal' && !options.skipReset && typeof resetLeaveForm === 'function'){
     try{ resetLeaveForm(); }catch(e){ console.error('resetLeaveForm failed', e); }
   }
   modal.classList.add('open');
@@ -1022,6 +1022,7 @@ const empNav = [
     {label:'Announcements',page:'emp-announcements',icon:'megaphone'},
     {label:'Policies',page:'emp-policies',icon:'doc'},
     {label:'Events & Calendar',page:'emp-calendar',icon:'cal'},
+    {label:'Company Details',page:'company',icon:'building'},
   ]},
 ];
 

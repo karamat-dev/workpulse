@@ -3,7 +3,8 @@
 <!-- Leave Modal -->
 <div class="modal-overlay" id="leaveModal">
   <div class="modal modal-xl">
-    <div class="modal-hdr"><div class="modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
+    <div class="modal-hdr"><div class="modal-title" id="leave-modal-title">Apply for Leave</div><button class="modal-close" onclick="window.closeModal('leaveModal')">×</button></div>
+    <input type="hidden" id="lv-edit-code">
     <div class="fg"><label class="fl">Leave Type <span class="req-star">*</span></label>
       <select class="fi" id="lv-type"><option value="annual">Annual Leave</option><option value="sick">Sick Leave</option><option value="casual">Casual Leave</option><option value="paternity">Paternity Leave</option><option value="maternity">Maternity Leave</option><option value="marriage">Marriage Leave</option><option value="bereavement">Bereavement Leave</option><option value="unpaid">Unpaid Leave</option></select>
       <div id="lv-quota" class="modal-note" style="margin-top:8px;display:none;"></div>
@@ -41,7 +42,7 @@
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('leaveModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="window.submitLeave()"">Submit Request</button>
+      <button class="btn btn-primary" id="leave-submit-btn" onclick="window.submitLeave()">Submit Request</button>
     </div>
   </div>
 </div>
@@ -176,7 +177,7 @@
     <div class="fg"><label class="fl">Personal Phone</label><input type="text" class="fi" id="ne-phone" placeholder="+92 3XX XXXXXXX"></div>
     <div class="g2">
       <div class="fg"><label class="fl">Personal Email <span class="req-star">*</span></label><input type="email" class="fi" id="ne-personal-email" placeholder="personal@email.com"></div>
-      <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ne-work-location" placeholder="Main Office"></div>
+        <div class="fg"><label class="fl">Work Model</label><input type="text" class="fi" id="ne-work-location" placeholder="On-site, Hybrid, Remote"></div>
     </div>
     <div class="g2">
       <div class="fg"><label class="fl">Team <span class="req-star">*</span></label>
@@ -356,13 +357,24 @@
         <div class="fg"><label class="fl">Last Working Date</label><input type="date" class="fi" id="ee-lwd"></div>
         <div class="fg"><label class="fl">Official Email <span class="req-star">*</span></label><input type="email" class="fi" id="ee-email"></div>
       </div>
+      <div class="fg" id="ee-employee-documents-panel">
+        <label class="fl">Employee Documents</label>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2);">
+          <div id="ee-employee-documents" style="display:flex;flex-direction:column;gap:8px;"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;">
+            <input type="text" class="fi" id="ee-employee-doc-title" placeholder="Document title">
+            <input type="file" class="fi" id="ee-employee-doc-files" multiple>
+            <button type="button" class="btn btn-sm btn-primary" onclick="window.uploadEmployeeDocuments()">Upload</button>
+          </div>
+        </div>
+      </div>
       <div class="fg" id="ee-offboarding-panel">
         <label class="fl">Offboarding Documents</label>
         <div style="border:1px solid var(--border);border-radius:8px;padding:12px;background:var(--surface2);">
           <div id="ee-offboarding-documents" style="display:flex;flex-direction:column;gap:8px;"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-top:10px;">
             <input type="text" class="fi" id="ee-offboarding-doc-title" placeholder="Document title">
-            <input type="file" class="fi" id="ee-offboarding-doc-file">
+            <input type="file" class="fi" id="ee-offboarding-doc-file" multiple>
             <button type="button" class="btn btn-sm btn-primary" onclick="window.uploadOffboardingDocument()">Upload</button>
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:10px;">
@@ -372,9 +384,9 @@
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="fg"><label class="fl">Confirmation Date</label><input type="date" class="fi" id="ee-confirmation-date"></div>
-        <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ee-work-location"></div>
+        <div class="fg"><label class="fl">Work Model</label><input type="text" class="fi" id="ee-work-location" placeholder="On-site, Hybrid, Remote"></div>
       </div>
-      <div class="fg"><label class="fl">Replace Profile Document</label><input type="file" class="fi" id="ee-cnic-document"></div>
+      <div class="fg"><label class="fl">Replace Legacy Profile Document</label><input type="file" class="fi" id="ee-cnic-document"></div>
       <div class="fg"><label class="fl">Reset Login Password</label><div class="password-input-wrap"><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
       <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Super-Admin</option><option value="admin">Admin</option></select></div>
@@ -445,7 +457,7 @@
     </div>
     <div class="g2">
       <div class="fg"><label class="fl">Grace Minutes</label><input type="number" class="fi" id="shift-grace" min="0" max="240" value="10"></div>
-      <div class="fg"><label class="fl">Break Minutes</label><input type="number" class="fi" id="shift-break" min="0" max="480" value="60"></div>
+      <div class="fg"><label class="fl">Break Minutes</label><input type="number" class="fi" id="shift-break" min="60" max="60" value="60" readonly></div>
     </div>
     <div class="g2">
       <div class="fg"><label class="fl">Working Days</label><input type="text" class="fi" id="shift-days" value="Mon-Fri"></div>

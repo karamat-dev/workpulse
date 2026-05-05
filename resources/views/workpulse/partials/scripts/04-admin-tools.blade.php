@@ -257,10 +257,15 @@ async function openEditEmployee(id){
     document.getElementById('ee-email').value = e.email||'';
     document.getElementById('ee-password').value = '';
     document.getElementById('ee-cnic-document').value = '';
+    const employeeDocTitle = document.getElementById('ee-employee-doc-title');
+    const employeeDocFiles = document.getElementById('ee-employee-doc-files');
+    if(employeeDocTitle) employeeDocTitle.value = '';
+    if(employeeDocFiles) employeeDocFiles.value = '';
     const offboardingTitle = document.getElementById('ee-offboarding-doc-title');
     const offboardingFile = document.getElementById('ee-offboarding-doc-file');
     if(offboardingTitle) offboardingTitle.value = '';
     if(offboardingFile) offboardingFile.value = '';
+    renderEmployeeDocuments(e);
     renderOffboardingDocuments(e);
   // Salary
     document.getElementById('ee-basic').value = e.basic||0;
@@ -280,6 +285,34 @@ async function openEditEmployee(id){
   }catch(e){
     showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
+}
+
+function renderEmployeeDocuments(employee=null){
+  const e = employee || _editEmpRecord || {};
+  const docs = Array.isArray(e.employeeDocuments) ? e.employeeDocuments : [];
+  const legacyDoc = e.cnicDocumentUrl ? [{
+    id: 'legacy',
+    title: 'Legacy profile document',
+    fileName: e.cnicDocumentName || 'Profile document',
+    url: e.cnicDocumentUrl,
+    legacy: true,
+  }] : [];
+  const list = document.getElementById('ee-employee-documents');
+  if(!list) return;
+
+  const allDocs = legacyDoc.concat(docs);
+  list.innerHTML = allDocs.length ? allDocs.map(doc => `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:8px;">
+      <div style="min-width:0;">
+        <strong>${escapeHtml(doc.title || doc.fileName || 'Employee document')}</strong>
+        <div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(doc.fileName || 'Uploaded document')}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+        <a class="btn btn-sm" href="${doc.url}" target="_blank" rel="noopener">Open</a>
+        ${doc.legacy ? '' : `<button type="button" class="btn btn-sm btn-danger" onclick="window.deleteEmployeeDocument('${doc.id}')">Delete</button>`}
+      </div>
+    </div>
+  `).join('') : `<div style="font-size:12px;color:var(--muted);">No employee documents uploaded yet.</div>`;
 }
 
 function renderOffboardingDocuments(employee=null){
@@ -314,26 +347,27 @@ async function refreshEditedEmployee(){
   if(!_editEmpId) return null;
   const data = await wpApi('/api/employees/'+encodeURIComponent(_editEmpId), {method:'GET'});
   _editEmpRecord = data.employee || _editEmpRecord;
+  renderEmployeeDocuments(_editEmpRecord);
   renderOffboardingDocuments(_editEmpRecord);
   return _editEmpRecord;
 }
 
-async function uploadOffboardingDocument(){
+async function uploadEmployeeDocuments(){
   if(!_editEmpId) return;
-  const fileInput = document.getElementById('ee-offboarding-doc-file');
-  const titleInput = document.getElementById('ee-offboarding-doc-title');
-  const file = fileInput?.files?.[0];
-  if(!file){
-    showToast('Choose an offboarding document first.','red');
+  const fileInput = document.getElementById('ee-employee-doc-files');
+  const titleInput = document.getElementById('ee-employee-doc-title');
+  const files = Array.from(fileInput?.files || []);
+  if(!files.length){
+    showToast('Choose at least one employee document.','red');
     return;
   }
 
   const formData = new FormData();
-  formData.append('document', file);
+  files.forEach(file => formData.append('documents[]', file));
   formData.append('title', titleInput?.value?.trim() || '');
 
   try{
-    await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-documents', {
+    await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/documents', {
       method:'POST',
       body: formData
     });
@@ -341,7 +375,51 @@ async function uploadOffboardingDocument(){
     if(titleInput) titleInput.value = '';
     await wpReload();
     await refreshEditedEmployee();
-    showToast('Offboarding document uploaded.','green');
+    showToast('Employee document(s) uploaded.','green');
+  }catch(e){
+    showToast(e?.message || 'Unable to upload employee documents.','red');
+  }
+}
+
+function deleteEmployeeDocument(documentId){
+  if(!_editEmpId || !documentId) return;
+  showConfirm('Delete Employee Document', 'This will remove the selected employee document.', '!', async function(){
+    try{
+      await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/documents/'+encodeURIComponent(documentId), {method:'DELETE'});
+      await wpReload();
+      await refreshEditedEmployee();
+      showToast('Employee document deleted.','green');
+    }catch(e){
+      showToast(e?.message || 'Unable to delete employee document.','red');
+    }
+  });
+}
+
+async function uploadOffboardingDocument(){
+  if(!_editEmpId) return;
+  const fileInput = document.getElementById('ee-offboarding-doc-file');
+  const titleInput = document.getElementById('ee-offboarding-doc-title');
+  const files = Array.from(fileInput?.files || []);
+  if(!files.length){
+    showToast('Choose an offboarding document first.','red');
+    return;
+  }
+
+  try{
+    for(const file of files){
+      const formData = new FormData();
+      formData.append('document', file);
+      formData.append('title', titleInput?.value?.trim() || '');
+      await wpApi('/api/employees/'+encodeURIComponent(_editEmpId)+'/offboarding-documents', {
+        method:'POST',
+        body: formData
+      });
+    }
+    if(fileInput) fileInput.value = '';
+    if(titleInput) titleInput.value = '';
+    await wpReload();
+    await refreshEditedEmployee();
+    showToast('Offboarding document(s) uploaded.','green');
   }catch(e){
     showToast(e?.message || 'Unable to upload offboarding document.','red');
   }
@@ -1251,7 +1329,7 @@ function openEditShift(shiftId){
   document.getElementById('shift-start').value = shift.start || '11:00';
   document.getElementById('shift-end').value = shift.end || '20:00';
   document.getElementById('shift-grace').value = shift.grace ?? 10;
-  document.getElementById('shift-break').value = shift.break ?? 60;
+  document.getElementById('shift-break').value = '60';
   document.getElementById('shift-days').value = shift.workingDays || 'Mon-Fri';
   document.getElementById('shift-active').value = shift.active ? '1' : '0';
   openModal('shiftModal');
@@ -1265,7 +1343,7 @@ async function saveShift(){
     start: document.getElementById('shift-start').value,
     end: document.getElementById('shift-end').value,
     grace: parseInt(document.getElementById('shift-grace').value, 10) || 0,
-    break: parseInt(document.getElementById('shift-break').value, 10) || 0,
+    break: 60,
     workingDays: document.getElementById('shift-days').value.trim(),
     active: document.getElementById('shift-active').value === '1',
   };

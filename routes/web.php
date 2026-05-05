@@ -58,6 +58,9 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('employees')->group(function () {
             Route::post('/', [EmployeesController::class, 'store'])->middleware('perm:employees.manage');
+            Route::post('/{employeeCode}/documents', [EmployeesController::class, 'storeDocuments'])->middleware('perm:employees.manage');
+            Route::get('/{employeeCode}/documents/{documentId}', [EmployeesController::class, 'downloadDocument']);
+            Route::delete('/{employeeCode}/documents/{documentId}', [EmployeesController::class, 'deleteDocument'])->middleware('perm:employees.manage');
             Route::post('/{employeeCode}/offboarding-documents', [EmployeesController::class, 'storeOffboardingDocument'])->middleware('perm:employees.manage');
             Route::get('/{employeeCode}/offboarding-documents/{documentId}', [EmployeesController::class, 'downloadOffboardingDocument']);
             Route::patch('/{employeeCode}/offboarding-documents/{documentId}', [EmployeesController::class, 'updateOffboardingDocument'])->middleware('perm:employees.manage');
@@ -123,6 +126,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/my/balance', [LeaveController::class, 'myBalance'])->middleware('perm:leave.apply');
             Route::get('/my/requests', [LeaveController::class, 'myRequests'])->middleware('perm:leave.apply');
             Route::post('/apply', [LeaveController::class, 'apply'])->middleware('perm:leave.apply');
+            Route::patch('/{code}', [LeaveController::class, 'updateOwnPending'])->middleware('perm:leave.apply');
+            Route::delete('/{code}', [LeaveController::class, 'destroyOwnPending'])->middleware('perm:leave.apply');
             Route::get('/pending', [LeaveController::class, 'pendingForReview'])->middleware('perm:leave.apply');
             Route::get('/balances/{employeeCode}', [LeaveController::class, 'employeeBalance'])->middleware('perm:leave.manage');
             Route::put('/balances/{employeeCode}', [LeaveController::class, 'updateEmployeeBalance'])->middleware('perm:leave.manage');

@@ -685,6 +685,127 @@ class LeaveAttendanceSyncTest extends TestCase
         $this->assertSame('full_day', $dailyBreakdown[2]['duration_type']);
     }
 
+    public function test_employee_can_edit_and_delete_pending_leave_request(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-304',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            ['name' => 'Unpaid Leave', 'code' => 'unpaid', 'paid' => false, 'created_at' => now(), 'updated_at' => now()],
+            ['name' => 'Annual Leave', 'code' => 'annual', 'paid' => false, 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $monday = now()->next('Monday')->toDateString();
+        $tuesday = now()->next('Monday')->addDay()->toDateString();
+
+        $apply = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $monday,
+                'to_date' => $monday,
+                'daily_breakdown' => [
+                    ['date' => $monday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                ],
+                'reason' => 'Original reason',
+            ]);
+
+        $apply->assertCreated()->assertJson(['ok' => true]);
+        $code = $apply->json('code');
+
+        $this
+            ->actingAs($employee)
+            ->patchJson("/api/leave/{$code}", [
+                'leave_type_code' => 'annual',
+                'from_date' => $tuesday,
+                'to_date' => $tuesday,
+                'daily_breakdown' => [
+                    ['date' => $tuesday, 'duration_type' => 'half_day', 'half_day_slot' => 'second_half'],
+                ],
+                'reason' => 'Updated reason',
+            ])
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $request = DB::table('leave_requests')->where('code', $code)->first();
+        $this->assertSame($tuesday, $request->from_date);
+        $this->assertSame($tuesday, $request->to_date);
+        $this->assertSame(0.5, (float) $request->days);
+        $this->assertSame('Updated reason', $request->reason);
+
+        $this
+            ->actingAs($employee)
+            ->deleteJson("/api/leave/{$code}")
+            ->assertOk()
+            ->assertJson(['ok' => true]);
+
+        $this->assertDatabaseMissing('leave_requests', ['code' => $code]);
+    }
+
+    public function test_employee_cannot_edit_or_delete_approved_leave_request(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-203',
+        ]);
+        $this->createEmployeeProfile($admin->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $monday = now()->next('Monday')->toDateString();
+
+        $apply = $this
+            ->actingAs($admin)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $monday,
+                'to_date' => $monday,
+                'daily_breakdown' => [
+                    ['date' => $monday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                ],
+                'reason' => 'Needs approval lock',
+            ]);
+
+        $apply->assertCreated()->assertJson(['ok' => true]);
+        $code = $apply->json('code');
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/leave/{$code}/review", ['status' => 'Approved'])
+            ->assertOk();
+
+        $this
+            ->actingAs($admin)
+            ->patchJson("/api/leave/{$code}", [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $monday,
+                'to_date' => $monday,
+                'daily_breakdown' => [
+                    ['date' => $monday, 'duration_type' => 'full_day', 'half_day_slot' => null],
+                ],
+                'reason' => 'Should not update',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only pending leave requests can be edited.');
+
+        $this
+            ->actingAs($admin)
+            ->deleteJson("/api/leave/{$code}")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Only pending leave requests can be deleted.');
+    }
+
     public function test_approving_multi_day_leave_with_daily_breakdown_syncs_each_day_status(): void
     {
         $admin = User::factory()->create([

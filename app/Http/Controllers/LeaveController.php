@@ -914,6 +914,131 @@ class LeaveController extends Controller
         return response()->json(['ok' => true, 'requests' => $rows]);
     }
 
+    public function updateOwnPending(Request $request, string $code): JsonResponse
+    {
+        $leaveRequest = DB::table('leave_requests')
+            ->where('code', $code)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$leaveRequest) {
+            return response()->json(['ok' => false, 'message' => 'Leave request not found'], 404);
+        }
+
+        if ($leaveRequest->status !== 'Pending') {
+            return response()->json(['ok' => false, 'message' => 'Only pending leave requests can be edited.'], 422);
+        }
+
+        $validated = $request->validate([
+            'leave_type_code' => ['required', 'string', 'max:30'],
+            'from_date' => ['required', 'date_format:Y-m-d'],
+            'to_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:from_date'],
+            'duration_type' => ['nullable', Rule::in(['full_day', 'half_day'])],
+            'half_day_slot' => ['nullable', Rule::in(['first_half', 'second_half'])],
+            'daily_breakdown' => ['nullable', 'array'],
+            'daily_breakdown.*.date' => ['required_with:daily_breakdown', 'date_format:Y-m-d'],
+            'daily_breakdown.*.duration_type' => ['required_with:daily_breakdown', Rule::in(['full_day', 'half_day'])],
+            'daily_breakdown.*.half_day_slot' => ['nullable', Rule::in(['first_half', 'second_half'])],
+            'reason' => ['nullable', 'string', 'max:2000'],
+            'handover_to' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $durationType = $this->normalizeDurationType($validated['duration_type'] ?? 'full_day');
+        $halfDaySlot = $this->normalizeHalfDaySlot($validated['half_day_slot'] ?? null);
+
+        if ($durationType === 'half_day') {
+            if ($validated['from_date'] !== $validated['to_date']) {
+                return response()->json(['ok' => false, 'message' => 'Half day leave must be for a single date'], 422);
+            }
+
+            if (!$halfDaySlot) {
+                return response()->json(['ok' => false, 'message' => 'Choose first half or second half for half day leave'], 422);
+            }
+        }
+
+        $dailyBreakdown = $this->normalizeDailyBreakdownInput($validated['daily_breakdown'] ?? []);
+        $weekendDates = $this->weekendDatesInRange($validated['from_date'], $validated['to_date']);
+        if ($weekendDates !== []) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Weekend dates cannot be used for leave: '.implode(', ', $weekendDates),
+            ], 422);
+        }
+
+        $leavePlan = $this->buildLeavePlan(
+            $validated['from_date'],
+            $validated['to_date'],
+            $durationType,
+            $halfDaySlot,
+            $dailyBreakdown
+        );
+
+        $leaveType = DB::table('leave_types')
+            ->where('code', $validated['leave_type_code'])
+            ->first(['id', 'paid']);
+
+        if (!$leaveType) {
+            return response()->json(['ok' => false, 'message' => 'Invalid leave type'], 422);
+        }
+
+        if ($this->leaveRequestsOverlap(
+            $request->user()->id,
+            $validated['from_date'],
+            $validated['to_date'],
+            $durationType,
+            $halfDaySlot,
+            $dailyBreakdown,
+            (int) $leaveRequest->id,
+        )) {
+            return response()->json(['ok' => false, 'message' => 'You already have a leave request for the selected dates'], 422);
+        }
+
+        $year = (int) date('Y', strtotime($validated['from_date']));
+        $requestedDays = $this->calculateRequestedLeaveDaysFromPlan($leavePlan);
+        $balance = $this->getOrCreateLeaveBalance($request->user()->id, $year, (int) $leaveType->id);
+
+        if ((bool) $leaveType->paid && $requestedDays > (float) $balance->remaining_days) {
+            return response()->json(['ok' => false, 'message' => 'Insufficient leave balance'], 422);
+        }
+
+        DB::table('leave_requests')
+            ->where('id', $leaveRequest->id)
+            ->update([
+                'leave_type_id' => $leaveType->id,
+                'from_date' => $validated['from_date'],
+                'to_date' => $validated['to_date'],
+                'duration_type' => $durationType,
+                'half_day_slot' => $halfDaySlot,
+                'daily_breakdown' => json_encode($leavePlan),
+                'days' => $requestedDays,
+                'reason' => $validated['reason'] ?? null,
+                'handover_to' => $validated['handover_to'] ?? null,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json(['ok' => true, 'code' => $code]);
+    }
+
+    public function destroyOwnPending(Request $request, string $code): JsonResponse
+    {
+        $leaveRequest = DB::table('leave_requests')
+            ->where('code', $code)
+            ->where('user_id', $request->user()->id)
+            ->first();
+
+        if (!$leaveRequest) {
+            return response()->json(['ok' => false, 'message' => 'Leave request not found'], 404);
+        }
+
+        if ($leaveRequest->status !== 'Pending') {
+            return response()->json(['ok' => false, 'message' => 'Only pending leave requests can be deleted.'], 422);
+        }
+
+        DB::table('leave_requests')->where('id', $leaveRequest->id)->delete();
+
+        return response()->json(['ok' => true]);
+    }
+
     public function pendingForReview(Request $request): JsonResponse
     {
         $user = $request->user();

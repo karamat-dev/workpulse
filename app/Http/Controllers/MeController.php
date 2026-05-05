@@ -181,7 +181,7 @@ class MeController extends Controller
             $row->shiftStart = $row->shiftStart ? substr((string) $row->shiftStart, 0, 5) : $defaultShiftStart;
             $row->shiftEnd = $row->shiftEnd ? substr((string) $row->shiftEnd, 0, 5) : $defaultShiftEnd;
             $row->shiftGrace = $row->shiftGrace !== null ? (int) $row->shiftGrace : max(0, (int) ($attendancePolicies['grace_minutes'] ?? 10));
-            $row->shiftBreak = $row->shiftBreak !== null ? (int) $row->shiftBreak : 60;
+            $row->shiftBreak = 60;
             $row->profilePhotoUrl = $row->profile_photo_path
                 ? url('/api/employees/'.$row->employee_code.'/profile-photo')
                 : null;

@@ -932,6 +932,24 @@ tbody tr:last-child td:last-child{border-bottom-right-radius:15px;}
 .ucell{display:flex;align-items:center;gap:8px;}
 .ucell-info .n{font-weight:500;font-size:13px;}
 .ucell-info .s{font-size:11px;color:var(--muted);}
+.emp-name-link{
+  border:0;
+  padding:0;
+  background:transparent;
+  color:var(--accent);
+  font:inherit;
+  font-weight:700;
+  cursor:pointer;
+  text-align:left;
+}
+.emp-name-link:hover{text-decoration:underline;}
+.employee-table-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin:0 0 8px;
+}
+table[id^="emp-table-"]{min-width:1120px;}
 
 /* ── TABS ── */
 .tabs{display:flex;gap:8px;border-bottom:none;margin-bottom:18px;flex-wrap:wrap;}

@@ -423,6 +423,89 @@ class EmployeeAccountManagementTest extends TestCase
         $this->assertNotNull(DB::table('employee_profiles')->where('user_id', $employee->id)->value('last_working_date'));
     }
 
+    public function test_ex_employee_is_not_in_live_attendance_snapshot(): void
+    {
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-101',
+        ]);
+        $this->createProfileFor($admin, 'Admin Ops');
+
+        $active = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-101',
+            'name' => 'Active Person',
+        ]);
+        $this->createProfileFor($active);
+
+        $exEmployee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-102',
+            'name' => 'Former Person',
+        ]);
+        $this->createProfileFor($exEmployee, 'Finance');
+
+        DB::table('employee_profiles')
+            ->where('user_id', $exEmployee->id)
+            ->update([
+                'status' => 'Inactive',
+                'last_working_date' => now()->toDateString(),
+                'updated_at' => now(),
+            ]);
+
+        $response = $this
+            ->actingAs($admin)
+            ->getJson('/api/bootstrap');
+
+        $response->assertOk();
+
+        $employeeCodes = collect($response->json('liveAttendance'))->pluck('empId')->all();
+
+        $this->assertContains('EMP-101', $employeeCodes);
+        $this->assertNotContains('EMP-102', $employeeCodes);
+    }
+
+    public function test_admin_can_upload_multiple_employee_documents_and_employee_can_view_them(): void
+    {
+        Storage::fake();
+
+        $admin = User::factory()->create([
+            'role' => 'admin',
+            'employee_code' => 'ADM-102',
+        ]);
+        $this->createProfileFor($admin, 'Admin Docs');
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-103',
+            'name' => 'Document Person',
+        ]);
+        $this->createProfileFor($employee);
+
+        $this
+            ->actingAs($admin)
+            ->post('/api/employees/EMP-103/documents', [
+                'title' => 'Joining document',
+                'documents' => [
+                    UploadedFile::fake()->create('offer.pdf', 20, 'application/pdf'),
+                    UploadedFile::fake()->create('id-card.pdf', 20, 'application/pdf'),
+                ],
+            ])
+            ->assertCreated()
+            ->assertJson(['ok' => true])
+            ->assertJsonCount(2, 'documents');
+
+        $documents = DB::table('employee_documents')->where('user_id', $employee->id)->get();
+        $this->assertCount(2, $documents);
+
+        $firstDocument = $documents->first();
+
+        $this
+            ->actingAs($employee)
+            ->get('/api/employees/EMP-103/documents/'.$firstDocument->id)
+            ->assertOk();
+    }
+
     public function test_future_last_working_date_moves_employee_to_offboarding_status(): void
     {
         $futureDate = now()->addDay()->toDateString();

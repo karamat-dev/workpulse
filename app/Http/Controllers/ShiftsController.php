@@ -31,7 +31,7 @@ class ShiftsController extends Controller
                 'start' => substr((string) $shift->start_time, 0, 5),
                 'end' => substr((string) $shift->end_time, 0, 5),
                 'grace' => (int) $shift->grace_minutes,
-                'break' => (int) ($shift->break_minutes ?? 60),
+                'break' => 60,
                 'workingDays' => $shift->working_days,
                 'active' => (bool) $shift->is_active,
             ])
@@ -50,7 +50,6 @@ class ShiftsController extends Controller
             'start' => ['required', 'date_format:H:i'],
             'end' => ['required', 'date_format:H:i'],
             'grace' => ['nullable', 'integer', 'min:0', 'max:240'],
-            'break' => ['nullable', 'integer', 'min:0', 'max:480'],
             'workingDays' => ['nullable', 'string', 'max:255'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -70,7 +69,7 @@ class ShiftsController extends Controller
             'start_time' => $validated['start'].':00',
             'end_time' => $validated['end'].':00',
             'grace_minutes' => $validated['grace'] ?? 10,
-            'break_minutes' => $validated['break'] ?? 60,
+            'break_minutes' => 60,
             'working_days' => $validated['workingDays'] ?? 'Mon-Fri',
             'is_active' => (bool) ($validated['active'] ?? true),
             'created_at' => now(),
@@ -95,7 +94,6 @@ class ShiftsController extends Controller
             'start' => ['required', 'date_format:H:i'],
             'end' => ['required', 'date_format:H:i'],
             'grace' => ['nullable', 'integer', 'min:0', 'max:240'],
-            'break' => ['nullable', 'integer', 'min:0', 'max:480'],
             'workingDays' => ['nullable', 'string', 'max:255'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -120,7 +118,7 @@ class ShiftsController extends Controller
                 'start_time' => $validated['start'].':00',
                 'end_time' => $validated['end'].':00',
                 'grace_minutes' => $validated['grace'] ?? 10,
-                'break_minutes' => $validated['break'] ?? 60,
+                'break_minutes' => 60,
                 'working_days' => $validated['workingDays'] ?? 'Mon-Fri',
                 'is_active' => (bool) ($validated['active'] ?? true),
                 'updated_at' => now(),

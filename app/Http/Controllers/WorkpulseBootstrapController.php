@@ -198,7 +198,7 @@ class WorkpulseBootstrapController extends Controller
             'shiftStart' => $profile?->start_time ? substr((string) $profile->start_time, 0, 5) : $defaultShiftStart,
             'shiftEnd' => $profile?->end_time ? substr((string) $profile->end_time, 0, 5) : $defaultShiftEnd,
             'shiftGrace' => $profile?->grace_minutes !== null ? (int) $profile->grace_minutes : $defaultShiftGrace,
-            'shiftBreak' => $profile?->break_minutes !== null ? (int) $profile->break_minutes : 60,
+            'shiftBreak' => 60,
             'shiftWorkingDays' => $profile?->working_days,
             'phone' => $profile?->personal_phone,
             'personalEmail' => $profile?->personal_email,
@@ -326,7 +326,35 @@ class WorkpulseBootstrapController extends Controller
 
         $employeeRows = $employeesQuery->get();
         $offboardingDocumentsByUser = collect();
+        $employeeDocumentsByUser = collect();
         $customFieldValuesByUser = collect();
+
+        if ($employeeRows->isNotEmpty()) {
+            $employeeCodesByUser = $employeeRows
+                ->pluck('employee_code', 'user_id')
+                ->map(fn ($employeeCode) => (string) $employeeCode);
+
+            $employeeDocumentsByUser = DB::table('employee_documents')
+                ->whereIn('user_id', $employeeRows->pluck('user_id')->filter()->values())
+                ->orderByDesc('created_at')
+                ->orderByDesc('id')
+                ->get()
+                ->groupBy('user_id')
+                ->map(function ($documents, $userId) use ($employeeCodesByUser) {
+                    $employeeCode = $employeeCodesByUser->get($userId);
+
+                    return $documents->map(fn ($document) => [
+                        'id' => $document->id,
+                        'title' => $document->title,
+                        'fileName' => $document->file_name,
+                        'mimeType' => $document->mime_type,
+                        'fileSize' => $document->file_size !== null ? (int) $document->file_size : null,
+                        'uploadedAt' => $document->created_at,
+                        'updatedAt' => $document->updated_at,
+                        'url' => url('/api/employees/'.$employeeCode.'/documents/'.$document->id),
+                    ])->values()->all();
+                });
+        }
 
         if ($user->isSuperAdmin() && $employeeRows->isNotEmpty()) {
             $employeeCodesByUser = $employeeRows
@@ -371,7 +399,7 @@ class WorkpulseBootstrapController extends Controller
                 ])->values()->all());
         }
 
-        $employees = $employeeRows->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace, $offboardingDocumentsByUser, $customFieldValuesByUser) {
+        $employees = $employeeRows->map(function ($employee) use ($colors, $user, $defaultShiftStart, $defaultShiftEnd, $defaultShiftGrace, $offboardingDocumentsByUser, $employeeDocumentsByUser, $customFieldValuesByUser) {
             $parts = preg_split('/\s+/', trim((string) $employee->name)) ?: [];
             $fn = $parts[0] ?? $employee->name;
             $ln = count($parts) > 1 ? implode(' ', array_slice($parts, 1)) : '';
@@ -400,13 +428,14 @@ class WorkpulseBootstrapController extends Controller
                 'shiftStart' => $employee->start_time ? substr((string) $employee->start_time, 0, 5) : $defaultShiftStart,
                 'shiftEnd' => $employee->end_time ? substr((string) $employee->end_time, 0, 5) : $defaultShiftEnd,
                 'shiftGrace' => $employee->grace_minutes !== null ? (int) $employee->grace_minutes : $defaultShiftGrace,
-                'shiftBreak' => $employee->break_minutes !== null ? (int) $employee->break_minutes : 60,
+                'shiftBreak' => 60,
                 'shiftWorkingDays' => $employee->working_days,
-                'cnicDocumentPath' => $user->isSuperAdmin() ? $employee->cnic_document_path : null,
-                'cnicDocumentName' => $user->isSuperAdmin() ? $employee->cnic_document_name : null,
-                'cnicDocumentUrl' => ($user->isSuperAdmin() && $employee->cnic_document_path)
+                'cnicDocumentPath' => $employee->cnic_document_path,
+                'cnicDocumentName' => $employee->cnic_document_name,
+                'cnicDocumentUrl' => $employee->cnic_document_path
                     ? url('/api/employees/'.$employee->employee_code.'/cnic-document')
                     : null,
+                'employeeDocuments' => $employeeDocumentsByUser->get($employee->user_id) ?? [],
                 'profilePhotoPath' => $employee->profile_photo_path,
                 'profilePhotoName' => $employee->profile_photo_name,
                 'profilePhotoUrl' => $employee->profile_photo_path
@@ -489,7 +518,7 @@ class WorkpulseBootstrapController extends Controller
                 'start' => substr((string) $shift->start_time, 0, 5),
                 'end' => substr((string) $shift->end_time, 0, 5),
                 'grace' => (int) $shift->grace_minutes,
-                'break' => (int) ($shift->break_minutes ?? 60),
+                'break' => 60,
                 'workingDays' => $shift->working_days,
                 'active' => (bool) $shift->is_active,
             ])
@@ -595,6 +624,7 @@ class WorkpulseBootstrapController extends Controller
                 'users.name as empName',
                 'departments.name as dept',
                 'leave_types.name as type',
+                'leave_types.code as type_code',
                 'leave_requests.from_date as from_date',
                 'leave_requests.to_date as to_date',
                 'leave_requests.duration_type',
@@ -622,6 +652,7 @@ class WorkpulseBootstrapController extends Controller
                     'empName' => $leave->empName,
                     'dept' => $leave->dept ?? '-',
                     'type' => $leave->type,
+                    'typeCode' => $leave->type_code,
                     'from' => $leave->from_date,
                     'to' => $leave->to_date,
                     'durationType' => $leave->duration_type ?? 'full_day',
@@ -703,7 +734,15 @@ class WorkpulseBootstrapController extends Controller
                 && !in_array($today, $leave['cancelledDates'] ?? [], true))
             ->groupBy('empId');
 
-        $liveAttendance = $employees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday, $today) {
+        $liveEmployees = $employees->filter(function (array $employee) use ($today) {
+            $status = strtolower((string) ($employee['status'] ?? 'Active'));
+            $lastWorkingDate = (string) ($employee['lwd'] ?? '');
+
+            return !in_array($status, ['inactive', 'resigned'], true)
+                && ($lastWorkingDate === '' || $lastWorkingDate >= $today || $status === 'offboarding');
+        })->values();
+
+        $liveAttendance = $liveEmployees->map(function (array $employee) use ($attendancePunches, $leaveByEmployeeToday, $today) {
             $empId = $employee['id'];
             $todayPunches = $attendancePunches->get($empId.'|'.$today, collect());
 
@@ -757,8 +796,8 @@ class WorkpulseBootstrapController extends Controller
             ];
         })->values();
 
-        $departments = $departments->map(function (array $department) use ($employees, $attendanceByEmployeeToday, $leaveByEmployeeToday) {
-            $departmentEmployees = $employees->where('dept', $department['name']);
+        $departments = $departments->map(function (array $department) use ($liveEmployees, $attendanceByEmployeeToday, $leaveByEmployeeToday) {
+            $departmentEmployees = $liveEmployees->where('dept', $department['name']);
             $count = $departmentEmployees->count();
             $present = 0;
             $leave = 0;
