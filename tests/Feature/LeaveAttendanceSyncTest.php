@@ -384,6 +384,14 @@ class LeaveAttendanceSyncTest extends TestCase
             'days' => 1,
         ]);
 
+        $this->assertDatabaseHas('employee_notifications', [
+            'user_id' => $admin->id,
+            'type' => 'regulation_review',
+            'title' => 'Attendance Request Accepted',
+            'message' => 'Your attendance regulation request has been accepted.',
+            'reference_code' => $regulationCode,
+        ]);
+
         $this->assertDatabaseHas('attendance_days', [
             'user_id' => $admin->id,
             'date' => $date,
@@ -578,6 +586,43 @@ class LeaveAttendanceSyncTest extends TestCase
         $this->assertDatabaseCount('leave_requests', 2);
     }
 
+    public function test_employee_cannot_apply_for_leave_on_weekends(): void
+    {
+        $this->grantEmployeeLeaveApplyPermission();
+
+        $employee = User::factory()->create([
+            'role' => 'employee',
+            'employee_code' => 'EMP-303W',
+        ]);
+        $this->createEmployeeProfile($employee->id, 'Permanent');
+
+        DB::table('leave_types')->insert([
+            'name' => 'Unpaid Leave',
+            'code' => 'unpaid',
+            'paid' => false,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $saturday = now()->next('Saturday')->toDateString();
+
+        $response = $this
+            ->actingAs($employee)
+            ->postJson('/api/leave/apply', [
+                'leave_type_code' => 'unpaid',
+                'from_date' => $saturday,
+                'to_date' => $saturday,
+                'reason' => 'Weekend leave should be blocked',
+            ]);
+
+        $response
+            ->assertStatus(422)
+            ->assertJson(['ok' => false])
+            ->assertJsonPath('message', 'Weekend dates cannot be used for leave: '.$saturday);
+
+        $this->assertDatabaseCount('leave_requests', 0);
+    }
+
     public function test_employee_can_apply_for_multi_day_leave_with_per_day_duration_breakdown(): void
     {
         $this->grantEmployeeLeaveApplyPermission();
@@ -703,6 +748,14 @@ class LeaveAttendanceSyncTest extends TestCase
             'date' => $wednesday,
             'status' => 'Leave',
         ]);
+
+        $this->assertSame(3, DB::table('employee_notifications')
+            ->where('user_id', $admin->id)
+            ->where('type', 'leave_review')
+            ->where('title', 'Leave Request Accepted')
+            ->where('message', 'Your leave request has been accepted.')
+            ->where('reference_code', $code)
+            ->count());
     }
 
     public function test_leave_request_creates_only_hr_approval_step(): void
@@ -733,12 +786,14 @@ class LeaveAttendanceSyncTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $weekday = now()->next('Monday')->toDateString();
+
         $response = $this
             ->actingAs($employee)
             ->postJson('/api/leave/apply', [
                 'leave_type_code' => 'annual',
-                'from_date' => now()->addDays(5)->toDateString(),
-                'to_date' => now()->addDays(5)->toDateString(),
+                'from_date' => $weekday,
+                'to_date' => $weekday,
                 'reason' => 'One day leave',
             ]);
 

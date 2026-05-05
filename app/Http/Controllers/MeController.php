@@ -65,6 +65,35 @@ class MeController extends Controller
         ]);
     }
 
+    public function updateNotificationReadState(Request $request, int $notificationId): JsonResponse
+    {
+        $validated = $request->validate([
+            'is_read' => ['required', 'boolean'],
+        ]);
+
+        $isRead = (bool) $validated['is_read'];
+        $updated = DB::table('employee_notifications')
+            ->where('id', $notificationId)
+            ->where('user_id', $request->user()->id)
+            ->update([
+                'is_read' => $isRead,
+                'read_at' => $isRead ? now() : null,
+                'updated_at' => now(),
+            ]);
+
+        if (! $updated) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Notification not found.',
+            ], 404);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'isRead' => $isRead,
+        ]);
+    }
+
     public function profile(Request $request): JsonResponse
     {
         $user = $request->user();

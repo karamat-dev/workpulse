@@ -47,6 +47,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/me/notifications', [MeController::class, 'notifications']);
         Route::patch('/me/account', [MeController::class, 'updateAccount']);
         Route::patch('/me/notifications/read-all', [MeController::class, 'markNotificationsRead']);
+        Route::patch('/me/notifications/{notificationId}/read-state', [MeController::class, 'updateNotificationReadState']);
         Route::get('/policies', [PoliciesController::class, 'index']);
         Route::post('/policies', [PoliciesController::class, 'store']);
         Route::get('/policies/{policyId}/file', [PoliciesController::class, 'download']);

@@ -589,6 +589,7 @@ function openAccountSettings(){
 
   const profilePhotoEl = document.getElementById('acc-profile-photo');
   if(profilePhotoEl) profilePhotoEl.value = '';
+  updateAccountProfilePhotoUI();
 
   ['acc-current-password','acc-new-password','acc-confirm-password'].forEach(id=>{
     const el = document.getElementById(id);
@@ -597,6 +598,46 @@ function openAccountSettings(){
 
   openModal('accountSettingsModal');
 }
+
+function updateAccountProfilePhotoUI(file=null){
+  const user = DB.currentUser || {};
+  const preview = document.getElementById('acc-profile-photo-preview');
+  const title = document.getElementById('acc-profile-photo-title');
+  const status = document.getElementById('acc-profile-photo-status');
+  if(!preview || !title || !status) return;
+
+  const fallbackInitials = String((user.fname || user.name || 'U')).charAt(0) + String(user.lname || '').charAt(0);
+  const initialsText = user.avatar || fallbackInitials.toUpperCase() || 'U';
+  preview.style.background = user.avatarColor || 'var(--accent)';
+  preview.style.color = '#fff';
+
+  if(file){
+    preview.innerHTML = '';
+    const img = document.createElement('img');
+    img.alt = 'Selected profile photo';
+    img.src = URL.createObjectURL(file);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    preview.appendChild(img);
+    title.textContent = file.name;
+    status.textContent = 'New photo selected. Save account to update it.';
+    return;
+  }
+
+  if(user.profilePhotoUrl){
+    preview.innerHTML = `<img src="${user.profilePhotoUrl}" alt="Profile photo">`;
+    title.textContent = user.profilePhotoName || 'Profile picture uploaded';
+    status.textContent = 'Use Edit to replace your current photo.';
+    return;
+  }
+
+  preview.textContent = initialsText;
+  title.textContent = 'No profile picture uploaded';
+  status.textContent = 'Use Edit to choose a JPG, PNG, or WebP image.';
+}
+
+document.getElementById('acc-profile-photo')?.addEventListener('change', function(){
+  updateAccountProfilePhotoUI(this.files?.[0] || null);
+});
 
 async function submitAccountSettings(){
   const profilePhoto = document.getElementById('acc-profile-photo')?.files?.[0] || null;

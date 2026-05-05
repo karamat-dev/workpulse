@@ -154,6 +154,14 @@ class LeaveController extends Controller
         return $dates;
     }
 
+    private function weekendDatesInRange(string $fromDate, string $toDate): array
+    {
+        return array_values(array_filter(
+            $this->getDateRange($fromDate, $toDate),
+            fn (string $date) => now()->parse($date)->isWeekend()
+        ));
+    }
+
     private function normalizeDailyBreakdownInput(mixed $value): array
     {
         if (is_string($value)) {
@@ -799,6 +807,14 @@ class LeaveController extends Controller
         }
 
         $dailyBreakdown = $this->normalizeDailyBreakdownInput($validated['daily_breakdown'] ?? []);
+        $weekendDates = $this->weekendDatesInRange($validated['from_date'], $validated['to_date']);
+        if ($weekendDates !== []) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Weekend dates cannot be used for leave: '.implode(', ', $weekendDates),
+            ], 422);
+        }
+
         $leavePlan = $this->buildLeavePlan(
             $validated['from_date'],
             $validated['to_date'],
@@ -1015,35 +1031,37 @@ class LeaveController extends Controller
                 );
             }
 
-            $title = $validated['status'] === 'Approved' ? 'Leave Request Approved' : 'Leave Request Rejected';
-
-            $message = sprintf(
-                'Your %s request from %s to %s (%s) is now %s.',
-                $requestRow->leave_type_name ?? 'leave',
-                (string) $requestRow->from_date,
-                (string) $requestRow->to_date,
-                $this->formatLeaveDurationLabel(
-                    (float) $requestRow->days,
+            $title = $validated['status'] === 'Approved' ? 'Leave Request Accepted' : 'Leave Request Rejected';
+            $message = $validated['status'] === 'Approved'
+                ? 'Your leave request has been accepted.'
+                : 'Your leave request has been rejected.';
+            $leavePlan = $this->normalizeDailyBreakdownInput($requestRow->daily_breakdown ?? []);
+            if ($leavePlan === []) {
+                $leavePlan = $this->buildLeavePlan(
+                    (string) $requestRow->from_date,
+                    (string) $requestRow->to_date,
                     (string) ($requestRow->duration_type ?? 'full_day'),
                     $requestRow->half_day_slot ? (string) $requestRow->half_day_slot : null
-                ),
-                strtolower($finalStatus)
-            );
+                );
+            }
 
-            $this->createEmployeeNotification(
-                (int) $requestRow->user_id,
-                'leave_review',
-                $title,
-                $message,
-                'leave_request',
-                (string) $requestRow->code,
-                [
-                    'step' => 'hr',
-                    'decision' => $validated['status'],
-                    'final_status' => $finalStatus,
-                    'reviewer_id' => $user->id,
-                ],
-            );
+            foreach ($leavePlan as $leaveDay) {
+                $this->createEmployeeNotification(
+                    (int) $requestRow->user_id,
+                    'leave_review',
+                    $title,
+                    $message,
+                    'leave_request',
+                    (string) $requestRow->code,
+                    [
+                        'step' => 'hr',
+                        'decision' => $validated['status'],
+                        'final_status' => $finalStatus,
+                        'reviewer_id' => $user->id,
+                        'date' => $leaveDay['date'] ?? null,
+                    ],
+                );
+            }
         });
 
         return response()->json(['ok' => true]);
