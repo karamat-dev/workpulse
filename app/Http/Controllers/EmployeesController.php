@@ -209,20 +209,13 @@ class EmployeesController extends Controller
                     : $this->nextEmployeeCodeForTeam($validated['dept'], (int) $existing->id);
 
                 // Update existing account to become an employee profile if needed
-                $existingRole = $existing->role ?: $role;
-                $userUpdate = [
+                DB::table('users')->where('id', $existing->id)->update([
                     'name' => $name,
-                    'role' => $existingRole,
+                    'role' => $existing->role ?: $role,
                     'employee_code' => $resolvedEmployeeCode,
                     'password' => !empty($validated['password']) ? Hash::make($validated['password']) : $existing->password,
                     'updated_at' => now(),
-                ];
-
-                if (!empty($validated['password']) && $existingRole === 'employee') {
-                    $userUpdate['password_must_change'] = true;
-                }
-
-                DB::table('users')->where('id', $existing->id)->update($userUpdate);
+                ]);
 
                 $userId = $existing->id;
             } else {
@@ -236,7 +229,6 @@ class EmployeesController extends Controller
                     'password' => Hash::make($tmpPassword),
                     'role' => $role,
                     'employee_code' => $employeeCode,
-                    'password_must_change' => $role === 'employee',
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -314,7 +306,7 @@ class EmployeesController extends Controller
 
         return response()->json([
             'ok' => true,
-            'employee_code' => DB::table('users')->where('id', $userId)->value('employee_code'),
+            'user_id' => $userId,
             'temporary_password' => $createdPassword,
         ], 201);
     }
@@ -435,8 +427,7 @@ class EmployeesController extends Controller
                 : (string) $currentUser->employee_code;
         }
 
-        DB::transaction(function () use ($validated, $userId, $name, $departmentId, $managerUserId, $request, $employeeCode, $updatedEmployeeCode, $targetRole) {
-            $updatedRole = $validated['role'] ?? $targetRole ?? 'employee';
+        DB::transaction(function () use ($validated, $userId, $name, $departmentId, $managerUserId, $request, $employeeCode, $updatedEmployeeCode) {
             $userUpdate = [
                 'name' => $name,
                 'email' => $validated['email'],
@@ -446,7 +437,6 @@ class EmployeesController extends Controller
 
             if (!empty($validated['password'])) {
                 $userUpdate['password'] = Hash::make($validated['password']);
-                $userUpdate['password_must_change'] = $updatedRole === 'employee';
             }
 
             if (!empty($validated['role'])) {
@@ -922,6 +912,7 @@ class EmployeesController extends Controller
 
         $payload = [
             'id' => $record->employee_code,
+            'userId' => $record->user_id,
             'fname' => $fname,
             'lname' => $lname,
             'email' => $record->email,

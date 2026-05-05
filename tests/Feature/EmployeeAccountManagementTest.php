@@ -66,7 +66,6 @@ class EmployeeAccountManagementTest extends TestCase
 
         $this->assertNotNull($employee);
         $this->assertTrue(Hash::check('Secret123!', $employee->password));
-        $this->assertTrue((bool) $employee->password_must_change);
     }
 
     public function test_admin_can_create_admin_but_cannot_create_super_admin(): void

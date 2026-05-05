@@ -278,7 +278,7 @@ async function openEditEmployee(id){
     switchEditTab('personal');
     openModal('editEmpModal');
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -474,7 +474,7 @@ async function saveDepartment(){
     showToast(`Team ${originalName ? 'updated' : 'created'} successfully.`,'green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -486,7 +486,7 @@ function deleteDepartment(name){
       showToast('Team deleted.','green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
-      showRequestError(e);
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   });
 }
@@ -573,7 +573,7 @@ async function saveEditEmployee(){
     if(title==='Employees') showPage('employees');
     else if(title==='Employee Profile') showPage('emp-profile-detail');
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -581,7 +581,6 @@ async function saveEditEmployee(){
 //  EDIT LEAVE BALANCE (Admin)
 // ══════════════════════════════════════════════════
 function openAccountSettings(){
-  const forced = typeof isPasswordChangeRequired === 'function' && isPasswordChangeRequired();
   const errEl = document.getElementById('acc-err');
   if(errEl){
     errEl.textContent = '';
@@ -597,77 +596,7 @@ function openAccountSettings(){
     if(el) el.value = '';
   });
 
-  configureAccountSettingsModal(forced);
   openModal('accountSettingsModal');
-  if(forced){
-    setTimeout(()=>document.getElementById('acc-current-password')?.focus(), 0);
-  }
-}
-
-function configureAccountSettingsModal(forced=false){
-  const modal = document.getElementById('accountSettingsModal');
-  if(!modal) return;
-
-  const title = modal.querySelector('.modal-title');
-  const closeButton = modal.querySelector('.modal-close');
-  const actions = modal.querySelector('.modal-actions');
-  const cancelButton = actions ? actions.querySelector('.btn:not(.btn-primary)') : null;
-  const profileRow = document.getElementById('acc-profile-photo')?.closest('.fg');
-  const note = document.getElementById('acc-err')?.nextElementSibling;
-  const profilePhoto = document.getElementById('acc-profile-photo');
-  const saveButton = actions ? actions.querySelector('.btn-primary') : null;
-  let logoutButton = document.getElementById('account-settings-logout');
-
-  modal.classList.toggle('force-password-change', forced);
-  if(title) title.textContent = forced ? 'Set New Password' : 'Account Settings';
-  if(closeButton) closeButton.style.display = forced ? 'none' : '';
-  if(cancelButton) cancelButton.style.display = forced ? 'none' : '';
-  if(profileRow) profileRow.style.display = forced ? 'none' : '';
-  if(profilePhoto) profilePhoto.disabled = forced;
-  if(note){
-    note.textContent = forced
-      ? 'For security, set a new password before opening your workspace.'
-      : 'Employees can update only their own password and profile picture here. Profile, team, type, salary, and other HR details stay managed by admin.';
-  }
-
-  if(forced && actions && !logoutButton){
-    logoutButton = document.createElement('button');
-    logoutButton.type = 'button';
-    logoutButton.className = 'btn';
-    logoutButton.id = 'account-settings-logout';
-    logoutButton.textContent = 'Logout';
-    logoutButton.addEventListener('click', () => {
-      if(typeof doLogout === 'function') doLogout();
-    });
-    actions.insertBefore(logoutButton, saveButton || null);
-  }
-  if(logoutButton) logoutButton.style.display = forced ? '' : 'none';
-
-  ['acc-current-password','acc-new-password','acc-confirm-password'].forEach(id=>{
-    const input = document.getElementById(id);
-    const label = input?.closest('.fg')?.querySelector('.fl');
-    if(!label) return;
-    const base = label.textContent.replace('*', '').trim();
-    label.innerHTML = forced ? `${base} <span class="req-star">*</span>` : base;
-  });
-}
-
-function showPasswordChangeRequired(){
-  window.__passwordChangeRequired = true;
-  if(DB.currentUser) DB.currentUser.mustChangePassword = true;
-
-  const title = document.getElementById('page-title');
-  if(title) title.textContent = 'Set New Password';
-
-  const main = document.getElementById('main-content');
-  if(main){
-    main.innerHTML = `<div class="card"><div class="card-title">Set a new password</div><p style="margin-top:8px;color:var(--muted);">Your account is active. Please set a new password to continue.</p></div>`;
-  }
-
-  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
-  document.querySelectorAll('.mobile-nav-item').forEach(n=>n.classList.remove('active'));
-  configureAccountSettingsModal(true);
-  openAccountSettings();
 }
 
 function updateAccountProfilePhotoUI(file=null){
@@ -711,8 +640,7 @@ document.getElementById('acc-profile-photo')?.addEventListener('change', functio
 });
 
 async function submitAccountSettings(){
-  const forced = typeof isPasswordChangeRequired === 'function' && isPasswordChangeRequired();
-  const profilePhoto = forced ? null : (document.getElementById('acc-profile-photo')?.files?.[0] || null);
+  const profilePhoto = document.getElementById('acc-profile-photo')?.files?.[0] || null;
   const currentPassword = document.getElementById('acc-current-password')?.value || '';
   const newPassword = document.getElementById('acc-new-password')?.value || '';
   const confirmPassword = document.getElementById('acc-confirm-password')?.value || '';
@@ -723,15 +651,7 @@ async function submitAccountSettings(){
     errEl.style.display = 'none';
   }
 
-  if(forced && (!currentPassword || !newPassword || !confirmPassword)){
-    if(errEl){
-      errEl.textContent = 'Current password, new password, and confirmation are required.';
-      errEl.style.display = 'block';
-    }
-    return;
-  }
-
-  if(!forced && !profilePhoto && !newPassword){
+  if(!profilePhoto && !newPassword){
     if(errEl){
       errEl.textContent = 'Choose a profile picture or enter a new password.';
       errEl.style.display = 'block';
@@ -755,14 +675,6 @@ async function submitAccountSettings(){
     return;
   }
 
-  if(newPassword && newPassword === currentPassword){
-    if(errEl){
-      errEl.textContent = 'New password must be different from your current password.';
-      errEl.style.display = 'block';
-    }
-    return;
-  }
-
   if(newPassword !== confirmPassword){
     if(errEl){
       errEl.textContent = 'New password and confirmation do not match.';
@@ -780,22 +692,11 @@ async function submitAccountSettings(){
       formData.append('password_confirmation', confirmPassword || '');
     }
 
-    const data = await wpApi('/api/me/account', {
+    await wpApi('/api/me/account', {
       method:'PATCH',
       body: formData
     });
-
-    if(forced || data?.passwordChangeRequired === false){
-      window.__passwordChangeRequired = false;
-      if(DB.currentUser) DB.currentUser.mustChangePassword = false;
-      configureAccountSettingsModal(false);
-    }
-
-    if(typeof window.bootWorkpulse === 'function'){
-      await window.bootWorkpulse();
-    }else{
-      await wpReload();
-    }
+    await wpReload();
     closeModal('accountSettingsModal');
     showToast('Account settings updated.','green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
@@ -864,7 +765,7 @@ async function openEditLeave(empId){
     renderLeaveBalanceEditorRows(balances);
     openModal('editLeaveModal');
   }catch(err){
-    showRequestError(err);
+    showToast('Backend error: '+(err?.message||'Failed'),'red');
   }
 }
 
@@ -900,7 +801,7 @@ async function saveLeaveBalance(){
     showToast('Leave balance updated!','green');
     if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -1050,7 +951,7 @@ async function openEditLeavePolicy(){
     renderLeavePolicyEditorRows(policies);
     openModal('editLeavePolicyModal');
   }catch(err){
-    showRequestError(err);
+    showToast('Backend error: '+(err?.message||'Failed'),'red');
   }
 }
 
@@ -1081,7 +982,7 @@ async function saveLeavePolicy(){
     showToast('Leave policy updated!','green');
     if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
   }catch(err){
-    showRequestError(err);
+    showToast('Backend error: '+(err?.message||'Failed'),'red');
   }
 }
 
@@ -1201,7 +1102,7 @@ function importTransferJson(inputId, endpoint, successMessage){
       showToast(successMessage(data),'green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
-      showRequestError(e);
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   };
   input.click();
@@ -1264,7 +1165,7 @@ function importEmployeeProfiles(){
       openModal('employeeImportMapModal');
     }catch(e){
       employeeImportMappingState = null;
-      showRequestError(e);
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   };
   input.click();
@@ -1308,7 +1209,7 @@ async function confirmEmployeeImportMapping(){
     showToast(`Imported ${data.imported || 0} employee profile(s).${created}${skipped}`,'green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }finally{
     if(button) button.disabled = false;
   }
@@ -1384,7 +1285,7 @@ async function saveShift(){
     showToast(`Shift ${shiftId ? 'updated' : 'created'} successfully.`,'green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -1396,7 +1297,7 @@ function deleteShift(shiftId){
       showToast('Shift deleted.','green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
-      showRequestError(e);
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   });
 }
@@ -1432,7 +1333,7 @@ async function uploadCompanyPolicy(){
     showToast('Policy uploaded successfully.','green');
     if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -1444,7 +1345,7 @@ function deleteCompanyPolicy(policyId){
       showToast('Policy deleted.','green');
       if(window.__workpulseCurrentPage) showPage(window.__workpulseCurrentPage);
     }catch(e){
-      showRequestError(e);
+      showToast('Backend error: '+(e?.message||'Failed'),'red');
     }
   });
 }

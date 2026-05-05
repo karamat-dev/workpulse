@@ -173,7 +173,7 @@ class WorkpulseBootstrapController extends Controller
         $avatarColor = $colors[($user->id ?? 1) % count($colors)];
 
         $currentUser = [
-            'id' => $user->employee_code,
+            'id' => $user->employee_code ?? (string) $user->id,
             'fname' => $fname,
             'lname' => $lname,
             'email' => $user->email,
@@ -237,7 +237,6 @@ class WorkpulseBootstrapController extends Controller
             'avatarColor' => $avatarColor,
             'status' => $profile?->status ?? 'Active',
             'type' => $profile?->employment_type,
-            'mustChangePassword' => (bool) $user->password_must_change,
         ];
 
         $employeeSelect = [
@@ -381,6 +380,7 @@ class WorkpulseBootstrapController extends Controller
 
             $mapped = [
                 'id' => $employee->employee_code,
+                'userId' => $employee->user_id,
                 'fname' => $fn,
                 'lname' => $ln,
                 'role' => $employee->role ?? 'employee',
@@ -969,7 +969,7 @@ class WorkpulseBootstrapController extends Controller
                 'message' => $notification->message,
                 'referenceType' => $notification->reference_type,
                 'referenceCode' => $notification->reference_code,
-                'meta' => NotificationsController::sanitizeNotificationMeta($notification->meta),
+                'meta' => $notification->meta ? json_decode((string) $notification->meta, true) : null,
                 'isRead' => (bool) $notification->is_read,
                 'readAt' => $notification->read_at,
                 'createdAt' => $notification->created_at,
@@ -996,7 +996,6 @@ class WorkpulseBootstrapController extends Controller
             'ok' => true,
             'currentUser' => $currentUser,
             'currentRole' => $user->canonicalRole(),
-            'passwordChangeRequired' => (bool) $user->password_must_change,
             'employees' => $employees,
             'departments' => $departments,
             'shifts' => $shifts,

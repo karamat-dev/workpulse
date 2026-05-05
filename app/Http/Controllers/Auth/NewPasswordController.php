@@ -45,7 +45,6 @@ class NewPasswordController extends Controller
             function (User $user) use ($request) {
                 $user->forceFill([
                     'password' => Hash::make($request->password),
-                    'password_must_change' => false,
                     'remember_token' => Str::random(60),
                 ])->save();
 

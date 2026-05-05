@@ -9,8 +9,6 @@ use Throwable;
 
 class RecoveryController extends Controller
 {
-    private const GENERIC_ERROR = 'Unable to restore this item right now. Please try again.';
-
     public function index(DeletionRecoveryService $recovery): JsonResponse
     {
         return response()->json([
@@ -31,7 +29,7 @@ class RecoveryController extends Controller
         } catch (Throwable $e) {
             report($e);
 
-            return response()->json(['ok' => false, 'message' => self::GENERIC_ERROR], 500);
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }

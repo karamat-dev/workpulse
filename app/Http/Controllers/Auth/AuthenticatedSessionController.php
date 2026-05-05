@@ -7,13 +7,10 @@ use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
-    private const TEMPORARY_EMPLOYEE_PASSWORD = 'TempEmployee123!@#';
-
     /**
      * Display the login view.
      */
@@ -30,7 +27,6 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
-        $this->flagTemporaryEmployeePassword($request);
 
         return redirect()->intended(route('dashboard', absolute: false));
     }
@@ -47,21 +43,5 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerateToken();
 
         return redirect('/');
-    }
-
-    private function flagTemporaryEmployeePassword(Request $request): void
-    {
-        $user = $request->user();
-
-        if (
-            !$user
-            || $user->canonicalRole() !== 'employee'
-            || $user->password_must_change
-            || !Hash::check(self::TEMPORARY_EMPLOYEE_PASSWORD, (string) $user->password)
-        ) {
-            return;
-        }
-
-        $user->forceFill(['password_must_change' => true])->save();
     }
 }

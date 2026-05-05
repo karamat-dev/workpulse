@@ -211,29 +211,6 @@ class NotificationsController extends Controller
             ->values();
     }
 
-    public static function sanitizeNotificationMeta(mixed $meta): ?array
-    {
-        if (is_string($meta)) {
-            $meta = json_decode($meta, true);
-        }
-
-        if (!is_array($meta)) {
-            return null;
-        }
-
-        foreach (['user_id', 'userId', 'employee_id', 'employeeId', 'reviewer_id', 'reviewerId', 'manager_user_id', 'managerUserId'] as $key) {
-            unset($meta[$key]);
-        }
-
-        foreach ($meta as $key => $value) {
-            if (is_array($value)) {
-                $meta[$key] = self::sanitizeNotificationMeta($value) ?? [];
-            }
-        }
-
-        return $meta;
-    }
-
     private function resolveRecipients(string $audience, Collection $recipientCodes): Collection
     {
         $query = DB::table('users')

@@ -25,11 +25,6 @@ async function wpApi(path, opts={}){
     : await fetch(path, requestOptions);
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json().catch(()=>null) : null;
-  if(data?.passwordChangeRequired){
-    window.__passwordChangeRequired = true;
-    if(DB.currentUser) DB.currentUser.mustChangePassword = true;
-    if(typeof window.showPasswordChangeRequired === 'function') window.showPasswordChangeRequired();
-  }
   if(!res.ok) throw new Error((data && (data.message||data.error)) || ('HTTP '+res.status));
   return data;
 }
@@ -40,7 +35,6 @@ async function wpReload(){
     if(typeof DB === 'object' && DB){
       DB.currentUser = data.currentUser;
       DB.currentRole = data.currentRole;
-      window.__passwordChangeRequired = Boolean(data.passwordChangeRequired || data.currentUser?.mustChangePassword);
       DB.users = [data.currentUser];
       DB.employees = data.employees || [];
       DB.departments = data.departments || [];
@@ -87,7 +81,7 @@ async function wpReload(){
     syncNotificationAudienceOptions();
     syncNotificationRecipientOptions();
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -615,7 +609,7 @@ async function punchIn(){
     restorePunchState(snapshot);
     await wpReload();
     refreshPunchUI();
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -646,7 +640,7 @@ async function punchOut(){
     restorePunchState(snapshot);
     await wpReload();
     refreshPunchUI();
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -673,7 +667,7 @@ async function breakOut(){
     restorePunchState(snapshot);
     await wpReload();
     refreshPunchUI();
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -704,7 +698,7 @@ async function breakIn(){
     restorePunchState(snapshot);
     await wpReload();
     refreshPunchUI();
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -780,7 +774,7 @@ function submitLeave(){
       showToast('Leave request submitted!','green');
       if(document.getElementById('page-title').textContent===pageTitles[page]) showPage(page);
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function formatLeaveDuration(leave){
@@ -1069,7 +1063,7 @@ async function loadRegulationRows(){
     }).join('');
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--red);padding:24px;">Could not fetch attendance records.</td></tr>`;
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -1123,7 +1117,7 @@ async function submitRegulation(){
       showPage(window.__workpulseCurrentPage);
     }
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -1226,7 +1220,7 @@ function submitAnnouncement(){
       showToast(successMessage,'green');
       if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function openAnnouncementModal(announcementId=''){
@@ -1274,7 +1268,7 @@ function deleteAnnouncement(announcementId){
       showToast('Announcement deleted!','green');
       if(document.getElementById('page-title').textContent==='Announcements') showPage('announcements');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function openAnnouncementVote(announcementId){
@@ -1294,7 +1288,7 @@ function submitAnnouncementVote(announcementId){
       window.__workpulseVoteDetailAnnouncementId = announcementId;
       showPage('announcement-vote');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function closeAnnouncementVote(announcementId){
@@ -1309,7 +1303,7 @@ function closeAnnouncementVote(announcementId){
         showPage('announcements');
       }
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function openAnnouncementVoteResults(announcementId){
@@ -1322,7 +1316,7 @@ function openAnnouncementVoteResults(announcementId){
       window.__workpulseVoteResults = data.results || null;
       if(window.__workpulseCurrentPage === 'announcement-vote-results') showPage('announcement-vote-results');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function exportAnnouncementVoteResults(announcementId){
@@ -1395,7 +1389,7 @@ function submitNotification(){
       showToast(successMessage,'green');
       if(window.__workpulseCurrentPage === 'notifications') showPage('notifications');
     })
-    .catch(e => showRequestError(e));
+    .catch(e => showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function deleteNotification(referenceCode){
@@ -1408,7 +1402,7 @@ function deleteNotification(referenceCode){
       showToast('Notification deleted','green');
       if(window.__workpulseCurrentPage === 'notifications') showPage('notifications');
     })
-    .catch(e => showRequestError(e));
+    .catch(e => showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function submitAddEmployee(){
@@ -1499,7 +1493,7 @@ function submitAddEmployee(){
       showToast('Employee added: '+fn+' '+ln+tempMsg,'green');
       return wpReload().then(()=>{ if(document.getElementById('page-title').textContent==='Employees') showPage('employees'); });
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('addEmpModal');
   ['ne-fname','ne-lname','ne-email','ne-password','ne-phone','ne-personal-email','ne-work-location','ne-desg','ne-manager-search','ne-manager','ne-dop','ne-lwd','ne-confirmation-date','ne-cnic-document','ne-dob','ne-gender','ne-cnic','ne-passport-no','ne-address','ne-marital-status','ne-blood','ne-kin','ne-kinRel','ne-kinPhone','ne-basic','ne-house','ne-transport','ne-pay-period','ne-salary-start-date','ne-contribution','ne-other-deductions','ne-tax','ne-bank','ne-acct','ne-iban'].forEach(i=>{const el=document.getElementById(i); if(el) el.value='';});
   if(document.getElementById('ne-role')) document.getElementById('ne-role').value='employee';
@@ -1574,7 +1568,7 @@ function submitHoliday(){
   if(!name||!date){ showToast('Please fill all fields','red'); return; }
   wpApi('/api/holidays', {method:'POST', body: JSON.stringify({name,date,type})})
     .then(()=>wpReload())
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   closeModal('holidayModal');
   showToast('Holiday added!','green');
   if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
@@ -1590,7 +1584,7 @@ function deleteHoliday(date){
       if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
       if(window.__workpulseCurrentPage === 'emp-calendar') showPage('emp-calendar');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 let currentApprovalId=null;
@@ -1620,7 +1614,7 @@ function approveLeave(decision){
       closeModal('approvalModal');
       showToast(`Leave ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function reviewRegulationRequest(id, decision){
@@ -1631,7 +1625,7 @@ function reviewRegulationRequest(id, decision){
       if(document.getElementById('page-title').textContent==='Leave Management') showPage('leave');
       showToast(`Regulation request ${decision.toLowerCase()}!`, decision==='Approved'?'green':'red');
     })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 async function markAllNotificationsRead(){
@@ -1732,7 +1726,7 @@ function deleteEmployee(id){
   wpApi('/api/employees/'+encodeURIComponent(id), {method:'DELETE'})
     .then(()=>wpReload())
     .then(()=>{ if(document.getElementById('page-title').textContent==='Employees') showPage('employees'); })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
   showToast('Employee moved to Ex-employee','amber');
 }
 
@@ -2487,7 +2481,7 @@ function cancelRegulation(id){
   wpApi('/api/attendance/regulations/'+encodeURIComponent(id), {method:'DELETE'})
     .then(()=>wpReload())
     .then(()=>{ showToast('Regulation request cancelled','amber'); showPage(DB.currentRole === 'employee' ? 'emp-attendance' : 'attendance'); })
-    .catch(e=>showRequestError(e));
+    .catch(e=>showToast('Backend error: '+(e?.message||'Failed'),'red'));
 }
 
 function getRealtimeMonitorTeamOptions(selectedTeam=''){
@@ -3387,71 +3381,14 @@ function formatEventCardDate(dateValue){
   return parsed.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
 }
 
-function getUpcomingCalendarHolidays(limit = 8){
-  const today = getTodayLocalDate();
-  return (Array.isArray(DB.holidays) ? DB.holidays : [])
-    .filter(holiday => /^\d{4}-\d{2}-\d{2}$/.test(String(holiday?.date || '')))
-    .filter(holiday => String(holiday.date) >= today)
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
-    .slice(0, limit);
-}
-
-function getCalendarApprovedLeaves(empView=false){
-  const leaves = Array.isArray(DB.leaves) ? DB.leaves : [];
-  const currentEmployeeCode = String(DB.currentUser?.id || '');
-
-  return leaves.filter(leave => {
-    if(leave?.status !== 'Approved') return false;
-    if(empView) return String(leave.empId || '') === currentEmployeeCode;
-    return true;
-  });
-}
-
-function getCalendarDisplayDate(){
-  if(window.__workpulseCalendarDate instanceof Date && !Number.isNaN(window.__workpulseCalendarDate.getTime())){
-    return new Date(window.__workpulseCalendarDate.getFullYear(), window.__workpulseCalendarDate.getMonth(), 1);
-  }
-
-  const today = new Date();
-  window.__workpulseCalendarDate = new Date(today.getFullYear(), today.getMonth(), 1);
-  return new Date(window.__workpulseCalendarDate);
-}
-
-function shiftCalendarMonth(delta){
-  const current = getCalendarDisplayDate();
-  window.__workpulseCalendarDate = new Date(current.getFullYear(), current.getMonth() + delta, 1);
-  showPage(window.__workpulseCurrentPage === 'emp-calendar' ? 'emp-calendar' : 'calendar');
-}
-
-document.addEventListener('click', function(event){
-  const button = event.target.closest('.card-hdr .btn');
-  if(!button || !['calendar','emp-calendar'].includes(window.__workpulseCurrentPage)) return;
-
-  const cardHeader = button.closest('.card-hdr');
-  const title = cardHeader?.querySelector('.card-title')?.textContent || '';
-  if(!/\b\d{4}\b/.test(title)) return;
-
-  const buttons = Array.from(cardHeader.querySelectorAll('.btn'));
-  const index = buttons.indexOf(button);
-  if(index === 0 || index === 1){
-    event.preventDefault();
-    shiftCalendarMonth(index === 0 ? -1 : 1);
-  }
-});
-
 function pageCalendar(empView=false){
   const today=new Date();
-  const displayDate = getCalendarDisplayDate();
-  const month=displayDate.getMonth(), year=displayDate.getFullYear();
+  const month=today.getMonth(), year=today.getFullYear();
   const firstDay=(new Date(year,month,1).getDay()+6)%7;
   const daysInMonth=new Date(year,month+1,0).getDate();
-  const isCurrentMonth=today.getFullYear()===year && today.getMonth()===month;
-  const todayDate=isCurrentMonth ? today.getDate() : null;
+  const todayDate=today.getDate();
   const events = getCalendarEventFeed();
   const calendarRangeEvents = getAudienceAnnouncementEvents(true);
-  const holidays = Array.isArray(DB.holidays) ? DB.holidays : [];
-  const upcomingHolidays = getUpcomingCalendarHolidays(8);
-  const calendarLeaves = getCalendarApprovedLeaves(empView);
   const birthdayItems = !empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole()
     ? getBirthdayEventFeed().slice(0, 6).map(item => {
         const employee = (Array.isArray(DB.employees) ? DB.employees : []).find(entry => String(entry.id) === String(item.employeeId)) || {};
@@ -3470,17 +3407,13 @@ function pageCalendar(empView=false){
   for(let d=1;d<=daysInMonth;d++){
     const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday=d===todayDate;
-    const holiday = holidays.find(h=>h.date===dateStr);
-    const leave = calendarLeaves.find(l=>l.from<=dateStr&&l.to>=dateStr);
-    const isHoliday=Boolean(holiday);
-    const hasLeave=Boolean(leave);
+    const isHoliday=DB.holidays.some(h=>h.date===dateStr);
+    const hasLeave=DB.leaves.some(l=>l.status==='Approved'&&l.from<=dateStr&&l.to>=dateStr);
     const hasEvent=events.some(ev=>ev.date===dateStr) || calendarRangeEvents.some(ev=>ev.date===dateStr);
     const cls=isToday?'cal-today':isHoliday?'cal-holiday':hasLeave?'cal-leave':hasEvent?'cal-event':'';
     const title=isHoliday
-      ? holiday.name
-      : hasLeave
-        ? `${leave.type || 'Leave'} approved`
-        : ([...events.filter(ev=>ev.date===dateStr), ...calendarRangeEvents.filter(ev=>ev.date===dateStr)].map(ev=>ev.label).join(' | ') || '');
+      ? DB.holidays.find(h=>h.date===dateStr).name
+      : ([...events.filter(ev=>ev.date===dateStr), ...calendarRangeEvents.filter(ev=>ev.date===dateStr)].map(ev=>ev.label).join(' | ') || '');
     calDays+=`<div class="cal-day ${cls}" title="${title}">${d}</div>`;
   }
 
@@ -3497,7 +3430,7 @@ function pageCalendar(empView=false){
   <div class="g2">
     <div class="card">
       <div class="card-hdr">
-        <div class="card-title">${displayDate.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
+        <div class="card-title">${today.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</div>
         <div style="display:flex;gap:5px;"><button class="btn btn-sm">â€¹</button><button class="btn btn-sm">â€º</button></div>
       </div>
       <div class="cal-grid">
@@ -3526,9 +3459,9 @@ function pageCalendar(empView=false){
       </div>`;
       }).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No events or announcements yet.</span></div>`}
       <div style="margin-top:14px;">
-        <div class="card-title" style="margin-bottom:10px;">Upcoming National Holidays</div>
-        ${upcomingHolidays.map(h=>`
-        <div class="irow"><span style="font-size:13px;">${h.name}</span><span class="badge bg-amber">${formatDate(h.date)}</span></div>`).join('') || `<div class="irow"><span style="font-size:13px;color:var(--muted);">No upcoming national holidays configured.</span></div>`}
+        <div class="card-title" style="margin-bottom:10px;">National Holidays</div>
+        ${DB.holidays.slice(0,5).map(h=>`
+        <div class="irow"><span style="font-size:13px;">${h.name}</span><span class="badge bg-amber">${formatDate(h.date)}</span></div>`).join('')}
       </div>
       ${!empView && typeof isSuperAdminRole === 'function' && isSuperAdminRole() ? `
       <div style="margin-top:14px;">
@@ -3626,7 +3559,7 @@ async function loadAttendanceReport(){
     set('rp-late', sum.late);
     set('rp-ot', sum.ot);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -3696,7 +3629,7 @@ async function loadMonthlySummary(){
     set('rp-m-emps', totalEmployees);
     set('rp-m-att', attPct + '%');
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -3725,7 +3658,7 @@ async function exportEmployeeRecordsCSV(){
   try{
     window.location.href = '/api/reports/employees.csv';
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -3906,7 +3839,7 @@ async function loadAttendanceReport(){
     set('rp-daily-late', summary.late);
     set('rp-daily-ot', summary.ot);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -4063,7 +3996,7 @@ async function loadMonthlyAttendanceReport(){
     set('rp-att-late-instances', sum.late);
     set('rp-att-ot-minutes', sum.ot);
   }catch(e){
-    showRequestError(e);
+    showToast('Backend error: '+(e?.message||'Failed'),'red');
   }
 }
 
@@ -5211,7 +5144,7 @@ function profileTabsMarkup(employee, opts={}){
     {id:'leave',label:'Leave',content: leaveCards.length ? `<div class="pp-leave-grid">${leaveCards.map(card=>`<div class="pp-leave-card"><h4>${card.name}</h4><div class="pp-leave-stat"><span>Remaining</span><strong>${formatLeaveBalanceValue(card.remaining)}</strong></div><div class="pp-leave-stat"><span>Entitled</span><strong>${formatLeaveBalanceValue(card.allocated)}</strong></div><div class="pp-leave-stat"><span>Used</span><strong>${formatLeaveBalanceValue(card.used)}</strong></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">No leave balances available yet.</div>`},
     {id:'leave-history',label:'Leave History',content: leaveRows.length ? `<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Applied</th><th>Type</th><th>From</th><th>To</th><th>Duration</th><th>Status</th></tr></thead><tbody>${leaveRows.map(row=>`<tr><td>${formatDate(row.applied || row.from)}</td><td>${row.type}</td><td>${formatDate(row.from)}</td><td>${formatDate(row.to)}</td><td>${formatLeaveDuration(row)}</td><td>${statusBadge(row.status)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="pp-mini-empty">No leave history available.</div>`},
     {id:'attendance',label:'Attendance',content: attendanceRows.length ? `<div class="soft-table"><div class="table-wrap"><table><thead><tr><th>Date</th><th>In</th><th>Out</th><th>Hours</th><th>Status</th></tr></thead><tbody>${attendanceRows.map(a=>`<tr><td>${formatDate(a.date)}</td><td>${a.in||'-'}</td><td>${a.out||'-'}</td><td>${calcWorkHours(a)}</td><td>${statusBadge(a.late?'Late':a.status)}</td></tr>`).join('')}</tbody></table></div></div>` : `<div class="pp-mini-empty">No attendance records found.</div>`},
-    {id:'dependent',label:'Dependent',content:`<div class="pp-main-card pp-dependent-card"><div class="pp-info-grid">${profileInfoRow('Next of Kin', employee.kin)}${profileInfoRow('Relationship', employee.kinRel)}${profileInfoRow('Contact Number', employee.kinPhone)}${profileInfoRow('Marital Status', employee.maritalStatus)}</div></div>`},
+    {id:'dependent',label:'Dependent',content:`<div class="pp-main-card" style="padding:0;border:none;box-shadow:none;background:transparent;"><div class="pp-info-grid">${profileInfoRow('Next of Kin', employee.kin)}${profileInfoRow('Relationship', employee.kinRel)}${profileInfoRow('Contact Number', employee.kinPhone)}${profileInfoRow('Marital Status', employee.maritalStatus)}</div></div>`},
     {id:'timeline',label:'Timeline',content: timelineRows.length ? `<div class="pp-timeline">${timelineRows.map(item=>`<div class="pp-timeline-item"><div class="pp-timeline-dot"></div><div class="pp-timeline-copy"><div style="font-size:13px;font-weight:700;">${item.title}</div><div style="font-size:12px;color:var(--muted);margin-top:4px;">${item.meta}</div><div style="font-size:11px;color:var(--muted);margin-top:6px;">${formatDate(item.date)}</div></div></div>`).join('')}</div>` : `<div class="pp-mini-empty">Timeline items will appear here as HR updates are recorded.</div>`},
     {id:'documents',label:'Documents',content: profileDocumentsCard(employee, !!opts.canManageEmployeeDocs, opts.documentButtonLabel || 'Open Document')},
     ...customFieldTab,

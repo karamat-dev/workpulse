@@ -4,7 +4,6 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -41,24 +40,6 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertGuest();
-    }
-
-    public function test_employee_with_temporary_password_is_marked_for_password_change_on_login(): void
-    {
-        $user = User::factory()->create([
-            'role' => 'employee',
-            'employee_code' => 'EMP-TEMP',
-            'password' => Hash::make('TempEmployee123!@#'),
-            'password_must_change' => false,
-        ]);
-
-        $this->post('/login', [
-            'email' => $user->email,
-            'password' => 'TempEmployee123!@#',
-        ]);
-
-        $this->assertAuthenticated();
-        $this->assertTrue((bool) $user->refresh()->password_must_change);
     }
 
     public function test_users_can_logout(): void

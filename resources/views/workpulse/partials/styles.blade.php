@@ -2802,7 +2802,6 @@ textarea.fi{line-height:1.55;resize:vertical;min-height:92px;font-weight:500;}
 .pp-info-row .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.35px;font-weight:700;}
 .pp-info-row .value{font-size:13px;font-weight:600;color:var(--text);min-width:0;overflow-wrap:anywhere;word-break:normal;}
 .pp-info-row .value .badge{display:inline-flex;align-items:center;white-space:nowrap;max-width:100%;}
-.pp-dependent-card{margin-top:2px;}
 .confidential-value{display:inline-block;max-width:100%;filter:blur(5px);transition:filter .16s ease, text-shadow .16s ease;cursor:default;}
 .confidential-value:hover,.confidential-value:focus,.confidential-value:focus-visible{filter:blur(0);outline:none;}
 .confidential-value:focus-visible{box-shadow:0 0 0 3px rgba(36,71,208,.14);border-radius:4px;}
