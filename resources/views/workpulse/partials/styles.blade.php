@@ -146,6 +146,18 @@ body{
 .lf-label{display:block;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#7983A1;margin-bottom:7px;}
 .lf-input{width:100%;min-height:54px;padding:13px 16px;border:1.5px solid rgba(214,222,241,.96);border-radius:16px;font-family:var(--font-body);font-size:15px;color:var(--text);background:linear-gradient(180deg,#FFFFFF 0%, #FBFCFF 100%);outline:none;transition:border .15s, box-shadow .15s, transform .15s;}
 .lf-input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(38,134,147,.10);transform:translateY(-1px);}
+.password-input-wrap{position:relative;width:100%;}
+.password-input-wrap .lf-input,
+.password-input-wrap .fi{padding-right:64px;}
+.password-view-btn{
+  position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  width:38px;height:34px;border:0;border-radius:12px;background:rgba(38,134,147,.10);
+  color:var(--accent-dark);font-family:var(--font-body);font-size:12px;font-weight:800;
+  cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:.15s;
+}
+.password-view-btn svg{width:18px;height:18px;display:block;}
+.password-view-btn svg[hidden]{display:none;}
+.password-view-btn:hover,.password-view-btn:focus{background:rgba(38,134,147,.16);outline:none;color:var(--accent-strong);}
 .lf-btn{width:100%;padding:14px 18px;border-radius:16px;border:none;background:linear-gradient(135deg,#268693 0%, #1F6F7A 100%);color:#fff;font-family:var(--font-body);font-size:16px;font-weight:800;cursor:pointer;margin-top:8px;transition:.15s;box-shadow:0 18px 30px rgba(38,134,147,.20);}
 .lf-btn:hover{background:linear-gradient(135deg,#227985 0%, #195F69 100%);transform:translateY(-1px);}
 .lf-hint{font-size:11px;color:var(--muted);margin-top:14px;text-align:center;line-height:1.6;}

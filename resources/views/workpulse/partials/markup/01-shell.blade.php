@@ -29,7 +29,10 @@
         </div>
         <div class="lf-group">
           <label class="lf-label">Password <span class="req-star">*</span></label>
-          <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
+          <div class="password-input-wrap">
+            <input type="password" class="lf-input" id="l-pass" placeholder="Enter password" value="admin123">
+            <button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"><svg data-password-eye viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.1 12s3.6-7 9.9-7 9.9 7 9.9 7-3.6 7-9.9 7-9.9-7-9.9-7Z"></path><circle cx="12" cy="12" r="3"></circle></svg><svg data-password-eye-off hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.9 4.2A10.7 10.7 0 0 1 12 4c6.3 0 9.9 8 9.9 8a18.4 18.4 0 0 1-2.8 3.9"></path><path d="M14.1 14.1A3 3 0 0 1 9.9 9.9"></path><path d="M6.6 6.6A18.5 18.5 0 0 0 2.1 12s3.6 7 9.9 7a10.8 10.8 0 0 0 5.4-1.5"></path><path d="M2 2l20 20"></path></svg></button>
+          </div>
         </div>
         <div class="lf-err" id="l-err">Invalid credentials. Please try again.</div>
         <div class="lf-err" id="forgot-msg" style="display:none;"></div>

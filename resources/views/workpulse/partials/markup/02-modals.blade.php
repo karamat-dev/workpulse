@@ -159,7 +159,10 @@
     <div class="fg">
       <label class="fl">Login Password <span class="req-star">*</span></label>
       <div style="display:flex;gap:8px;align-items:center;">
-        <input type="text" class="fi" id="ne-password" placeholder="Auto generated password" style="flex:1;">
+        <div class="password-input-wrap" style="flex:1;">
+          <input type="text" class="fi" id="ne-password" placeholder="Auto generated password">
+          <button type="button" class="password-view-btn" data-password-toggle aria-label="Hide password"></button>
+        </div>
         <button type="button" class="btn btn-sm" onclick="window.generateNewEmployeePassword && window.generateNewEmployeePassword()">Regenerate</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
@@ -370,7 +373,7 @@
         <div class="fg"><label class="fl">Work Location</label><input type="text" class="fi" id="ee-work-location"></div>
       </div>
       <div class="fg"><label class="fl">Replace Profile Document</label><input type="file" class="fi" id="ee-cnic-document"></div>
-      <div class="fg"><label class="fl">Reset Login Password</label><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"></div>
+      <div class="fg"><label class="fl">Reset Login Password</label><div class="password-input-wrap"><input type="password" class="fi" id="ee-password" placeholder="Leave blank to keep current password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
       <div class="fg"><label class="fl">Employment Type</label><select class="fi" id="ee-type"><option>Permanent</option><option>Probation</option><option>Contract</option><option>Intern</option></select></div>
       <div class="fg"><label class="fl">User Role</label><select class="fi" id="ee-role"><option value="employee">Employee</option><option value="manager">Super-Admin</option><option value="admin">Admin</option></select></div>
       <div class="fg">
@@ -527,9 +530,9 @@
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Account Settings</div><button class="modal-close" onclick="window.closeModal('accountSettingsModal')">Ã—</button></div>
     <div class="fg"><label class="fl">Profile Picture</label><input type="file" class="fi" id="acc-profile-photo" accept=".jpg,.jpeg,.png,.webp"></div>
-    <div class="fg"><label class="fl">Current Password</label><input type="password" class="fi" id="acc-current-password" placeholder="Required only when changing password"></div>
-    <div class="fg"><label class="fl">New Password</label><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"></div>
-    <div class="fg"><label class="fl">Confirm New Password</label><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"></div>
+    <div class="fg"><label class="fl">Current Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-current-password" placeholder="Required only when changing password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
+    <div class="fg"><label class="fl">New Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-new-password" placeholder="Leave blank to keep current password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
+    <div class="fg"><label class="fl">Confirm New Password</label><div class="password-input-wrap"><input type="password" class="fi" id="acc-confirm-password" placeholder="Re-enter new password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
     <div id="acc-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;">
       Employees can update only their own password and profile picture here. Profile, team, type, salary, and other HR details stay managed by admin.
@@ -567,9 +570,9 @@
 <div class="modal-overlay" id="changePassModal">
   <div class="modal">
     <div class="modal-hdr"><div class="modal-title">Change Password</div><button class="modal-close" onclick="window.closeModal('changePassModal')">×</button></div>
-    <div class="fg"><label class="fl">Current Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-current" placeholder="Enter current password"></div>
-    <div class="fg"><label class="fl">New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"></div>
-    <div class="fg"><label class="fl">Confirm New Password <span class="req-star">*</span></label><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"></div>
+    <div class="fg"><label class="fl">Current Password <span class="req-star">*</span></label><div class="password-input-wrap"><input type="password" class="fi" id="cp-current" placeholder="Enter current password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
+    <div class="fg"><label class="fl">New Password <span class="req-star">*</span></label><div class="password-input-wrap"><input type="password" class="fi" id="cp-new" placeholder="Min 6 characters"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
+    <div class="fg"><label class="fl">Confirm New Password <span class="req-star">*</span></label><div class="password-input-wrap"><input type="password" class="fi" id="cp-confirm" placeholder="Re-enter new password"><button type="button" class="password-view-btn" data-password-toggle aria-label="Show password"></button></div></div>
     <div id="cp-err" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none;"></div>
     <div class="modal-actions">
       <button class="btn" onclick="window.closeModal('changePassModal')">Cancel</button>

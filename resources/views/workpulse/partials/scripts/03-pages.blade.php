@@ -1450,6 +1450,12 @@ function setNewEmployeePasswordMode(mode){
   if(auto) auto.checked = !isManual;
   if(manual) manual.checked = isManual;
   input.type = isManual ? 'password' : 'text';
+  const toggle = input.closest('.password-input-wrap')?.querySelector('[data-password-toggle]');
+  if(toggle){
+    if(typeof syncPasswordToggleIcon === 'function'){
+      syncPasswordToggleIcon(toggle, !isManual);
+    }
+  }
   input.readOnly = !isManual;
   input.placeholder = isManual ? 'Create employee password' : 'Auto generated password';
   if(!isManual && !input.value){
